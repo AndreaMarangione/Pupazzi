@@ -2,7 +2,7 @@
 #pragma once
 #include "render.h"
 
-#define PUPAZZI_VERSION "0.5.2"   // unico posto: core, menu e Makefile la leggono da qui
+#define PUPAZZI_VERSION "0.5.3"   // unico posto: core, menu e Makefile la leggono da qui
 #define MAX_PLAYERS 4
 
 // Personaggi disponibili (i 4 iniziali, uno per mondo).

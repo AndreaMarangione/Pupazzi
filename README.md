@@ -1,4 +1,4 @@
-# Pupazzi — 0.5.2
+# Pupazzi — 0.5.3
 
 Gioco cooperativo da 1 a 4 giocatori per l'Anbernic RG35XX Pro (Stock OS MOD), ispirato a
 Brawl Stars: il giro del **sistema solare**, pianeta dopo pianeta, attraversando mappe fatte di
@@ -30,6 +30,12 @@ scelta con la stessa sfumatura e un alone caldo, titoli bianchi con l'alone, car
 con gli accenti veri, tutto dentro il margine che i televisori tagliano; anche l'HUD in partita. La
 pausa non elenca più i tasti: li mostra la voce **COMANDI**, in un riquadro a parte. La scelta della
 mappa è al centro dello schermo, con un pianeta alla volta.
+
+La 0.5.3 aggiunge sostanza: **quattro salvataggi** (prima schermata con NUOVA PARTITA, CARICA
+SALVATAGGIO, GESTISCI SALVATAGGI per duplicarli ed eliminarli, LINGUA, ESCI), **sette lingue**
+(italiano, inglese, spagnolo, portoghese, cinese, giapponese, hindi) e la **visuale più vicina
+sullo schermo della console**: da 15 a 30 m, e da 22 a 30 m quando l'HDMI è collegato (lo capisce da
+solo, anche se lo si attacca o stacca a partita iniziata).
 
 ## Installazione
 
@@ -82,7 +88,19 @@ Tenere premuto START due secondi apre il menu di RetroArch come negli altri gioc
 
 ## Menu
 
-Titolo → **Insieme** (Contro arriva con la 0.6) → la prima volta la **storia** (A mostra tutte le
+Prima schermata (gli eroi a sinistra, le voci a destra):
+
+- **NUOVA PARTITA**: una partita nuova nel primo dei quattro posti liberi; se sono tutti pieni si
+  sceglie quale sovrascrivere (con conferma).
+- **CARICA SALVATAGGIO**: i quattro posti, ognuno con il pianeta più lontano raggiunto e il suo
+  giro, le stelle, le mappe aperte e il tempo di gioco; A carica e si va avanti.
+- **GESTISCI SALVATAGGI**: gli stessi posti; A su una partita apre **DUPLICA** (una copia nel primo
+  posto libero) ed **ELIMINA** (con conferma: A sì, B no).
+- **LINGUA**: italiano, inglese, spagnolo, portoghese (del Portogallo), cinese semplificato,
+  giapponese, hindi; vale subito e resta salvata.
+- **ESCI**: torna al menu della console.
+
+Poi **Insieme** (Contro arriva con la 0.6) → la prima volta la **storia** (A mostra tutte le
 righe, poi A va avanti) → mappa → ogni giocatore sceglie il suo eroe col suo pad (A per entrare,
 ← → per scegliere, A per "pronto") → partita → fine mappa con le statistiche (mostri sconfitti,
 danni, cadute e il migliore) e le stelle → si sceglie di nuovo e si passa alla mappa successiva.
@@ -214,8 +232,11 @@ Il boss non brucia e non rallenta.
 
 ## Cosa si vede a schermo
 
-La telecamera va da 22 a 30 m (0.5: da 15 a 30; 0.4: da 15 a 21): quando il gruppo si allarga si vede una zona
-intera, e i giocatori non si possono allontanare più di quanto si vede.
+La telecamera va da 15 a 30 m sullo schermo della console e da 22 a 30 m con l'HDMI collegato
+(0.5.1-0.5.2: da 22 a 30 sempre; 0.5: da 15 a 30): quando il gruppo si allarga si vede una zona
+intera, e i giocatori non si possono allontanare più di quanto si vede. L'HDMI si controlla ogni
+secondo (`/sys/class/extcon/hdmi/state`): attaccarlo o staccarlo in partita cambia solo la visuale
+minima; il registro lo dice (righe "HDMI:" e "schermo:").
 
 In alto a sinistra una tessera per ogni giocatore: la faccia del suo eroe nel suo colore e i
 cuori delle vite. Chi è a terra ha la faccia spenta e una barra rossa che si svuota fino al
@@ -239,21 +260,44 @@ abbassato molto la musica la rialzi a 4-5.
 
 ## Salvataggi
 
-Il gioco salva da solo in `pupazzi.sav`, nella cartella dei salvataggi di RetroArch: sulla console
+Il gioco salva da solo nella cartella dei salvataggi di RetroArch: sulla console
 `/mnt/mmc/saves_RA/Pupazzi/` con la configurazione di serie (`/mnt/sdcard/saves_RA/...` con la
 seconda scheda), dove stanno anche i salvataggi degli altri giochi, fuori da APPS (che un
 aggiornamento della MOD svuota); se non si potesse usare, in `pupazzi/out/`. Il percorso esatto è
-nella riga "salvataggio:" del registro.
+nella riga "salvataggio:" del registro. Dalla 0.5.3 i file sono due tipi:
 
-Dentro: mappe aperte e giro di ogni pianeta, stelle di ogni mappa nel giro in corso, storia già
-vista, mira di ogni controller, antialias e volumi. Si scrive a fine mappa, dopo la storia, quando
-si chiude la pausa dopo aver cambiato qualcosa e all'uscita, sempre in modo sicuro (prima un file
-a parte, poi lo scambio: se la console si spegne a metà resta quello di prima). Per ricominciare
-da capo basta cancellare `pupazzi.sav`. Il file è di testo e spiega da solo cosa contiene; se non
-c'è niente di valido, il gioco riparte da zero e lo tiene da parte come `pupazzi.sav.illeggibile`.
+- `pupazzi.sav`: le impostazioni di questa console (mira di ogni controller, antialias, volumi,
+  lingua);
+- `partita1.sav` ... `partita4.sav`: le quattro partite (mappe aperte e giro di ogni pianeta,
+  stelle di ogni mappa nel giro in corso, storia già vista, tempo di gioco). Un posto libero è un
+  file che non c'è.
 
+Si scrive a fine mappa, dopo la storia, quando si chiude la pausa dopo aver cambiato qualcosa,
+quando si cambia lingua e all'uscita, sempre in modo sicuro (prima un file a parte, poi lo scambio:
+se la console si spegne a metà resta quello di prima). I file sono di testo e spiegano da soli cosa
+contengono; un file in cui non c'è niente di valido si vede come ILLEGGIBILE: caricandolo si
+riparte da zero e il file vecchio resta da parte come `partitaN.sav.illeggibile`. Per liberare un
+posto basta eliminarlo dal gioco (o cancellare il file).
+
+La prima volta la partita della 0.5.2 (o della 0.4) diventa la **partita 1**, con tutti i progressi;
+in `pupazzi.sav` i dati vecchi restano (una 0.5.2 rimessa sulla console li ritrova) e la riga
+`salvataggi=1` dice che sono già stati presi: se poi si eliminano tutte le partite non tornano.
 Con un salvataggio della 0.4 restano mira, antialias e volumi; la storia nuova si vede la prima
-volta e la Terra riparte dalla prima mappa (le righe della prateria restano nel file, ignorate).
+volta e la Terra riparte dalla prima mappa.
+
+## Lingue
+
+La lingua si sceglie dalla prima schermata (voce LINGUA, con il mappamondo) e vale per tutto:
+menu, carte, messaggi in partita, nomi delle mappe di serie e dei pianeti; i nomi degli eroi sono
+trascritti in cinese, giapponese e hindi. Restano in italiano il registro e gli errori delle mappe
+personalizzate (come il loro formato). Nel menu dei comandi di RetroArch i tasti hanno i nomi nella
+lingua scelta (in inglese per cinese, giapponese e hindi, che i caratteri di RetroArch di solito non
+hanno).
+
+Tutti i testi stanno in `lang/testi.txt`, un blocco per testo con l'italiano e le sei traduzioni:
+per correggere una traduzione si cambia lì, poi `python3 tools/make_lang.py` (rigenera
+`src/lang_data.h` e controlla che non manchi nulla e che i `%d` siano gli stessi) e, se ci sono
+caratteri cinesi, giapponesi o parole hindi nuove, `python3 tools/make_font.py` (vedi **Compilare**).
 
 ## Mappe personalizzate
 
@@ -323,8 +367,9 @@ nel cenote ("giocatore N caduto nel cenote") e le mosse del gladiatore.
 ## Compilare
 
     make            # core per questo PC e strumenti di prova (serve solo g++)
-    make test       # prove automatiche (mira e carte: test_aim; salvataggi: test_save; vite e giri: test_rules;
-                    # mappe chiuse e giocabili: test_maps; gladiatore: test_boss)
+    make test       # prove automatiche (testi delle lingue: make_lang.py e test_lang; mira e carte: test_aim;
+                    # salvataggi: test_save; vite e giri: test_rules; mappe chiuse e giocabili: test_maps;
+                    # gladiatore: test_boss)
     make test-gl    # prove del renderer GPU su un OpenGL ES software (Mesa)
     make test-audio # prove del sonoro; scrive ogni suono e ogni musica in build/wav/ per ascoltarli
     python3 tools/test_remote.py   # comandi dalle altre console (Remote RetroPad) con il frontend di prova
@@ -339,6 +384,11 @@ Per la console serve zig come compilatore incrociato (provato con la versione 0.
 
 Nel pacchetto `dist/` è già compilato.
 
+I caratteri dell'interfaccia (`src/font_hud.h` e `src/font_hud_data.h`) e i testi (`src/lang_data.h`)
+sono già generati. Per rifarli: `python3 tools/make_lang.py` e `python3 tools/make_font.py`, che
+vuole Pillow con raqm, `pip install uharfbuzz freetype-py` e i caratteri Noto Sans CJK del sistema
+(pacchetto `fonts-noto-cjk`, oppure la cartella in `PUPAZZI_NOTO_CJK`).
+
 ## Com'è fatto
 
 | File | Contenuto |
@@ -352,8 +402,9 @@ Nel pacchetto `dist/` è già compilato.
 | `src/menu.cpp` | menu, storia, stelle e giri, pausa, finestre per entrare a partita iniziata |
 | `src/game_draw.cpp` | animazioni, oggetti da disegnare, HUD con le tessere dei giocatori |
 | `src/audio.cpp` | sonoro: sintetizzatore, effetti, musiche, mixer con limitatore |
-| `src/save.cpp` | salvataggio `pupazzi.sav`: lettura tollerante, scrittura atomica |
-| `src/hud.cpp`, `font_hud.h` | testi, disegni (cuori, facce degli eroi, stelle) e forme (pannelli con gli angoli tagliati, aloni, sfumature) sopra l'immagine, uguali nei due renderer; caratteri generati da `tools/make_font.py` |
+| `src/save.cpp` | salvataggi: impostazioni in `pupazzi.sav`, quattro partite; lettura tollerante, scrittura atomica |
+| `src/lang.cpp`, `lang/testi.txt` | lingue: i testi in 7 lingue (`src/lang_data.h`, generato da `tools/make_lang.py`) |
+| `src/hud.cpp`, `font_hud.h` | testi (latino, cinese, giapponese, hindi), disegni (cuori, facce degli eroi, stelle) e forme (pannelli con gli angoli tagliati, aloni, sfumature) sopra l'immagine, uguali nei due renderer; caratteri generati da `tools/make_font.py` in `font_hud_data.h` |
 | `src/ui.cpp` | stile dell'interfaccia (Orbita, colori Tramonto): pannelli, voce scelta, titoli, tasti, piede dei menu, margine per i televisori |
 | `src/level.cpp`, `maps.cpp` | mappe: lettura del testo, zone, collisioni |
 | `src/level_mesh.cpp` | geometria delle mappe: terreno morbido, stili della Terra, paesaggio attorno |
@@ -367,7 +418,8 @@ Nel pacchetto `dist/` è già compilato.
 | `tools/test_rules.cpp` | prove di vite, zone e mappe da capo, rientri, giri e stelle, mappe aperte |
 | `tools/test_maps.cpp` | prove delle mappe: chiuse, tutte giocabili, niente passaggi tra le zone (anche saltando e spinti), cenote |
 | `tools/test_boss.cpp` | prove del gladiatore: inseguimento, fendente, carica, stordito, giavellotti, fasi, niente blocchi |
-| `tools/test_save.cpp` | prove dei salvataggi: file rotti, troncati, enormi, chiavi sconosciute, salvataggi della 0.4 |
+| `tools/test_save.cpp` | prove dei salvataggi: file rotti, troncati, enormi, chiavi sconosciute, salvataggi della 0.4 e della 0.5.2, partite nuove, copiate, eliminate |
+| `tools/test_lang.cpp` | prove delle lingue: ogni testo in ogni lingua si disegna, a capo e puntini (anche cinese, giapponese, hindi) |
 | `tools/test_audio.cpp` | prove del sonoro: livelli, picchi, voci, tempi, equilibrio musica/effetti; scrive i WAV |
 | `tools/remote_send.py`, `test_remote.py` | finto Remote RetroPad e prove dei comandi dalla rete |
 | `console/`, `deploy.sh` | voce di menu, script di avvio, icona; installazione dal PC |
@@ -382,7 +434,9 @@ personalizzate), `PUPAZZI_OUT` (cartella del registro), `PUPAZZI_MIRA` (`0` extr
 per forzare un modo; `prova` percorso della Mali con un solo campione, per le prove sul PC),
 `PUPAZZI_SALVATAGGI` (cartella di `pupazzi.sav` al posto di quella di RetroArch), `PUPAZZI_REMOTO`
 (`0`: non apre le porte delle altre console), `PUPAZZI_REMOTO_PORTA` (prima porta, al posto di 55400),
-`PUPAZZI_UI_SEMPLICE=1` (con la GPU, l'interfaccia di riserva senza lo shader nuovo).
+`PUPAZZI_UI_SEMPLICE=1` (con la GPU, l'interfaccia di riserva senza lo shader nuovo),
+`PUPAZZI_LINGUA` (`it`, `en`, `es`, `pt`, `zh`, `ja`, `hi`: la lingua al posto di quella salvata),
+`PUPAZZI_HDMI` (`1` o `0`: come con l'HDMI collegato o staccato, al posto di guardarlo).
 
 ## Stato delle verifiche
 
@@ -470,7 +524,10 @@ giocatori veri, il sonoro sulla TV e i comandi dalle altre console sul Wi-Fi ver
   memoria della GPU e si riducono a un pixel quando il fotogramma esce), altrove con OpenGL ES 3
   (renderbuffer a più campioni e blit).
 - Interfaccia (dalla 0.5.2): coordinate in pixel a 640×480; testi in Chakra Petch già alla misura
-  giusta, con i bordi sfumati e gli aloni calcolati all'avvio; pannelli, aloni e sfumature sono
+  giusta, con i bordi sfumati e gli aloni calcolati all'avvio (dalla 0.5.3 anche Noto Sans CJK per
+  cinese e giapponese e Poppins per l'hindi, solo con i caratteri dei testi: le parole hindi sono
+  già composte con HarfBuzz quando si genera il font, il gioco le cerca intere; in cinese e
+  giapponese si va a capo tra un carattere e l'altro); pannelli, aloni e sfumature sono
   forme calcolate pixel per pixel dalla distanza dal bordo, con la stessa matematica nel renderer
   software (a strisce, in parallelo) e nello shader della GPU (un solo disegno per fotogramma, con
   l'interno pieno dei pannelli grandi senza calcoli). `make test-gl` confronta le due.

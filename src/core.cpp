@@ -786,8 +786,9 @@ static void open_save(void) {
     save_data()->antialias = false;
     save_write();
   }
-  // PUPAZZI_LINGUA=it|en|es|pt|zh|ja|hi: la lingua (prove; in gioco si sceglie dalla prima
-  // schermata). Vale piu' di quella salvata.
+  // PUPAZZI_LINGUA=it|en|es|pt|zh|ja|hi: la lingua per questa volta (prove; in gioco si sceglie
+  // dalla prima schermata), al posto di quella salvata, che resta com'era nel file.
+  const uint8_t saved_lang = save_data()->lang;
   const char* lg = getenv("PUPAZZI_LINGUA");
   for (int l = 0; lg && l < SAVE_LANGS; ++l)
     if (!strcmp(lg, save_lang_id(l))) {
@@ -795,6 +796,7 @@ static void open_save(void) {
       plat_log("lingua (PUPAZZI_LINGUA): %s", lg);
     }
   game_save_loaded();
+  save_data()->lang = saved_lang;
   // PUPAZZI_MIRA=0..3: mira extra morbida, morbida, media o rapida per tutti (prove; in gioco si
   // sceglie nella pausa). Vale piu' della mira salvata.
   const int mira = env_int("PUPAZZI_MIRA", -1);

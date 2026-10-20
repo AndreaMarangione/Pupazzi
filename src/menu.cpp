@@ -236,6 +236,7 @@ void lang_update(void) {
   if (any_confirm(&who)) {
     snd_ui(SND_UI_OK);
     if (g.lang_sel != lang_get()) {
+      g_info_t = 0;                                // un avviso ancora a schermo era nella lingua di prima
       lang_set(g.lang_sel);
       save_data()->lang = (uint8_t)g.lang_sel;
       save_write();

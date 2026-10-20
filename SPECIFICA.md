@@ -160,7 +160,7 @@ ognuno il suo schermo, visuale vicina senza HDMI; si comincia al via di Andrea).
     troppo vicina: la distanza minima si allontana. *0.5.1*: da 22 a 30 m.
   - [deciso 20/10] Sullo schermo della console (HDMI staccato) la visuale è troppo lontana: senza
     HDMI vicina, con l'HDMI come ora.
-    - [proposta] Il gioco legge da solo se l'HDMI è collegato (`/sys/class/extcon/hdmi/state`, lo
+    - [proposta, fatta nella 0.5.3] Il gioco legge da solo se l'HDMI è collegato (`/sys/class/extcon/hdmi/state`, lo
       stesso file del RetroArch della console) e cambia anche a partita in corso. Senza HDMI da 15
       m con il gruppo vicino fino a 30 m con il gruppo largo (il limite tra i personaggi resta
       31×21 m); con l'HDMI da 22 a 30 m.
@@ -586,10 +586,12 @@ triangoli a 60 fps fissi; con la visuale larga della 0.3.2 se ne inquadrano circ
   capitolo 12.
 - [deciso 20/10] **Lingua**: dalla prima schermata una pagina per scegliere tra inglese, italiano,
   spagnolo, portoghese (del Portogallo), cinese (semplificato), giapponese e hindi.
-  - [proposta] Ogni lingua scritta nella sua lingua (English, Italiano, Español, Português, 中文,
-    日本語, हिन्दी); cambia subito tutto il gioco e resta salvata nella console. Traduzioni di Claude,
-    di tutti i testi (menu, storia, carte, messaggi); caratteri Noto Sans (licenza libera) per
-    cinese, giapponese e hindi, solo quelli che servono.
+  - [proposta, fatta nella 0.5.3] Ogni lingua scritta nella sua lingua (English, Italiano, Español,
+    Português, 中文, 日本語, हिन्दी); cambia subito tutto il gioco e resta salvata nella console.
+    Traduzioni di Claude, di tutti i testi (menu, storia, carte, messaggi, nomi delle mappe di serie
+    e dei pianeti; i nomi degli eroi trascritti in cinese, giapponese e hindi); caratteri Noto Sans
+    CJK per cinese e giapponese e Poppins per l'hindi (licenza libera), solo quelli che servono.
+    Restano in italiano il registro e il formato delle mappe personalizzate con i suoi errori.
 - [deciso 17/10] Icone dei giocatori in alto a sinistra (capitolo 2) e giro sempre in vista
   (capitolo 8).
   - [proposta, fatta nella 0.5] La riga in alto (pianeta, mappa, giro, zona, mostri; nell'arena la vita
@@ -644,6 +646,9 @@ triangoli a 60 fps fissi; con la visuale larga della 0.3.2 se ne inquadrano circ
     l'elenco (voce grigia se non ce n'è nessuno); Duplica nel primo posto libero, Elimina con la
     conferma. Nel salvataggio solo la partita: lingua, volumi, mira e antialias restano unici per
     la console. Il salvataggio di oggi diventa il numero 1.
+  - *0.5.3*: impostazioni in `pupazzi.sav` (con `lingua=` e `salvataggi=1`), partite in
+    `partita1.sav` ... `partita4.sav` (con `tempo=`, i secondi di gioco); al primo avvio i progressi
+    del `pupazzi.sav` della 0.5.2 (o della 0.4) diventano `partita1.sav`, una volta sola.
 - [proposta, fatta nella 0.5] Per ogni pianeta il giro raggiunto e le stelle del giro in corso; le stelle
   e le mappe della prateria (0.4) non valgono più per la Terra.
 - *0.5*: chiavi nuove `giro.<pianeta>` e `mappe.<pianeta>` (mappe aperte in ordine), `stelle.<mappa>`
@@ -677,7 +682,7 @@ Il gioco completo si consegna a tappe; ognuna si prova sulla console prima della
 | 0.5 | [deciso 17/10] tema del sistema solare: la Terra (Piramidi, Machu Picchu, Grande Muraglia, Colosseo) e i 4 eroi iniziali al posto di prateria e pupazzi; visuale più larga con il limite tra i personaggi uguale alla visuale; vite; icone dei giocatori; stelle che aprono i giri di ogni pianeta; mappe due terzi più grandi e meno pixellate; comandi delle altre console senza ritardo — consegnata il 17/10, da provare |
 | 0.5.1 | [deciso 18/10] visuale minima più lontana; mappe tutte giocabili senza acqua attraversabile, paesaggio ridotto; gladiatore che insegue e combatte; Chichén Itzá con i cenote al posto di Machu Picchu; scorpione e arciere di terracotta al posto di sciacallo e lama — consegnata il 18/10 |
 | 0.5.2 | [deciso 19/10] interfaccia nuova (stile Orbita, colori Tramonto) in tutte le schermate e nell'HUD; pausa con la voce COMANDI; mappe al centro — consegnata il 19/10, provata il 20/10 ("molto bella") |
-| 0.5.3 | [deciso 20/10] visuale vicina senza HDMI; più salvataggi (nuova, carica, gestisci: duplica ed elimina); 7 lingue |
+| 0.5.3 | [deciso 20/10] visuale vicina senza HDMI; più salvataggi (nuova, carica, gestisci: duplica ed elimina); 7 lingue — consegnata il 20/10, da provare |
 | 0.5.4 | [deciso 20/10] gioco in rete con ognuno il suo schermo e la telecamera sul proprio eroe |
 | 0.6 e dopo | un pianeta per versione, nell'ordine del viaggio: Luna, Marte, Venere, Mercurio, Giove, Saturno, Urano, Nettuno; compiti nelle zone, mini-boss, livelli e bonus; modalità Contro |
 | dopo | app per le console-controller; gioco via internet (da valutare) |

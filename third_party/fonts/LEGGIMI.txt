@@ -1,12 +1,26 @@
-Caratteri dell'interfaccia (src/font_hud.h, generato da tools/make_font.py)
+Caratteri dell'interfaccia (src/font_hud.h e src/font_hud_data.h, generati da tools/make_font.py)
 
-Nel core non ci sono i file dei font: solo le immagini dei caratteri (Latin-1 e qualche simbolo:
-frecce, puntini, apostrofo tipografico) gia' disegnate alle misure usate dall'interfaccia, con i
-bordi sfumati; gli aloni dei titoli li calcola il gioco all'avvio.
+Nel core non ci sono i file dei font: solo le immagini dei caratteri gia' disegnate alle misure
+usate dall'interfaccia, con i bordi sfumati; gli aloni dei titoli li calcola il gioco all'avvio.
+Per cinese, giapponese e hindi ci sono solo i caratteri (e le parole hindi, gia' composte) dei
+testi di lang/testi.txt.
 
-Chakra Petch SemiBold e Bold - tutti i testi dall'interfaccia della 0.5.2 (stile "Orbita")
+Chakra Petch SemiBold e Bold - testi latini dalla 0.5.2 (stile "Orbita")
   Copyright 2018 The Chakra Petch Project Authors (https://github.com/m4rc1e/Chakra-Petch.git)
   SIL Open Font License, Version 1.1 (testo completo in OFL-ChakraPetch.txt)
-  https://openfontlicense.org
 
-Fino alla 0.5.1 i testi usavano DejaVu Sans Bold e Poppins Bold, ora non piu'.
+Poppins Medium e Bold - hindi (devanagari) dalla 0.5.3
+  Copyright 2020 The Poppins Project Authors (https://github.com/itfoundry/Poppins)
+  SIL Open Font License, Version 1.1 (testo completo in OFL-Poppins.txt)
+
+Noto Sans CJK SC e JP, Medium e Bold - cinese semplificato e giapponese dalla 0.5.3
+  Copyright 2014-2021 Adobe (http://www.adobe.com/), with Reserved Font Name 'Source'
+  SIL Open Font License, Version 1.1 (testo completo in OFL-NotoSansCJK.txt)
+  I file (NotoSansCJK-Medium.ttc e NotoSansCJK-Bold.ttc, 18-20 MB l'uno) non sono qui: servono
+  solo per rigenerare i caratteri e make_font.py li prende dal sistema (pacchetto fonts-noto-cjk,
+  /usr/share/fonts/opentype/noto) oppure dalla cartella in PUPAZZI_NOTO_CJK.
+  https://github.com/notofonts/noto-cjk
+
+https://openfontlicense.org
+
+Fino alla 0.5.1 i testi usavano DejaVu Sans Bold e Poppins Bold, poi solo Chakra Petch.
