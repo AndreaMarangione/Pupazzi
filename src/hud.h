@@ -69,6 +69,22 @@ float hud_mid(int face, float cy);
 // Maiuscole anche per le lettere accentate di Latin-1 (UTF-8).
 void hud_upper(char* dst, const char* src, int n);
 
+// Scritture oltre al latino (dalla 0.5.3): cinese semplificato e giapponese (un carattere per punto
+// di codice) e hindi (parole gia' composte, vedi tools/make_font.py). I caratteri cinesi hanno due
+// disegni: hud_cjk sceglie quello cinese o quello giapponese per i testi che seguono (lo fa
+// lang_set; la pagina delle lingue lo cambia per scrivere 中文 e 日本語).
+enum { HUD_CJK_SC = 0, HUD_CJK_JP = 1, HUD_DEVA = 2 };
+void hud_cjk(int script);
+int hud_cjk_get(void);
+// Caratteri disegnati come '?' perche' nessuna faccia li ha (prove); reset: si riparte da zero.
+int hud_missing(bool reset);
+// Punto di codice del carattere UTF-8 in s, e s va avanti (0 alla fine; 0xFFFD se non e' valido).
+uint32_t hud_utf8_next(const char*& s);
+inline bool hud_is_deva(uint32_t cp) { return (cp >= 0x900 && cp <= 0x97F) || cp == 0x200C || cp == 0x200D; }
+inline bool hud_is_cjk(uint32_t cp) {
+  return (cp >= 0x3000 && cp <= 0x30FF) || (cp >= 0x3400 && cp <= 0x9FFF) || (cp >= 0xF900 && cp <= 0xFAFF) || (cp >= 0xFF00 && cp <= 0xFFEF);
+}
+
 // Disegni (HI_* in font_hud.h), dall'angolo in alto a sinistra.
 void hud_icon(Hud* h, int icon, float x, float y, uint32_t argb);
 int hud_icon_w(int icon);

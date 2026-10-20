@@ -9,7 +9,8 @@
 #include <string.h>
 
 Game g;
-const char* const WORLD_NAMES[NWORLDS] = { "TERRA", "LUNA", "MARTE", "VENERE", "MERCURIO", "GIOVE", "SATURNO", "URANO", "NETTUNO" };
+const char* const WORLD_NAMES[NWORLDS] = { N_("TERRA"), N_("LUNA"), N_("MARTE"), N_("VENERE"), N_("MERCURIO"), N_("GIOVE"),
+                                            N_("SATURNO"), N_("URANO"), N_("NETTUNO") };
 static_assert(SAVE_WORLDS == NWORLDS, "save.h e level.h devono avere gli stessi pianeti");
 
 namespace {
@@ -111,21 +112,21 @@ void restart_zone(void) {
   int lives = 0;
   for (int i = 0; i < MAX_PLAYERS; ++i)
     if (g.pl[i].active) lives += g.pl[i].lives;
-  char sub[64];
+  char sub[224];
   if (g.wipe_cleared) {
     // La zona era gia' stata ripulita (l'ha preso un colpo arrivato dopo): resta libera.
     g.phase = PH_CLEAR;
     g.phase_t = 0;
     const int gi = g.L.zones[g.zone].exit_gate;
     if (gi >= 0) g.gate_want[gi] = 1.0f;
-    if (lives == 1) snprintf(sub, sizeof(sub), "la zona resta libera - ultima vita!");
-    else snprintf(sub, sizeof(sub), "la zona resta libera - ancora %d vite", lives);
-    show_msg("SI RIPARTE!", sub, 0xFFFFFF, 2, 120);
+    if (lives == 1) snprintf(sub, sizeof(sub), "%s", tr("la zona resta libera - ultima vita!"));
+    else snprintf(sub, sizeof(sub), tr("la zona resta libera - ancora %d vite"), lives);
+    show_msg(tr("SI RIPARTE!"), sub, 0xFFFFFF, 2, 120);
   } else {
     begin_zone(g.zone, false);
-    if (lives == 1) snprintf(sub, sizeof(sub), "zona %d - ultima vita!", g.zone + 1);
-    else snprintf(sub, sizeof(sub), "zona %d - ancora %d vite", g.zone + 1, lives);
-    show_msg("SI RIPARTE!", sub, 0xFFFFFF, 2, 110);
+    if (lives == 1) snprintf(sub, sizeof(sub), tr("zona %d - ultima vita!"), g.zone + 1);
+    else snprintf(sub, sizeof(sub), tr("zona %d - ancora %d vite"), g.zone + 1, lives);
+    show_msg(tr("SI RIPARTE!"), sub, 0xFFFFFF, 2, 110);
   }
   plat_log("si riparte dalla zona %d della mappa %d (vite %d)", g.zone + 1, g.map_idx + 1, lives);
   update_camera(true);
@@ -210,7 +211,7 @@ void update_spawning(void) {
     if (alive <= 1) {
       begin_wave(g.wave + 1);
       g.spawn_wait = 45;
-      show_msg("ARRIVANO ALTRI!", "", 0xFF8A5C, 2, 90);
+      show_msg(tr("ARRIVANO ALTRI!"), "", 0xFF8A5C, 2, 90);
       snd_ui(SND_WAVE);
     }
     return;
@@ -225,14 +226,14 @@ void update_spawning(void) {
       const Gate& gt = g.L.gates[gi];
       snd_at(SND_GATE, cell_center(&g.L, (gt.x0 + gt.x1) / 2, (gt.z0 + gt.z1) / 2));
     }
-    show_msg("ZONA LIBERA!", "avanti: il cancello è aperto", 0x7CF29A, 2, 180);
+    show_msg(tr("ZONA LIBERA!"), tr("avanti: il cancello è aperto"), 0x7CF29A, 2, 180);
     snd_ui(SND_ZONE_CLEAR);
     plat_log("mappa %d, zona %d libera", g.map_idx + 1, g.zone + 1);
     cards_zone_cleared();
   } else {
     g.phase = PH_MAP_DONE;
     g.phase_t = 0;
-    show_msg("MAPPA COMPLETATA!", "", 0xFFE14D, 2, 200);
+    show_msg(tr("MAPPA COMPLETATA!"), "", 0xFFE14D, 2, 200);
     plat_log("mappa %d (%s) completata: mostri sconfitti in totale %d, cadute %d", g.map_idx + 1, g.L.name, g.kills, g.deaths);
     award_stars();
   }
@@ -281,6 +282,8 @@ void update_gates(void) {
 // Comincia la mappa gia' caricata (g.map_idx) dalla zona 1, come appena scelta: 3 vite a testa,
 // carte da scegliere, oggetti, casse e capsula come all'inizio. again: la stessa mappa da capo
 // nella stessa visita (statistiche dei giocatori e ripartenze restano).
+static void map_start_msg(bool again, bool log = true);
+
 void begin_map(bool again) {
   clear_actors();
   memset(g.bo, 0, sizeof(g.bo));
@@ -329,26 +332,30 @@ void begin_map(bool again) {
   g.screen_t = 0;
   g.paused = false;
   g.cam_pitch = PITCH_PLAY;
-  char big[44], sub[64];
-  const int w = maps_world(g.map_idx);
-  if (again) {
-    snprintf(big, sizeof(big), "SI RICOMINCIA!");
-    if (count_active() > 1) snprintf(sub, sizeof(sub), "la mappa da capo: %d vite a testa", START_LIVES);
-    else snprintf(sub, sizeof(sub), "la mappa da capo: %d vite", START_LIVES);
-    plat_log("=== mappa %d: %s da capo (ripartenza %d in questa visita, %s giro %d) ===", g.map_idx + 1, g.L.name, g.map_wipes,
-             WORLD_NAMES[w >= 0 && w < NWORLDS ? w : 0], g.loop + 1);
-  } else {
-    int k = 0;
-    for (; g.L.name[k] && k < 43; ++k) big[k] = (char)(g.L.name[k] >= 'a' && g.L.name[k] <= 'z' ? g.L.name[k] - 32 : g.L.name[k]);
-    big[k] = 0;
-    const char* what = g.L.boss != BOSS_NONE ? "arena del boss" : "pronti... via!";
-    if (g.loop > 0) snprintf(sub, sizeof(sub), "%s - giro %d, mostri più forti", what, g.loop + 1);
-    else snprintf(sub, sizeof(sub), "%s", what);
-    plat_log("=== mappa %d: %s (%s, giro %d) ===", g.map_idx + 1, g.L.name, WORLD_NAMES[w >= 0 && w < NWORLDS ? w : 0], g.loop + 1);
-  }
-  show_msg(big, sub, 0xFFE14D, 2, 150);
+  map_start_msg(again);
   update_camera(true);
   cards_offer();     // prima della prima ondata; il messaggio della mappa si vede dopo le carte
+}
+
+// Messaggio grande all'inizio della mappa (nome e "pronti... via!", oppure "si ricomincia").
+static void map_start_msg(bool again, bool log) {
+  char big[160], sub[224];
+  const int w = maps_world(g.map_idx);
+  if (again) {
+    snprintf(big, sizeof(big), "%s", tr("SI RICOMINCIA!"));
+    if (count_active() > 1) snprintf(sub, sizeof(sub), tr("la mappa da capo: %d vite a testa"), START_LIVES);
+    else snprintf(sub, sizeof(sub), tr("la mappa da capo: %d vite"), START_LIVES);
+    if (log)
+      plat_log("=== mappa %d: %s da capo (ripartenza %d in questa visita, %s giro %d) ===", g.map_idx + 1, g.L.name, g.map_wipes,
+               WORLD_NAMES[w >= 0 && w < NWORLDS ? w : 0], g.loop + 1);
+  } else {
+    hud_upper(big, tr(g.L.name), sizeof(big));
+    const char* what = g.L.boss != BOSS_NONE ? tr("arena del boss") : tr("pronti... via!");
+    if (g.loop > 0) snprintf(sub, sizeof(sub), tr("%s - giro %d, mostri più forti"), what, g.loop + 1);
+    else snprintf(sub, sizeof(sub), "%s", what);
+    if (log) plat_log("=== mappa %d: %s (%s, giro %d) ===", g.map_idx + 1, g.L.name, WORLD_NAMES[w >= 0 && w < NWORLDS ? w : 0], g.loop + 1);
+  }
+  show_msg(big, sub, 0xFFE14D, 2, 150);
 }
 
 void restart_map(void) { begin_map(true); }
@@ -442,15 +449,15 @@ void play_update(const Pad pads[MAX_PLAYERS]) {
     if (g.wipe_map) {
       g.map_wipes++;
       g.restarts++;
-      show_msg(solo ? "VITE FINITE!" : "TUTTI A TERRA!", "si ricomincia la mappa da capo", 0xFF6A5A, 2, WIPE_MAP_FRAMES);
+      show_msg(solo ? tr("VITE FINITE!") : tr("TUTTI A TERRA!"), tr("si ricomincia la mappa da capo"), 0xFF6A5A, 2, WIPE_MAP_FRAMES);
       if (solo) plat_log("vite finite: la mappa %d (%s) ricomincia da capo", g.map_idx + 1, g.L.name);
       else plat_log("tutti a terra insieme (vite rimaste in tutto: %d): la mappa %d (%s) ricomincia da capo", lives, g.map_idx + 1, g.L.name);
     } else {
       g.wipes++;
-      char sub[64];
-      if (lives == 1) snprintf(sub, sizeof(sub), "resta 1 vita: si rifà questa zona");
-      else snprintf(sub, sizeof(sub), "restano %d vite: si rifà questa zona", lives);
-      show_msg("VITA PERSA!", sub, 0xFF6A5A, 2, WIPE_ZONE_FRAMES);
+      char sub[224];
+      if (lives == 1) snprintf(sub, sizeof(sub), "%s", tr("resta 1 vita: si rifà questa zona"));
+      else snprintf(sub, sizeof(sub), tr("restano %d vite: si rifà questa zona"), lives);
+      show_msg(tr("VITA PERSA!"), sub, 0xFF6A5A, 2, WIPE_ZONE_FRAMES);
       plat_log("vita persa (restano %d): mappa %d, zona %d da rifare", lives, g.map_idx + 1, g.zone + 1);
     }
   }
@@ -877,6 +884,7 @@ void game_save_loaded(void) {
   // il salvataggio e gioca nella partita 1 (se non c'e' la crea); se il pianeta e' a un altro giro
   // la mappa riparte con quello.
   if (g.screen == SC_PLAY && g.tick == 0 && save_slot() < 0 && !save_slot_load(0)) save_slot_new(0);
+  if (g.screen == SC_PLAY && g.tick == 0) map_start_msg(false, false);      // nella lingua salvata
   if (g.screen == SC_PLAY && g.tick == 0 && g.loop != world_giro(maps_world(g.map_idx)) - 1) {
     plat_log("salvataggio letto: %s e' al giro %d, la mappa di prova riparte", WORLD_NAMES[maps_world(g.map_idx)],
              world_giro(maps_world(g.map_idx)));

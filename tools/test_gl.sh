@@ -73,11 +73,15 @@ PYEOF
 if command -v python3 > /dev/null; then
   MENU_IN="0:A@200-202,0:RIGHT@280-282,0:A@320-322,0:LEFT@360-362,0:A@380-382,0:A@450-452,0:A@470-472,0:DOWN@550-552,0:A@562-564,0:UP@600-602,0:A@620-622,0:RIGHT@700-702,1:A@720-722"
   PAUSE_IN="0:A@40-42,1:A@40-42,0:START@100-102,0:DOWN@130-132,0:A@150-152,0:B@175-177,0:DOWN@190-192"
+  # In italiano e (0.5.3) in hindi e giapponese: parole composte e caratteri cinesi.
   for r in software:sw gpu:gl; do
     R=${r%%:*}; D=$T/ui_${r##*:}; G=""; [ "$R" = gpu ] && G=--gl
-    mkdir -p "$D/m" "$D/p" "$D/b"
-    PUPAZZI_BOT= PUPAZZI_PERF=0 PUPAZZI_AA=0 PUPAZZI_OUT="$D/m" PUPAZZI_SALVATAGGI="$D/m" PUPAZZI_RENDERER=$R $H $C $G --frames 761 --quiet --dump "$D/m" --at 150,260,345,430,540,580,760 --in "$MENU_IN" > /dev/null 2>&1
-    PUPAZZI_BOT= PUPAZZI_PERF=0 PUPAZZI_AA=0 PUPAZZI_OUT="$D/p" PUPAZZI_SALVATAGGI="$D/p" PUPAZZI_MAPPA=1 PUPAZZI_GIOCATORI=2 PUPAZZI_RENDERER=$R $H $C $G --frames 201 --quiet --dump "$D/p" --at 30,120,160,200 --in "$PAUSE_IN" > /dev/null 2>&1
+    for L in it hi ja; do
+      mkdir -p "$D/m$L" "$D/p$L"
+      PUPAZZI_LINGUA=$L PUPAZZI_BOT= PUPAZZI_PERF=0 PUPAZZI_AA=0 PUPAZZI_OUT="$D/m$L" PUPAZZI_SALVATAGGI="$D/m$L" PUPAZZI_RENDERER=$R $H $C $G --frames 761 --quiet --dump "$D/m$L" --at 150,260,345,430,540,580,760 --in "$MENU_IN" > /dev/null 2>&1
+      PUPAZZI_LINGUA=$L PUPAZZI_BOT= PUPAZZI_PERF=0 PUPAZZI_AA=0 PUPAZZI_OUT="$D/p$L" PUPAZZI_SALVATAGGI="$D/p$L" PUPAZZI_MAPPA=1 PUPAZZI_GIOCATORI=2 PUPAZZI_RENDERER=$R $H $C $G --frames 201 --quiet --dump "$D/p$L" --at 30,120,160,200 --in "$PAUSE_IN" > /dev/null 2>&1
+    done
+    mkdir -p "$D/b"
     PUPAZZI_BOT=4 PUPAZZI_PERF=0 PUPAZZI_AA=0 PUPAZZI_OUT="$D/b" PUPAZZI_MAPPA=1 PUPAZZI_RENDERER=$R $H $C $G --frames 420 --quiet --dump "$D/b" --at 150,419 > /dev/null 2>&1
   done
   worst=0; nf=0
@@ -89,7 +93,7 @@ if command -v python3 > /dev/null; then
     [ "$n" -gt "$worst" ] && worst=$n
     [ "$n" -gt 600 ] && { echo "ERRORE: interfaccia, ${f#$T/ui_sw/}: $n pixel diversi tra software e GPU"; fail=1; }
   done
-  [ "$nf" -lt 13 ] && { echo "ERRORE: interfaccia, solo $nf fotogrammi confrontati"; fail=1; }
+  [ "$nf" -lt 35 ] && { echo "ERRORE: interfaccia, solo $nf fotogrammi confrontati"; fail=1; }
   echo "interfaccia, software e GPU: $nf fotogrammi, al massimo $worst pixel diversi"
 else
   echo "interfaccia: python3 assente, confronto saltato"

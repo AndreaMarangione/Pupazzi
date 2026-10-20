@@ -47,7 +47,8 @@ CHECK_ARM32 = @if command -v readelf >/dev/null 2>&1; then \
 .PHONY: all native tools console arm32 arm64 pc dist test test-gl test-audio clean
 all: native tools
 native: build/native/pupazzi_libretro.so
-tools: build/native/host build/native/test_raster build/native/test_aim build/native/test_save build/native/test_rules build/native/test_maps build/native/test_boss
+tools: build/native/host build/native/test_raster build/native/test_aim build/native/test_save build/native/test_rules build/native/test_maps build/native/test_boss \
+       build/native/test_lang
 console: arm32 arm64
 arm32: build/arm32/pupazzi_libretro.so
 arm64: build/arm64/pupazzi_libretro.so
@@ -106,12 +107,19 @@ build/native/test_boss: tools/test_boss.cpp $(GAME_SRC) src/swr.cpp $(GEN) $(HDR
 	@mkdir -p build/native
 	$(CXX) $(filter-out -fPIC -fvisibility=hidden,$(CXXFLAGS)) -Isrc -o $@ tools/test_boss.cpp $(GAME_SRC) src/swr.cpp $(GEN) -lm -lpthread
 
+# Prove delle lingue (0.5.3): testi, caratteri, a capo.
+build/native/test_lang: tools/test_lang.cpp src/lang.cpp src/hud.cpp src/ui.cpp src/save.cpp src/plat.cpp $(HDR)
+	@mkdir -p build/native
+	$(CXX) $(filter-out -fPIC -fvisibility=hidden,$(CXXFLAGS)) -Isrc -o $@ tools/test_lang.cpp src/lang.cpp src/hud.cpp src/ui.cpp src/save.cpp src/plat.cpp -lm -lpthread
+
 # Prove del salvataggio: solo save.cpp (e plat.cpp per il registro), in una cartella temporanea.
 build/native/test_save: tools/test_save.cpp src/save.cpp src/plat.cpp $(HDR)
 	@mkdir -p build/native
 	$(CXX) $(filter-out -fPIC -fvisibility=hidden,$(CXXFLAGS)) -Isrc -o $@ tools/test_save.cpp src/save.cpp src/plat.cpp
 
 test: native tools
+	python3 tools/make_lang.py --controlla
+	./build/native/test_lang
 	./build/native/test_raster 300
 	./build/native/test_aim
 	./build/native/test_save

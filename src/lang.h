@@ -15,7 +15,12 @@ static_assert(NLANGS == SAVE_LANGS, "save.h e lang.h devono avere le stesse ling
 
 #define N_(s) s
 
+// Il testo nella lingua scelta (it e' il testo italiano, come nella tabella).
 const char* tr(const char* it);
+// Nella lingua l (i comandi per RetroArch).
+const char* tr_in(int l, const char* it);
+// Il testo e' nella tabella (prove).
+bool tr_known(const char* it);
 void lang_set(int l);
 int lang_get(void);
 // Nome della lingua l scritto in quella lingua ("Italiano", "English", "中文"...).

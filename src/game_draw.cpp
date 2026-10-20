@@ -1271,7 +1271,7 @@ void player_bars(Hud* h, const Camera& cam, int i) {
     hud_box(h, x0 + 2.0f + (float)k * 9.0f, y0 - 11.0f, 7.0f, 7.0f, 2.0f, O(0x1E1C24));
     hud_rect(h, x0 + 5.0f + (float)k * 9.0f, y0 - 12.5f, 2.0f, 2.0f, 0xFF8A2A);
   }
-  if (p.frozen) stext(h, sx, y0 - 22.0f, HF_B12, ui::A2, "COMANDI FERMI", 1.0f, 0);
+  if (p.frozen) stext(h, sx, y0 - 22.0f, HF_B12, ui::A2, tr("COMANDI FERMI"), 1.0f, 0);
 }
 
 // Schede dei giocatori in alto a sinistra: la faccia dell'eroe nella cornice del colore del
@@ -1320,26 +1320,27 @@ float player_icons(Hud* h) {
 // Riga in alto, a destra delle schede: pianeta e mappa, giro, zona, mostri che mancano; nell'arena
 // la vita del boss al posto della zona.
 void top_line(Hud* h, float x) {
-  char buf[64];
+  char buf[128];
   const float cy = HY + 14.0f;
   const int w = g.L.world >= 0 && g.L.world < NWORLDS ? g.L.world : 0;
-  if (maps_is_boss(g.map_idx)) snprintf(buf, sizeof(buf), "%s · BOSS", WORLD_NAMES[w]);
-  else snprintf(buf, sizeof(buf), "%s %d", WORLD_NAMES[w], map_in_world(g.map_idx) + 1);
+  if (maps_is_boss(g.map_idx)) snprintf(buf, sizeof(buf), tr("%s · BOSS"), tr(WORLD_NAMES[w]));
+  else snprintf(buf, sizeof(buf), "%s %d", tr(WORLD_NAMES[w]), map_in_world(g.map_idx) + 1);
   stext(h, x, cy, HF_B13, ui::L1, buf, 1.5f);
   x += hud_text_w(HF_B13, buf, 1.5f) + 10.0f;
-  snprintf(buf, sizeof(buf), "GIRO %d", g.loop + 1);
+  snprintf(buf, sizeof(buf), tr("GIRO %d"), g.loop + 1);
   hud_frame(h, x + 1.0f, cy - 8.5f, hud_text_w(HF_B11, buf, 1.5f) + 15.0f, 19.0f, 0, 1.5f, A(ui::SCRIM, 0.6f));
   x += ui::tag(h, x, cy, buf, ui::FTX, HF_B11, 1.5f, 6.0f, 19.0f) + 12.0f;
   float xr = 640.0f - HX;
   if (g.phase == PH_CLEAR) {
-    const float tw = hud_text_w(HF_B13, "VAI AVANTI", 1.5f);
+    const char* go = tr("VAI AVANTI");
+    const float tw = hud_text_w(HF_B13, go, 1.5f);
     if (blink(20)) {
-      stext(h, xr - 14.0f, cy, HF_B13, ui::L1, "VAI AVANTI", 1.5f, 1);
+      stext(h, xr - 14.0f, cy, HF_B13, ui::L1, go, 1.5f, 1);
       ui::chev(h, xr - 8.0f, cy - 6.0f, true, ui::L1);
     }
     xr -= tw + 26.0f;
   } else if (g.phase == PH_FIGHT && !g.boss.alive) {
-    snprintf(buf, sizeof(buf), "MOSTRI %d", g.enemies_left);
+    snprintf(buf, sizeof(buf), tr("MOSTRI %d"), g.enemies_left);
     stext(h, xr, cy, HF_B13, ui::A2, buf, 1.5f, 1);
     xr -= hud_text_w(HF_B13, buf, 1.5f) + 12.0f;
   } else if (g.boss.alive && count_monsters() > 0) {
@@ -1359,7 +1360,7 @@ void top_line(Hud* h, float x) {
     hud_rect(h, x0 + floorf(W / 3.0f), y0, 2.0f, 14.0f, 0x18081E);
     hud_rect(h, x0 + floorf(2.0f * W / 3.0f), y0, 2.0f, 14.0f, 0x18081E);
   } else {
-    snprintf(buf, sizeof(buf), "ZONA %d/%d", g.zone + 1, g.L.nzones);
+    snprintf(buf, sizeof(buf), tr("ZONA %d/%d"), g.zone + 1, g.L.nzones);
     stext(h, x, cy, HF_B13, ui::TX, buf, 1.5f);
   }
 }
@@ -1371,7 +1372,7 @@ void center_msg(Hud* h) {
   hud_box_grad(h, 0, by, 320, bh, 0, A(ui::SCRIM, 0.0f), A(ui::SCRIM, 0.6f), 90.0f);
   hud_box_grad(h, 320, by, 320, bh, 0, A(ui::SCRIM, 0.6f), A(ui::SCRIM, 0.0f), 90.0f);
   const float base = hud_mid(HF_T32, cy);
-  char big[96], sub[128];
+  char big[192], sub[256];
   ui::fit(big, sizeof(big), g.msg, HF_T32, 3.0f, 600.0f, "...");   // i nomi delle mappe personalizzate
   hud_text(h, 320, base + 2.0f, HF_T32, O(ui::TDROP), big, 3.0f, 0);
   hud_text_glow(h, 320, base, HF_T32, ui::TGLOW, big, 3.0f, 0);
@@ -1409,7 +1410,7 @@ void build_play_hud(Hud* h, const Camera& cam) {
     const FloatText& f = g.ft[i];
     if (!f.alive) continue;
     float sx, sy;
-    if (to_px(cam, f.pos, &sx, &sy)) stext(h, sx, sy + 8.0f, HF_B13, f.rgb, f.txt, 1.0f, 0);
+    if (to_px(cam, f.pos, &sx, &sy)) stext(h, sx, sy + 8.0f, HF_B13, f.rgb, tr(f.txt), 1.0f, 0);   // numeri: restano come sono
   }
 
   // In alto: le schede dei giocatori a sinistra, poi la riga con mappa, giro, zona e mostri.
@@ -1430,7 +1431,7 @@ void build_play_hud(Hud* h, const Camera& cam) {
     joining |= g.pl[i].joining;
   }
   if (!g.paused && !g.cards_open && !joining && waiting && g.zone == 0 && g.tick < 900 && g.map_idx == 0) {
-    const char* msg = "altri giocatori: premete un tasto";
+    const char* msg = tr("altri giocatori: premete un tasto");
     const float cy = 480.0f - HY - 11.0f;
     float ww = 4.0f + hud_text_w(HF_S13, msg, 1.0f);
     for (int i = 0; i < MAX_PLAYERS; ++i)

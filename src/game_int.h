@@ -5,6 +5,7 @@
 // partita, bit per bit, su ogni processore.
 #pragma once
 #include "game.h"
+#include "lang.h"
 #include "level.h"
 #include "models.h"
 #include "audio.h"
@@ -365,7 +366,7 @@ struct Game {
   float cam_dist, cam_pitch, shake;
   bool cam_back;                // telecamera rivolta verso sud (menu: i personaggi guardano verso chi gioca)
   float gate_want[LV_MAX_GATES];
-  char msg[44], msg2[64];
+  char msg[160], msg2[224];        // gia' nella lingua scelta (tr al momento del messaggio)
   int msg_t, msg_size;
   uint32_t msg_rgb;
   int kills, deaths, wipes, maps_done;
@@ -564,4 +565,4 @@ void card_elem_hit(int k, int owner, int elem);   // fuoco o neve sul mostro k: 
 void card_burn_tick(int k);                  // mostro che brucia: danni e fiammelle
 bool card_shield_hit(int i);                 // SCUDO: true se il colpo si ferma
 void card_special_used(int i);               // SPECIALE GENEROSO
-bool cards_layout_ok(char* why, int n);      // prove: nomi e descrizioni stanno nei riquadri
+bool cards_layout_ok(char* why, int n, bool all = false);   // prove: nomi e descrizioni stanno nei riquadri (all: li scrive tutti)

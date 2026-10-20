@@ -31,12 +31,13 @@ void scrim_bottom(Hud* h, float hh = 120.0f);
 void overlay(Hud* h, float a);
 
 // Testo che sta in w pixel: se serve tagliato alla fine, con ell ("…"; per le facce dei titoli, che
-// non hanno quel carattere, "..."). Non spezza i caratteri UTF-8. Restituisce dst.
+// non hanno quel carattere, "..."). Non spezza i caratteri UTF-8 ne' le parole hindi. Restituisce dst.
 const char* fit(char* dst, int n, const char* s, int face, float track, float w, const char* ell = "\xE2\x80\xA6");
-// Righe larghe al massimo w pixel, a capo sugli spazi; se non bastano max righe l'ultima finisce con
-// "…". Restituisce quante righe.
-const int WRAP_LEN = 160;
-int wrap(const char* s, float w, int face, float track, char (*out)[WRAP_LEN], int max);
+// Righe larghe al massimo w pixel, a capo sugli spazi e (cinese, giapponese) tra un carattere e
+// l'altro; se non bastano max righe l'ultima finisce con "…" e cut (se c'e') diventa true.
+// Restituisce quante righe.
+const int WRAP_LEN = 256;
+int wrap(const char* s, float w, int face, float track, char (*out)[WRAP_LEN], int max, bool* cut = 0);
 
 // Testo centrato in altezza su cy.
 void text(Hud* h, float x, float cy, int face, uint32_t argb, const char* s, float track = 0.0f, int align = -1);

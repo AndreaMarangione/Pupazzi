@@ -4,6 +4,7 @@
 #include "game_int.h"
 #include "plat.h"
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 static int g_fail = 0;
@@ -88,11 +89,14 @@ static int test_monster(Vec3 pos) {
 static void test_cards(void) {
   printf("10) carte\n");
   game_set_cards_enabled(true);
-  {
-    char why[160];
-    const bool ok = cards_layout_ok(why, sizeof(why));
-    check(ok, ok ? "nomi e descrizioni stanno nei riquadri con 1, 2, 3 e 4 giocatori" : why);
+  for (int l = 0; l < NLANGS; ++l) {                // in ogni lingua (0.5.3)
+    lang_set(l);
+    char why[160], what[200];
+    const bool ok = cards_layout_ok(why, sizeof(why), getenv("PUPAZZI_CARTE_TUTTE") != NULL);
+    snprintf(what, sizeof(what), "%s: %s", save_lang_id(l), ok ? "nomi e descrizioni stanno nei riquadri con 1, 2, 3 e 4 giocatori" : why);
+    check(ok, what);
   }
+  lang_set(LANG_IT);
   {
     game_init();
     game_quick_start(0, 4, "0123");

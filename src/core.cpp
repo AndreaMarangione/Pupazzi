@@ -22,6 +22,7 @@
 #include "plat.h"
 #include "audio.h"
 #include "save.h"
+#include "lang.h"
 
 #ifndef PUPAZZI_BUILD
 #define PUPAZZI_BUILD "locale"
@@ -785,12 +786,56 @@ static void open_save(void) {
     save_data()->antialias = false;
     save_write();
   }
+  // PUPAZZI_LINGUA=it|en|es|pt|zh|ja|hi: la lingua (prove; in gioco si sceglie dalla prima
+  // schermata). Vale piu' di quella salvata.
+  const char* lg = getenv("PUPAZZI_LINGUA");
+  for (int l = 0; lg && l < SAVE_LANGS; ++l)
+    if (!strcmp(lg, save_lang_id(l))) {
+      save_data()->lang = (uint8_t)l;
+      plat_log("lingua (PUPAZZI_LINGUA): %s", lg);
+    }
   game_save_loaded();
   // PUPAZZI_MIRA=0..3: mira extra morbida, morbida, media o rapida per tutti (prove; in gioco si
   // sceglie nella pausa). Vale piu' della mira salvata.
   const int mira = env_int("PUPAZZI_MIRA", -1);
   if (mira >= 0)
     for (int p = 0; p < MAX_PLAYERS; ++p) game_set_aim_level(p, mira);
+}
+
+// Nomi dei tasti per il menu dei comandi di RetroArch, nella lingua del gioco; per cinese,
+// giapponese e hindi in inglese (i caratteri di RetroArch di solito non li hanno). Si rimandano
+// quando la lingua cambia.
+static int g_desc_lang = -1;
+
+static void send_descriptors(void) {
+  struct Key { unsigned device, index, id; const char* name; };
+  static const Key KEYS[] = {
+    { RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_LEFT, N_("Sinistra") },
+    { RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_RIGHT, N_("Destra") },
+    { RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_UP, N_("Su") },
+    { RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_DOWN, N_("Giù") },
+    { RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_B, N_("Indietro (menu)") },
+    { RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_A, N_("Conferma (menu)") },
+    { RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_R, N_("Colpo normale") },
+    { RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_L, N_("Colpo speciale") },
+    { RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_R2, N_("Salto") },
+    { RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_L2, N_("Bomba") },
+    { RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_START, N_("Pausa") },
+    { RETRO_DEVICE_ANALOG, RETRO_DEVICE_INDEX_ANALOG_LEFT, RETRO_DEVICE_ID_ANALOG_X, N_("Movimento X") },
+    { RETRO_DEVICE_ANALOG, RETRO_DEVICE_INDEX_ANALOG_LEFT, RETRO_DEVICE_ID_ANALOG_Y, N_("Movimento Y") },
+    { RETRO_DEVICE_ANALOG, RETRO_DEVICE_INDEX_ANALOG_RIGHT, RETRO_DEVICE_ID_ANALOG_X, N_("Mira X") },
+    { RETRO_DEVICE_ANALOG, RETRO_DEVICE_INDEX_ANALOG_RIGHT, RETRO_DEVICE_ID_ANALOG_Y, N_("Mira Y") },
+  };
+  const int NK = (int)(sizeof(KEYS) / sizeof(KEYS[0]));
+  static struct retro_input_descriptor desc[MAX_PLAYERS * NK + 2];
+  const int l = lang_get(), dl = l == LANG_ZH || l == LANG_JA || l == LANG_HI ? LANG_EN : l;
+  int n = 0;
+  for (unsigned p = 0; p < MAX_PLAYERS; ++p)
+    for (int k = 0; k < NK; ++k) desc[n++] = { p, KEYS[k].device, KEYS[k].index, KEYS[k].id, tr_in(dl, KEYS[k].name) };
+  desc[n++] = { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_SELECT, tr_in(dl, N_("Prestazioni (con START tenuti: esci)")) };
+  desc[n] = { 0, 0, 0, 0, NULL };
+  env_cb(RETRO_ENVIRONMENT_SET_INPUT_DESCRIPTORS, (void*)desc);
+  g_desc_lang = l;
 }
 
 RETRO_API bool retro_load_game(const struct retro_game_info* info) {
@@ -800,29 +845,6 @@ RETRO_API bool retro_load_game(const struct retro_game_info* info) {
     plat_log("ERRORE: il frontend non accetta XRGB8888");
     return false;
   }
-  static const struct retro_input_descriptor desc[] = {
-#define PUPAZZI_PAD(p) \
-    { p, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_LEFT, "Sinistra" }, \
-    { p, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_RIGHT, "Destra" }, \
-    { p, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_UP, "Su" }, \
-    { p, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_DOWN, "Giu'" }, \
-    { p, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_B, "Indietro (menu)" }, \
-    { p, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_A, "Conferma (menu)" }, \
-    { p, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_R, "Colpo normale" }, \
-    { p, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_L, "Colpo speciale" }, \
-    { p, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_R2, "Salto" }, \
-    { p, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_L2, "Bomba" }, \
-    { p, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_START, "Pausa" }, \
-    { p, RETRO_DEVICE_ANALOG, RETRO_DEVICE_INDEX_ANALOG_LEFT, RETRO_DEVICE_ID_ANALOG_X, "Movimento X" }, \
-    { p, RETRO_DEVICE_ANALOG, RETRO_DEVICE_INDEX_ANALOG_LEFT, RETRO_DEVICE_ID_ANALOG_Y, "Movimento Y" }, \
-    { p, RETRO_DEVICE_ANALOG, RETRO_DEVICE_INDEX_ANALOG_RIGHT, RETRO_DEVICE_ID_ANALOG_X, "Mira X" }, \
-    { p, RETRO_DEVICE_ANALOG, RETRO_DEVICE_INDEX_ANALOG_RIGHT, RETRO_DEVICE_ID_ANALOG_Y, "Mira Y" },
-    PUPAZZI_PAD(0) PUPAZZI_PAD(1) PUPAZZI_PAD(2) PUPAZZI_PAD(3)
-#undef PUPAZZI_PAD
-    { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_SELECT, "Prestazioni (con START tenuti: esci)" },
-    { 0, 0, 0, 0, NULL }
-  };
-  env_cb(RETRO_ENVIRONMENT_SET_INPUT_DESCRIPTORS, (void*)desc);
   A.bitmasks = env_cb(RETRO_ENVIRONMENT_GET_INPUT_BITMASKS, NULL);
 
   // Renderer: GPU salvo richiesta diversa (variabile d'ambiente, poi opzione del core).
@@ -849,6 +871,7 @@ RETRO_API bool retro_load_game(const struct retro_game_info* info) {
   plat_log("maschere di input: %s; cartella dei risultati: %s", A.bitmasks ? "si" : "no", A.out_dir);
   if (A.bots) plat_log("giocatori automatici: %d", A.bots);
   open_save();
+  send_descriptors();
   remote_close();    // retro_load_game di nuovo senza retro_unload_game: le porte di prima
   remote_open();
   return true;
@@ -895,6 +918,7 @@ RETRO_API void retro_run(void) {
   }
 
   read_input();
+  if (lang_get() != g_desc_lang) send_descriptors();
   if (A.frame % 60 == 59 && A.hdmi_force < 0 && A.hdmi_src != 0) hdmi_poll(false);   // ogni secondo: si puo' staccare in partita
   if (A.bots) game_bot_pads(A.pads, A.bots);
   handle_controls();

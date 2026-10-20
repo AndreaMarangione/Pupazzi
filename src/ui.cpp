@@ -1,5 +1,6 @@
 #include "ui.h"
 #include "game.h"
+#include "lang.h"
 #include <math.h>
 #include <stdio.h>
 #include <string.h>
@@ -43,13 +44,55 @@ void scrim_top(Hud* h, float hh) { hud_box_grad(h, 0, 0, 640, hh, 0, A(SCRIM, 0.
 void scrim_bottom(Hud* h, float hh) { hud_box_grad(h, 0, 480.0f - hh, 640, hh, 0, A(SCRIM, 0.0f), A(SCRIM, 0.72f), 180.0f); }
 void overlay(Hud* h, float a) { hud_box(h, 0, 0, 640, 480, 0, A(SCRIM, a)); }
 
+namespace {
+
+// Punto di codice che finisce in s[len - 1] (e dove comincia).
+uint32_t cp_before(const char* s, int len, int* start) {
+  int i = len - 1;
+  while (i > 0 && ((unsigned char)s[i] & 0xC0u) == 0x80u) --i;
+  const char* p = s + i;
+  *start = i;
+  return hud_utf8_next(p);
+}
+
+// Cinese e giapponese: non si va a capo prima della punteggiatura di chiusura e dei piccoli kana,
+// ne' dopo quella di apertura.
+bool no_start(uint32_t c) {
+  static const uint32_t L[] = { 0x3001, 0x3002, 0xFF0C, 0xFF0E, 0xFF01, 0xFF1F, 0xFF1A, 0xFF1B, 0xFF09, 0x300D, 0x300F, 0x3011,
+                                0x3015, 0x3009, 0x300B, 0x30FC, 0x3005, 0x3041, 0x3043, 0x3045, 0x3047, 0x3049, 0x3063, 0x3083,
+                                0x3085, 0x3087, 0x308E, 0x30A1, 0x30A3, 0x30A5, 0x30A7, 0x30A9, 0x30C3, 0x30E3, 0x30E5, 0x30E7,
+                                0x30EE, 0x30F5, 0x30F6, 0x30FB, 0x301C, 0x2026, '!', '?', ':', ';', ',', '.', ')', '%' };
+  for (uint32_t x : L)
+    if (x == c) return true;
+  return false;
+}
+bool no_end(uint32_t c) { return c == 0xFF08 || c == 0x300C || c == 0x300E || c == 0x3010 || c == 0x3014 || c == 0x3008 || c == 0x300A; }
+
+float width_of(const char* s, int n, int face, float track) {
+  char tmp[WRAP_LEN * 2];
+  if (n > (int)sizeof(tmp) - 1) n = (int)sizeof(tmp) - 1;
+  memcpy(tmp, s, (size_t)n);
+  tmp[n] = 0;
+  return hud_text_w(face, tmp, track);
+}
+
+}  // namespace
+
 const char* fit(char* dst, int n, const char* s, int face, float track, float w, const char* ell) {
   snprintf(dst, (size_t)n, "%s", s);
   if (hud_text_w(face, dst, track) <= w) return dst;
   const int el = (int)strlen(ell);
   int len = (int)strlen(dst);
   while (len > 0) {
-    do { --len; } while (len > 0 && ((unsigned char)dst[len] & 0xC0u) == 0x80u);   // un carattere intero
+    // Via un carattere intero; una parola hindi va via tutta (a meta' non si sa comporre).
+    int start;
+    const bool deva = hud_is_deva(cp_before(dst, len, &start));
+    len = start;
+    while (deva && len > 0) {
+      const bool more = hud_is_deva(cp_before(dst, len, &start));
+      if (!more) break;
+      len = start;
+    }
     while (len > 0 && dst[len - 1] == ' ') --len;
     if (len + el + 1 > n) continue;
     memcpy(dst + len, ell, (size_t)el + 1);
@@ -59,41 +102,72 @@ const char* fit(char* dst, int n, const char* s, int face, float track, float w,
   return dst;
 }
 
-int wrap(const char* s, float w, int face, float track, char (*out)[WRAP_LEN], int max) {
+int wrap(const char* s, float w, int face, float track, char (*out)[WRAP_LEN], int max, bool* cut) {
   int n = 0;
+  if (cut) *cut = false;
   while (*s == ' ') ++s;
   while (*s && n < max) {
-    int cut = 0;
-    for (int e = 0;;) {
-      while (s[e] == ' ') ++e;
-      while (s[e] && s[e] != ' ') ++e;
-      if (e >= WRAP_LEN - 1) break;
-      char tmp[WRAP_LEN];
-      memcpy(tmp, s, (size_t)e);
-      tmp[e] = 0;
-      if (cut > 0 && hud_text_w(face, tmp, track) > w) break;
-      cut = e;
-      if (!s[e]) break;
+    // Dove si puo' andare a capo: agli spazi e tra due caratteri cinesi o giapponesi. La riga e'
+    // la piu' lunga che sta in w; la riga dopo comincia dopo gli spazi.
+    int best = 0, best_next = 0;
+    uint32_t prev = 0;
+    for (const char* p = s;;) {
+      const char* q = p;
+      const uint32_t c = *p ? hud_utf8_next(q) : 0;
+      int end = -1, next = -1;
+      if (!c) {
+        end = next = (int)(p - s);
+      } else if (c == ' ') {
+        end = (int)(p - s);
+        const char* t = p;
+        while (*t == ' ') ++t;
+        next = (int)(t - s);
+      } else if (p > s && hud_is_cjk(prev) && hud_is_cjk(c) && !no_start(c) && !no_end(prev)) {
+        end = next = (int)(p - s);
+      }
+      if (end > 0) {
+        if (end >= WRAP_LEN - 1 || (best > 0 && width_of(s, end, face, track) > w)) break;
+        best = end;
+        best_next = next;
+        if (best > 0 && width_of(s, end, face, track) > w) break;      // la prima e' gia' troppo lunga
+      }
+      if (!c) break;
+      if (c == ' ') {
+        while (*q == ' ') ++q;
+        prev = ' ';
+      } else {
+        prev = c;
+      }
+      p = q;
     }
-    if (cut == 0) {                                  // una parola sola piu' lunga della riga
-      while (cut < WRAP_LEN - 1 && s[cut] && s[cut] != ' ') ++cut;
-      while (cut > 0 && ((unsigned char)s[cut] & 0xC0u) == 0x80u) --cut;
-      if (cut == 0) cut = 1;
+    if (best == 0 || width_of(s, best, face, track) > w) {
+      // Una parola sola piu' lunga della riga: tagliata dove sta (fit mette i puntini).
+      best = 0;
+      for (const char* p = s; *p && *p != ' ';) {
+        const char* q = p;
+        hud_utf8_next(q);
+        if ((int)(q - s) >= WRAP_LEN - 1) break;
+        best = (int)(q - s);
+        p = q;
+      }
+      if (best == 0) best = 1;
+      best_next = best;
+      while (s[best_next] == ' ') ++best_next;
     }
-    char line[WRAP_LEN];
-    memcpy(line, s, (size_t)cut);
-    line[cut] = 0;
-    s += cut;
-    while (*s == ' ') ++s;
-    if (*s && n == max - 1) {                        // non ci sta tutto: l'ultima riga con i puntini
-      char rest[2 * WRAP_LEN];
-      snprintf(rest, sizeof(rest), "%s %s", line, s);
-      fit(out[n], WRAP_LEN, rest, face, track, w);
+    if (s[best_next] && n == max - 1) {             // non ci sta tutto: l'ultima riga con i puntini
+      fit(out[n], WRAP_LEN, s, face, track, w);
+      if (cut) *cut = true;
       return n + 1;
     }
+    char line[WRAP_LEN];
+    memcpy(line, s, (size_t)best);
+    line[best] = 0;
     fit(out[n], WRAP_LEN, line, face, track, w);
     ++n;
+    s += best_next;
+    while (*s == ' ') ++s;
   }
+  if (*s && cut) *cut = true;
   return n;
 }
 
@@ -194,8 +268,8 @@ float tag(Hud* h, float x, float cy, const char* s, uint32_t color, int face, fl
 }
 
 float gp(Hud* h, float x, float cy, int player, int face) {
-  char buf[4];
-  snprintf(buf, sizeof(buf), "G%d", (player & 3) + 1);
+  char buf[16];
+  snprintf(buf, sizeof(buf), tr("G%d"), (player & 3) + 1);     // G1 in italiano, P1 in inglese...
   const float w = fmaxf(24.0f, hud_text_w(face, buf, 0.5f) + 8.0f);
   hud_box(h, x, cy - 9.0f, w, 18.0f, 4.0f, O(PLAYER[player & 3]));
   text(h, x + w * 0.5f, cy, face, O((player & 3) == 3 ? 0x06102E : 0xFFFFFF), buf, 0.5f, 0);

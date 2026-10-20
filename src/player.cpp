@@ -9,22 +9,22 @@
 const CharDef CHARS[NCHARS] = {
   // nome, chi, ruolo, colpo, speciale, colore, vita, velocita',
   // barra, costo, cadenza, attesa, ricarica, gittata, mira, larghezza, costo speciale, mira speciale, gittata, larghezza
-  { "ASTRO", "astronauta della Terra", "equilibrato", "fucilone: raffica di 3 colpi a ventaglio", "3 razzi a ricerca", 0xE9EEF5,
+  { N_("ASTRO"), N_("astronauta della Terra"), N_("equilibrato"), N_("fucilone: raffica di 3 colpi a ventaglio"), N_("3 razzi a ricerca"), 0xE9EEF5,
     100.0f, 5.0f, 5.0f, 1.0f, 22, 30, 100, 8.0f, AIM_FAN, 0.44f, 160.0f, AIM_LINE, 10.0f, 0.6f },
-  { "MOCHI", "coniglio della Luna", "resistente", "ventaglio di 5 schegge di luna", "salto lunare con le schegge", 0xD9D6F0,
+  { N_("MOCHI"), N_("coniglio della Luna"), N_("resistente"), N_("ventaglio di 5 schegge di luna"), N_("salto lunare con le schegge"), 0xD9D6F0,
     140.0f, 4.7f, 4.0f, 1.0f, 28, 30, 88, 5.2f, AIM_FAN, 0.70f, 150.0f, AIM_LOB, 6.5f, 2.3f },
-  { "MARZIO", "marziano del polo", "controllo", "3 palle di ghiaccio secco che rallentano", "tempesta di sabbia gelata", 0xE8673C,
+  { N_("MARZIO"), N_("marziano del polo"), N_("controllo"), N_("3 palle di ghiaccio secco che rallentano"), N_("tempesta di sabbia gelata"), 0xE8673C,
     95.0f, 5.0f, 8.0f, 1.0f, 13, 30, 96, 8.5f, AIM_FAN, 0.35f, 140.0f, AIM_AREA, 4.0f, 0.0f },
-  { "ZOLFO", "fiamma di Venere", "lanciafiamme", "fiamma che attraversa i mostri", "eruzione: 5 bolle di lava", 0xFFC93C,
+  { N_("ZOLFO"), N_("fiamma di Venere"), N_("lanciafiamme"), N_("fiamma che attraversa i mostri"), N_("eruzione: 5 bolle di lava"), 0xFFC93C,
     120.0f, 4.8f, 100.0f, 4.2f, 3, 25, 78, 4.2f, AIM_FAN, 0.32f, 180.0f, AIM_LOB, 8.0f, 1.6f },
 };
 
 // Nome, nome nel menu di pausa, soglia, taglio minimo del filtro (Hz), beta (Hz per rad/s).
 const AimTune AIM_TUNE[NAIMLEVELS] = {
-  { "extra morbida", "EXTRA MORBIDA", 0.60f, 0.5f, 0.12f },
-  { "morbida", "MORBIDA", 0.55f, 0.8f, 0.20f },
-  { "media", "MEDIA", 0.50f, 1.5f, 0.30f },
-  { "rapida", "RAPIDA", 0.45f, 3.0f, 0.50f },
+  { "extra morbida", N_("EXTRA MORBIDA"), 0.60f, 0.5f, 0.12f },
+  { "morbida", N_("MORBIDA"), 0.55f, 0.8f, 0.20f },
+  { "media", N_("MEDIA"), 0.50f, 1.5f, 0.30f },
+  { "rapida", N_("RAPIDA"), 0.45f, 3.0f, 0.50f },
 };
 
 namespace {
@@ -497,7 +497,7 @@ static void player_fall(int i) {
     puff(p.pos + v3(0.0f, -0.6f, 0.0f), PK_PUFF, PC_WHITE, v3(d_cos(a) * 1.6f, 3.2f + 0.3f * (float)(k & 1), d_sin(a) * 1.6f), 0.7f, 26);
   }
   burst(p.pos + v3(0.0f, -0.4f, 0.0f), 8, PC_SNOW, 3.0f);
-  add_float_text(v3(p.pos.x, 1.6f, p.pos.z), 0xBFEFFF, "SPLASH!");
+  add_float_text(v3(p.pos.x, 1.6f, p.pos.z), 0xBFEFFF, N_("SPLASH!"));
   snd_at(SND_SPLASH, p.pos);   // il tonfo nell'acqua arriva dopo 0,75 s (niente SND_DOWN sopra)
   plat_log("giocatore %d caduto nel cenote", i + 1);
   p.hp = 0.0f;
@@ -525,15 +525,15 @@ static void player_down(int i, bool pit) {
   p.respawn = p.out ? 0 : RESPAWN_FRAMES;
   plat_log("giocatore %d a terra (mappa %d, zona %d): vite rimaste %d", i + 1, g.map_idx + 1, g.zone + 1, p.lives);
   if (count_active() < 2) return;       // da soli: zona rifatta o mappa da capo (game.cpp)
-  char big[44], small[64];
+  char big[160], small[224];
   if (p.out) {
-    snprintf(big, sizeof(big), pit ? "G%d È CADUTO NEL CENOTE!" : "G%d SENZA VITE!", i + 1);
-    snprintf(small, sizeof(small), pit ? "senza vite: resta fuori fino alla fine" : "resta fuori fino alla fine della mappa");
+    snprintf(big, sizeof(big), pit ? tr("G%d È CADUTO NEL CENOTE!") : tr("G%d SENZA VITE!"), i + 1);
+    snprintf(small, sizeof(small), "%s", pit ? tr("senza vite: resta fuori fino alla fine") : tr("resta fuori fino alla fine della mappa"));
     plat_log("giocatore %d senza vite: resta fuori fino alla fine della mappa (o finche' non ricomincia)", i + 1);
   } else {
-    snprintf(big, sizeof(big), pit ? "G%d È CADUTO NEL CENOTE!" : "G%d A TERRA!", i + 1);
-    snprintf(small, sizeof(small), p.lives == 1 ? "resta 1 vita: rientra tra 5 secondi" : "restano %d vite: rientra tra 5 secondi",
-             p.lives);
+    snprintf(big, sizeof(big), pit ? tr("G%d È CADUTO NEL CENOTE!") : tr("G%d A TERRA!"), i + 1);
+    if (p.lives == 1) snprintf(small, sizeof(small), "%s", tr("resta 1 vita: rientra tra 5 secondi"));
+    else snprintf(small, sizeof(small), tr("restano %d vite: rientra tra 5 secondi"), p.lives);
   }
   show_msg(big, small, PLAYER_RGB[i], 2, p.out ? 150 : 100);
 }

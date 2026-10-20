@@ -1,0 +1,2248 @@
+# Testi del gioco nelle 7 lingue: italiano, inglese, spagnolo, portoghese (del Portogallo), cinese
+# semplificato, giapponese, hindi. Da qui tools/make_lang.py genera src/lang_data.h (e controlla
+# che ci siano tutti i testi del codice, con gli stessi %d e %s); tools/make_font.py prende i
+# caratteri che servono per cinese, giapponese e hindi.
+#
+# Un blocco per testo, separati da una riga vuota. La riga "it" e' la chiave: il testo italiano
+# scritto uguale nel codice (tr("..."), N_("...")). Le righe @T25 @T32 @T38 @T44 @B22 dicono in
+# quali facce grandi si disegna il testo (titoli, messaggi grandi, nomi grandi): le facce grandi
+# di cinese, giapponese e hindi hanno solo i caratteri di questi testi.
+#
+# Regole: niente spazi all'inizio o alla fine; i %d, %s, %u come nell'italiano e nello stesso
+# ordine (oppure tutti con la posizione: %2$d prima di %1$s); nelle lingue latine i testi in
+# maiuscolo restano in maiuscolo. Spagnolo neutro (tu, niente vosotros); portoghese del
+# Portogallo (guardar, ecrã, equipa, tu); hindi con "tu" amichevole (तुम) e i tasti all'imperativo
+# cortese (चुनें). Nomi degli eroi: uguali nelle lingue latine, trascritti nelle altre.
+
+
+# === Prima schermata ==========================================================================
+
+# sotto il nome del gioco (S15, al massimo 576 pixel)
+it DA 1 A 4 AMICI CONTRO I MOSTRI
+en 1 TO 4 FRIENDS AGAINST THE MONSTERS
+es DE 1 A 4 AMIGOS CONTRA LOS MONSTRUOS
+pt DE 1 A 4 AMIGOS CONTRA OS MONSTROS
+zh 1至4位好友并肩对抗怪物
+ja 1〜4人で力を合わせてモンスターと戦おう
+hi 1 से 4 दोस्त, राक्षसों के ख़िलाफ़
+
+# voci della prima schermata (S16, circa 188 pixel); CARICA e GESTISCI anche come titoli
+it NUOVA PARTITA
+en NEW GAME
+es NUEVA PARTIDA
+pt NOVO JOGO
+zh 新游戏
+ja ニューゲーム
+hi नया गेम
+
+@T32
+it CARICA SALVATAGGIO
+en LOAD GAME
+es CARGAR PARTIDA
+pt CARREGAR JOGO
+zh 读取存档
+ja データをロード
+hi सेव लोड करें
+
+@T32
+it GESTISCI SALVATAGGI
+en MANAGE SAVES
+es GESTIONAR PARTIDAS
+pt GERIR JOGOS
+zh 管理存档
+ja データを管理
+hi सेव मैनेज करें
+
+# voce e titolo della pagina delle lingue (accanto c'e' il nome della lingua scelta)
+@T32
+it LINGUA
+en LANGUAGE
+es IDIOMA
+pt IDIOMA
+zh 语言
+ja 言語
+hi भाषा
+
+it ESCI
+en QUIT
+es SALIR
+pt SAIR
+zh 退出
+ja 終了
+hi बाहर निकलें
+
+# piede dei menu: A ..., B ... (S14)
+it conferma
+en confirm
+es confirmar
+pt confirmar
+zh 确认
+ja 決定
+hi पुष्टि करें
+
+it indietro
+en back
+es atrás
+pt voltar
+zh 返回
+ja 戻る
+hi वापस
+
+it scegli
+en choose
+es elegir
+pt escolher
+zh 选择
+ja 選ぶ
+hi चुनें
+
+it nessun salvataggio: comincia una nuova partita
+en no saved games: start a new game
+es no hay partidas guardadas: empieza una nueva
+pt não há jogos guardados: começa um novo jogo
+zh 没有存档：开始新游戏吧
+ja セーブデータがありません。ニューゲームで始めよう
+hi कोई सेव नहीं: नया गेम शुरू करें
+
+
+# === Salvataggi ===============================================================================
+
+@T32
+it DOVE SALVARE?
+en WHERE TO SAVE?
+es ¿DÓNDE GUARDAR?
+pt ONDE GUARDAR?
+zh 保存到哪里？
+ja どこに保存する？
+hi कहाँ सेव करें?
+
+# sotto il titolo quando i 4 posti sono pieni (S14, al massimo 576 pixel)
+it i posti sono pieni: la partita nuova prende il posto di quella scelta
+en all slots are full: the new game replaces the one you choose
+es los espacios están llenos: la partida nueva ocupa el lugar de la que elijas
+pt os espaços estão cheios: o novo jogo fica no lugar do que escolheres
+zh 存档位已满：新游戏将替换你选择的存档
+ja スロットがいっぱいです。選んだデータに新しいゲームを上書きします
+hi सारे स्लॉट भरे हैं: नया गेम आपके चुने हुए सेव की जगह लेगा
+
+it carica
+en load
+es cargar
+pt carregar
+zh 读取
+ja ロード
+hi लोड करें
+
+it sovrascrivi
+en overwrite
+es sobrescribir
+pt substituir
+zh 覆盖
+ja 上書き
+hi ओवरराइट करें
+
+# riga di un posto (B16)
+it POSTO LIBERO
+en EMPTY SLOT
+es ESPACIO LIBRE
+pt ESPAÇO LIVRE
+zh 空存档位
+ja 空きスロット
+hi खाली स्लॉट
+
+it ILLEGGIBILE
+en UNREADABLE
+es ILEGIBLE
+pt ILEGÍVEL
+zh 无法读取
+ja 読み込めません
+hi पढ़ा नहीं जा सकता
+
+it si riparte dall'inizio
+en it will start over from the beginning
+es se empezará desde el principio
+pt recomeça do início
+zh 将从头开始
+ja 最初からになります
+hi शुरू से शुरू होगा
+
+# pianeta piu' lontano e giro (B16)
+it %s · GIRO %d
+en %s · ROUND %d
+es %s · VUELTA %d
+pt %s · VOLTA %d
+zh %s · 第%d轮
+ja %s · %d周目
+hi %s · राउंड %d
+
+it %d/%d mappe
+en %d/%d maps
+es %d/%d mapas
+pt %d/%d mapas
+zh 地图 %d/%d
+ja マップ %d/%d
+hi %d/%d मैप
+
+# tempo di gioco
+it %u min
+en %u min
+es %u min
+pt %u min
+zh %u分钟
+ja %u分
+hi %u मिनट
+
+it %u h %02u min
+en %u h %02u min
+es %u h %02u min
+pt %u h %02u min
+zh %u小时%02u分钟
+ja %u時間%02u分
+hi %u घंटे %02u मिनट
+
+it posto libero
+en empty slot
+es espacio libre
+pt espaço livre
+zh 空存档位
+ja 空きスロット
+hi खाली स्लॉट
+
+# finestra delle azioni (titolo B22, voci S16, spiegazioni S12)
+@B22
+it SALVATAGGIO %d
+en SAVE %d
+es PARTIDA %d
+pt JOGO %d
+zh 存档 %d
+ja データ %d
+hi सेव %d
+
+it DUPLICA
+en DUPLICATE
+es DUPLICAR
+pt DUPLICAR
+zh 复制
+ja コピー
+hi कॉपी करें
+
+it ELIMINA
+en DELETE
+es BORRAR
+pt ELIMINAR
+zh 删除
+ja 削除
+hi मिटाएँ
+
+it una copia nel primo posto libero
+en a copy in the first empty slot
+es una copia en el primer espacio libre
+pt uma cópia no primeiro espaço livre
+zh 复制到第一个空位
+ja 最初の空きスロットにコピー
+hi पहले खाली स्लॉट में एक कॉपी
+
+it lo cancella per sempre
+en erases it forever
+es la borra para siempre
+pt apaga-o para sempre
+zh 永久删除
+ja 完全に消去します
+hi हमेशा के लिए मिटा देता है
+
+it nessun posto libero: elimina prima un salvataggio
+en no empty slot: delete a save first
+es no hay espacio libre: borra antes una partida
+pt não há espaço livre: elimina primeiro um jogo
+zh 没有空位：请先删除一个存档
+ja 空きスロットがありません。先にデータを削除してください
+hi कोई खाली स्लॉट नहीं: पहले कोई सेव मिटाएँ
+
+it copiato nel posto %d
+en copied to slot %d
+es copiada al espacio %d
+pt copiado para o espaço %d
+zh 已复制到第%d个存档位
+ja スロット%dにコピーしました
+hi स्लॉट %d में कॉपी हो गया
+
+it copia non riuscita
+en copy failed
+es no se pudo copiar
+pt não foi possível copiar
+zh 复制失败
+ja コピーできませんでした
+hi कॉपी नहीं हो सका
+
+# conferma (B16, al massimo 336 pixel)
+it ELIMINARE IL SALVATAGGIO %d?
+en DELETE SAVE %d?
+es ¿BORRAR LA PARTIDA %d?
+pt ELIMINAR O JOGO %d?
+zh 删除存档%d？
+ja データ%dを削除しますか？
+hi सेव %d मिटाएँ?
+
+it SOVRASCRIVERE IL SALVATAGGIO %d?
+en OVERWRITE SAVE %d?
+es ¿SOBRESCRIBIR LA PARTIDA %d?
+pt SUBSTITUIR O JOGO %d?
+zh 覆盖存档%d？
+ja データ%dに上書きしますか？
+hi सेव %d ओवरराइट करें?
+
+# riassunto nella conferma: pianeta, giro, stelle, tempo di gioco (S13, al massimo 336 pixel)
+it %s, giro %d: %d stelle, %s di gioco
+en %s, round %d: %d stars, %s played
+es %s, vuelta %d: %d estrellas, %s de juego
+pt %s, volta %d: %d estrelas, %s de jogo
+zh %s，第%d轮：%d颗星，游戏时长%s
+ja %s %d周目：スター%d個、プレイ時間%s
+hi %s, राउंड %d: %d स्टार, खेल का समय %s
+
+it salvataggio %d eliminato
+en save %d deleted
+es partida %d borrada
+pt jogo %d eliminado
+zh 存档%d已删除
+ja データ%dを削除しました
+hi सेव %d मिटा दिया गया
+
+it non riesco a eliminare il salvataggio %d
+en couldn't delete save %d
+es no se pudo borrar la partida %d
+pt não foi possível eliminar o jogo %d
+zh 无法删除存档%d
+ja データ%dを削除できませんでした
+hi सेव %d मिटाया नहीं जा सका
+
+# risposte (A si', B no)
+it sì
+en yes
+es sí
+pt sim
+zh 是
+ja はい
+hi हाँ
+
+it no
+en no
+es no
+pt não
+zh 否
+ja いいえ
+hi नहीं
+
+
+# === Come si gioca, storia ====================================================================
+
+@T38
+it COME SI GIOCA?
+en HOW DO WE PLAY?
+es ¿CÓMO SE JUEGA?
+pt COMO SE JOGA?
+zh 怎么玩？
+ja どうあそぶ？
+hi कैसे खेलें?
+
+# schede (titolo T25, sotto S14, larghe 262)
+@T25
+it INSIEME
+en TOGETHER
+es JUNTOS
+pt JUNTOS
+zh 合作
+ja 協力
+hi साथ मिलकर
+
+it tutti insieme contro i mostri
+en team up against the monsters
+es todos contra los monstruos
+pt todos contra os monstros
+zh 大家一起对抗怪物
+ja みんなで力を合わせて戦う
+hi मिलकर राक्षसों से लड़ो
+
+@T25
+it CONTRO
+en VERSUS
+es CONTRA
+pt CONTRA
+zh 对战
+ja 対戦
+hi मुक़ाबला
+
+it 2 contro 2
+en 2 against 2
+es 2 contra 2
+pt 2 contra 2
+zh 2对2
+ja 2対2
+hi 2 बनाम 2
+
+# etichetta (B11) e titoletto dei pianeti che arrivano (S12)
+it IN ARRIVO
+en COMING SOON
+es PRÓXIMAMENTE
+pt EM BREVE
+zh 即将推出
+ja 近日公開
+hi जल्द आ रहा है
+
+it CONTRO arriva con la versione 0.6
+en VERSUS arrives with version 0.6
+es CONTRA llega con la versión 0.6
+pt CONTRA chega com a versão 0.6
+zh 对战模式将在0.6版本推出
+ja 対戦はバージョン0.6で登場
+hi मुक़ाबला मोड वर्ज़न 0.6 में आएगा
+
+@T32
+it IL GIRO DEI PIANETI
+en THE PLANET TOUR
+es LA VUELTA A LOS PLANETAS
+pt A VOLTA AOS PLANETAS
+zh 行星之旅
+ja 惑星めぐり
+hi ग्रहों की यात्रा
+
+# la storia: due paragrafi, a capo da soli (S16, righe da 440 pixel)
+it Astro parte dalla Terra con gli amici della Luna, di Marte e di Venere: il giro dei pianeti comincia! Ogni pianeta ha i suoi mostri e un boss.
+en Astro leaves Earth with his friends from the Moon, Mars and Venus: the planet tour begins! Every planet has its own monsters and a boss.
+es Astro sale de la Tierra con sus amigos de la Luna, Marte y Venus: ¡empieza la vuelta a los planetas! Cada planeta tiene sus monstruos y un jefe.
+pt O Astro parte da Terra com os amigos da Lua, de Marte e de Vénus: começa a volta aos planetas! Cada planeta tem os seus monstros e um chefe.
+zh 阿斯特罗和来自月球、火星、金星的朋友们从地球出发：行星之旅开始了！每颗星球都有自己的怪物和一个首领。
+ja アストロは月・火星・金星の仲間たちと地球を出発。惑星めぐりのはじまりだ！どの惑星にもモンスターとボスがいる。
+hi एस्ट्रो चंद्रमा, मंगल और शुक्र के दोस्तों के साथ पृथ्वी से निकलता है: ग्रहों की यात्रा शुरू होती है! हर ग्रह के अपने राक्षस हैं और एक बॉस।
+
+it Battuto il boss, l'eroe del pianeta entra in squadra. In ogni mappa c'è una capsula nascosta: salvate l'esploratore!
+en Beat the boss and the planet's hero joins the team. Every map has a hidden capsule: rescue the explorer!
+es Vence al jefe y el héroe del planeta se une al equipo. En cada mapa hay una cápsula escondida: ¡rescata al explorador!
+pt Vence o chefe e o herói do planeta junta-se à equipa. Em cada mapa há uma cápsula escondida: salva o explorador!
+zh 打败首领后，该星球的英雄就会加入队伍。每张地图都藏着一个太空舱：救出探险家吧！
+ja ボスを倒すと、その惑星のヒーローが仲間になる。どのマップにもカプセルがかくれている。探検家を助けよう！
+hi बॉस को हराओ और उस ग्रह का हीरो टीम में आ जाएगा। हर मैप में एक छिपा कैप्सूल है: खोजी को बचाओ!
+
+it tutto
+en show all
+es ver todo
+pt ver tudo
+zh 全部显示
+ja 全部表示
+hi सब दिखाएँ
+
+it avanti
+en next
+es siguiente
+pt seguinte
+zh 继续
+ja 次へ
+hi आगे
+
+
+# === Mappe ====================================================================================
+
+@T32
+it SCEGLI LA MAPPA
+en CHOOSE A MAP
+es ELIGE EL MAPA
+pt ESCOLHE O MAPA
+zh 选择地图
+ja マップを選ぼう
+hi मैप चुनें
+
+# pianeti: grandi nella scelta delle mappe (B22), piccoli altrove
+@B22
+it TERRA
+en EARTH
+es TIERRA
+pt TERRA
+zh 地球
+ja 地球
+hi पृथ्वी
+
+@B22
+it LUNA
+en MOON
+es LUNA
+pt LUA
+zh 月球
+ja 月
+hi चंद्रमा
+
+@B22
+it MARTE
+en MARS
+es MARTE
+pt MARTE
+zh 火星
+ja 火星
+hi मंगल
+
+@B22
+it VENERE
+en VENUS
+es VENUS
+pt VÉNUS
+zh 金星
+ja 金星
+hi शुक्र
+
+@B22
+it MERCURIO
+en MERCURY
+es MERCURIO
+pt MERCÚRIO
+zh 水星
+ja 水星
+hi बुध
+
+@B22
+it GIOVE
+en JUPITER
+es JÚPITER
+pt JÚPITER
+zh 木星
+ja 木星
+hi बृहस्पति
+
+@B22
+it SATURNO
+en SATURN
+es SATURNO
+pt SATURNO
+zh 土星
+ja 土星
+hi शनि
+
+@B22
+it URANO
+en URANUS
+es URANO
+pt URANO
+zh 天王星
+ja 天王星
+hi यूरेनस
+
+@B22
+it NETTUNO
+en NEPTUNE
+es NEPTUNO
+pt NEPTUNO
+zh 海王星
+ja 海王星
+hi नेपच्यून
+
+# mappe della Terra (anche come messaggio grande all'inizio della mappa)
+@T32
+it Le Piramidi
+en The Pyramids
+es Las Pirámides
+pt As Pirâmides
+zh 金字塔
+ja ピラミッド
+hi पिरामिड
+
+@T32
+it La Grande Muraglia
+en The Great Wall
+es La Gran Muralla
+pt A Grande Muralha
+zh 长城
+ja 万里の長城
+hi महान दीवार
+
+@T32
+it Chichén Itzá
+en Chichén Itzá
+es Chichén Itzá
+pt Chichén Itzá
+zh 奇琴伊察
+ja チチェン・イッツァ
+hi चिचेन इत्ज़ा
+
+@T32
+it Il Colosseo
+en The Colosseum
+es El Coliseo
+pt O Coliseu
+zh 罗马斗兽场
+ja コロッセオ
+hi कोलोसियम
+
+# giro del pianeta: etichetta (B13 nelle mappe, B11 in partita)
+it GIRO %d
+en ROUND %d
+es VUELTA %d
+pt VOLTA %d
+zh 第%d轮
+ja %d周目
+hi राउंड %d
+
+it BOSS
+en BOSS
+es JEFE
+pt CHEFE
+zh 首领
+ja ボス
+hi बॉस
+
+it CHIUSA
+en LOCKED
+es CERRADO
+pt FECHADO
+zh 未解锁
+ja ロック中
+hi बंद
+
+# a destra delle stelle del giro (S13)
+it GIRO %d, L'ULTIMO
+en ROUND %d, THE LAST
+es VUELTA %d, LA ÚLTIMA
+pt VOLTA %d, A ÚLTIMA
+zh 第%d轮，最后一轮
+ja %d周目、最後
+hi राउंड %d, आख़िरी
+
+it BOSS → GIRO %d
+en BOSS → ROUND %d
+es JEFE → VUELTA %d
+pt CHEFE → VOLTA %d
+zh 首领 → 第%d轮
+ja ボス → %d周目
+hi बॉस → राउंड %d
+
+it %d → GIRO %d
+en %d → ROUND %d
+es %d → VUELTA %d
+pt %d → VOLTA %d
+zh %d → 第%d轮
+ja %d → %d周目
+hi %d → राउंड %d
+
+it si apre finendo la mappa prima
+en unlocks when you finish the previous map
+es se abre al terminar el mapa anterior
+pt abre ao terminar o mapa anterior
+zh 完成上一张地图后解锁
+ja 前のマップをクリアすると解放
+hi पिछला मैप पूरा करने पर खुलेगा
+
+it si apre battendo il boss di %s
+en unlocks when you beat the boss of %s
+es se abre al vencer al jefe de %s
+pt abre ao vencer o chefe de %s
+zh 击败%s的首领后解锁
+ja %sのボスを倒すと解放
+hi %s के बॉस को हराने पर खुलेगा
+
+it mappa chiusa
+en locked map
+es mapa cerrado
+pt mapa fechado
+zh 地图未解锁
+ja ロック中のマップ
+hi मैप बंद है
+
+it gioca
+en play
+es jugar
+pt jogar
+zh 开始
+ja プレイ
+hi खेलें
+
+
+# === Chi gioca ================================================================================
+
+@T38
+it CHI GIOCA?
+en WHO'S PLAYING?
+es ¿QUIÉN JUEGA?
+pt QUEM JOGA?
+zh 谁来玩？
+ja だれが遊ぶ？
+hi कौन खेलेगा?
+
+# mappa, pianeta e giro sotto il titolo (S15)
+it %s · %s · GIRO %d
+en %s · %s · ROUND %d
+es %s · %s · VUELTA %d
+pt %s · %s · VOLTA %d
+zh %s · %s · 第%d轮
+ja %s · %s · %d周目
+hi %s · %s · राउंड %d
+
+# eroi: nome (B22 sopra le teste, B16 nei riquadri), chi e' e ruolo (S13)
+@B22
+it ASTRO
+en ASTRO
+es ASTRO
+pt ASTRO
+zh 阿斯特罗
+ja アストロ
+hi एस्ट्रो
+
+@B22
+it MOCHI
+en MOCHI
+es MOCHI
+pt MOCHI
+zh 麻糬
+ja モチ
+hi मोचि
+
+@B22
+it MARZIO
+en MARZIO
+es MARZIO
+pt MARZIO
+zh 马尔齐奥
+ja マルツィオ
+hi मार्ज़ियो
+
+@B22
+it ZOLFO
+en ZOLFO
+es ZOLFO
+pt ZOLFO
+zh 佐尔福
+ja ゾルフォ
+hi ज़ोल्फ़ो
+
+it astronauta della Terra
+en Earth astronaut
+es astronauta de la Tierra
+pt astronauta da Terra
+zh 地球宇航员
+ja 地球の宇宙飛行士
+hi पृथ्वी का अंतरिक्ष यात्री
+
+it coniglio della Luna
+en Moon rabbit
+es conejo de la Luna
+pt coelho da Lua
+zh 月兔
+ja 月のウサギ
+hi चंद्रमा का ख़रगोश
+
+it marziano del polo
+en Martian from the pole
+es marciano del polo
+pt marciano do polo
+zh 极地火星人
+ja 極地の火星人
+hi ध्रुव का मंगलवासी
+
+it fiamma di Venere
+en Venus flame
+es llama de Venus
+pt chama de Vénus
+zh 金星火焰
+ja 金星の炎
+hi शुक्र की लौ
+
+it equilibrato
+en all-rounder
+es equilibrado
+pt equilibrado
+zh 均衡型
+ja バランス型
+hi संतुलित
+
+it resistente
+en tough
+es resistente
+pt resistente
+zh 耐打型
+ja タフ型
+hi मज़बूत
+
+it controllo
+en control
+es control
+pt controlo
+zh 控制型
+ja コントロール型
+hi कंट्रोल
+
+it lanciafiamme
+en flamethrower
+es lanzallamas
+pt lança-chamas
+zh 火焰喷射
+ja 火炎放射
+hi फ़्लेमथ्रोअर
+
+# colpo (R1) e speciale (L1) di ogni eroe (S13, in una riga lunga al massimo 576)
+it fucilone: raffica di 3 colpi a ventaglio
+en shotgun: 3 shots in a fan
+es escopeta: 3 disparos en abanico
+pt caçadeira: 3 disparos em leque
+zh 霰弹枪：3发扇形连射
+ja ショットガン：扇状に3連射
+hi शॉटगन: पंखे जैसे 3 शॉट
+
+it 3 razzi a ricerca
+en 3 homing rockets
+es 3 cohetes guiados
+pt 3 foguetes guiados
+zh 3枚追踪火箭
+ja 追尾ロケット3発
+hi 3 पीछा करने वाले रॉकेट
+
+it ventaglio di 5 schegge di luna
+en fan of 5 moon shards
+es abanico de 5 esquirlas lunares
+pt leque de 5 estilhaços lunares
+zh 5片扇形月之碎片
+ja 月のかけら5つを扇状に
+hi चाँद के 5 टुकड़ों का पंखा
+
+it salto lunare con le schegge
+en moon leap with shards
+es salto lunar con esquirlas
+pt salto lunar com estilhaços
+zh 带碎片的月跃
+ja かけらをまく月面ジャンプ
+hi टुकड़ों के साथ चाँद-छलांग
+
+it 3 palle di ghiaccio secco che rallentano
+en 3 dry-ice balls that slow down
+es 3 bolas de hielo seco que frenan
+pt 3 bolas de gelo seco que abrandam
+zh 3颗减速干冰球
+ja 動きを遅くするドライアイス弾3発
+hi धीमा करने वाले सूखी बर्फ़ के 3 गोले
+
+it tempesta di sabbia gelata
+en frozen sandstorm
+es tormenta de arena helada
+pt tempestade de areia gelada
+zh 冰冻沙暴
+ja 凍てつく砂嵐
+hi जमी हुई रेत का तूफ़ान
+
+it fiamma che attraversa i mostri
+en flame that goes through monsters
+es llama que atraviesa a los monstruos
+pt chama que atravessa os monstros
+zh 穿透怪物的火焰
+ja モンスターをつらぬく炎
+hi राक्षसों के आर-पार जाती लौ
+
+it eruzione: 5 bolle di lava
+en eruption: 5 lava bubbles
+es erupción: 5 burbujas de lava
+pt erupção: 5 bolhas de lava
+zh 喷发：5个熔岩泡
+ja 噴火：溶岩の泡5つ
+hi ज्वालामुखी: लावा के 5 बुलबुले
+
+# riquadri dei giocatori (S13 e B13, larghi 134)
+it entra
+en join
+es entrar
+pt entrar
+zh 加入
+ja 参加
+hi जुड़ें
+
+it pronto
+en ready
+es listo
+pt pronto
+zh 准备
+ja 準備OK
+hi तैयार
+
+it PRONTO!
+en READY!
+es ¡LISTO!
+pt PRONTO!
+zh 准备好了！
+ja 準備OK！
+hi तैयार!
+
+@T44
+it SI PARTE!
+en HERE WE GO!
+es ¡EMPEZAMOS!
+pt VAMOS LÁ!
+zh 出发！
+ja 出発！
+hi चलो चलें!
+
+it personaggio
+en character
+es personaje
+pt personagem
+zh 角色
+ja キャラクター
+hi किरदार
+
+it esci
+en exit
+es salir
+pt sair
+zh 退出
+ja 終了
+hi निकलें
+
+# gettone del giocatore (G1...) e finestre per entrare a partita iniziata
+it G%d
+en P%d
+es J%d
+pt J%d
+zh P%d
+ja %dP
+hi P%d
+
+it ENTRA
+en JOIN
+es ENTRAR
+pt ENTRAR
+zh 加入
+ja 参加
+hi जुड़ें
+
+
+# === Fine mappa ===============================================================================
+
+@T32
+it BOSS SCONFITTO!
+en BOSS DEFEATED!
+es ¡JEFE DERROTADO!
+pt CHEFE DERROTADO!
+zh 首领被击败！
+ja ボス撃破！
+hi बॉस हार गया!
+
+@T32
+it MAPPA COMPLETATA!
+en MAP COMPLETE!
+es ¡MAPA COMPLETADO!
+pt MAPA CONCLUÍDO!
+zh 地图完成！
+ja マップクリア！
+hi मैप पूरा!
+
+# colonne della tabella (S12, al massimo 76 pixel)
+it SCONFITTI
+en DEFEATED
+es VENCIDOS
+pt VENCIDOS
+zh 击败
+ja 撃破
+hi हराए
+
+it DANNI
+en DAMAGE
+es DAÑO
+pt DANO
+zh 伤害
+ja ダメージ
+hi नुकसान
+
+it CADUTE
+en DOWNS
+es CAÍDAS
+pt QUEDAS
+zh 倒地
+ja ダウン
+hi गिरे
+
+# le tre stelle della mappa (S15)
+it mappa finita
+en map finished
+es mapa terminado
+pt mapa terminado
+zh 完成地图
+ja マップクリア
+hi मैप पूरा किया
+
+it esploratore salvato
+en explorer rescued
+es explorador rescatado
+pt explorador salvo
+zh 救出探险家
+ja 探検家を救出
+hi खोजी को बचाया
+
+it senza ricominciare la mappa
+en without restarting the map
+es sin reiniciar el mapa
+pt sem recomeçar o mapa
+zh 未重新开始地图
+ja マップをやり直さずに
+hi मैप दोबारा शुरू किए बिना
+
+it NUOVA!
+en NEW!
+es ¡NUEVA!
+pt NOVA!
+zh 新！
+ja NEW!
+hi नया!
+
+@B22
+it GIRO %d APERTO!
+en ROUND %d UNLOCKED!
+es ¡VUELTA %d ABIERTA!
+pt VOLTA %d ABERTA!
+zh 第%d轮已开启！
+ja %d周目 解放！
+hi राउंड %d खुल गया!
+
+it %s: stelle da capo, mostri più forti
+en %s: stars reset, tougher monsters
+es %s: estrellas desde cero, monstruos más fuertes
+pt %s: estrelas do zero, monstros mais fortes
+zh %s：星星清零，怪物更强
+ja %s：スターはリセット、モンスターが強くなる
+hi %s: स्टार फिर से शून्य, राक्षस और ताक़तवर
+
+it %s: giro %d, l'ultimo!
+en %s: round %d, the last one!
+es %s: vuelta %d, ¡la última!
+pt %s: volta %d, a última!
+zh %s：第%d轮，最后一轮！
+ja %s：%d周目、これが最後！
+hi %s: राउंड %d, आख़िरी!
+
+it per il giro %d servono %d stelle: ne hai %d
+en round %d needs %d stars: you have %d
+es para la vuelta %d hacen falta %d estrellas: tienes %d
+pt para a volta %d são precisas %d estrelas: tens %d
+zh 第%d轮需要%d颗星：你有%d颗
+ja %d周目にはスターが%d個必要：今は%d個
+hi राउंड %d के लिए %d स्टार चाहिए: तुम्हारे पास %d हैं
+
+it rifai le mappe per le stelle che mancano
+en replay maps for the missing stars
+es repite los mapas para las estrellas que faltan
+pt repete os mapas para as estrelas que faltam
+zh 重玩地图，收集缺少的星星
+ja マップをやり直して足りないスターを集めよう
+hi बचे हुए स्टार के लिए मैप दोबारा खेलो
+
+it mappe
+en maps
+es mapas
+pt mapas
+zh 地图
+ja マップ
+hi मैप
+
+
+# === Carte ====================================================================================
+
+@T32
+it SCEGLI UNA CARTA
+en CHOOSE A CARD
+es ELIGE UNA CARTA
+pt ESCOLHE UMA CARTA
+zh 选择一张卡牌
+ja カードを選ぼう
+hi एक कार्ड चुनो
+
+it vale fino alla fine della mappa
+en lasts until the end of the map
+es dura hasta el final del mapa
+pt vale até ao fim do mapa
+zh 持续到本地图结束
+ja マップの最後まで有効
+hi मैप के अंत तक चलता है
+
+it sceglie
+en choose
+es elige
+pt escolhe
+zh 选择
+ja 選ぶ
+hi चुनें
+
+it prende
+en take
+es toma
+pt leva
+zh 拿取
+ja 取る
+hi लें
+
+@B22
+it PRESA!
+en TAKEN!
+es ¡ELEGIDA!
+pt FEITO!
+zh 已选择！
+ja ゲット！
+hi ले लिया!
+
+it aspetta gli altri
+en wait for the others
+es espera a los demás
+pt espera pelos outros
+zh 等待其他人
+ja ほかの人を待っています
+hi बाक़ी लोगों का इंतज़ार करो
+
+it COMBO
+en COMBO
+es COMBO
+pt COMBO
+zh 组合
+ja コンボ
+hi कॉम्बो
+
+# carte gia' prese, in fondo al riquadro (S12)
+it hai già: %s
+en you have: %s
+es ya tienes: %s
+pt já tens: %s
+zh 已有：%s
+ja 所持：%s
+hi पहले से हैं: %s
+
+it %s, %s
+en %s, %s
+es %s, %s
+pt %s, %s
+zh %s、%s
+ja %s、%s
+hi %s, %s
+
+it hai già 1 carta
+en you already have 1 card
+es ya tienes 1 carta
+pt já tens 1 carta
+zh 已有1张卡牌
+ja カードを1枚所持
+hi पहले से 1 कार्ड है
+
+it hai già %d carte
+en you already have %d cards
+es ya tienes %d cartas
+pt já tens %d cartas
+zh 已有%d张卡牌
+ja カードを%d枚所持
+hi पहले से %d कार्ड हैं
+
+# nomi delle carte (S15, S13 nei riquadri stretti dei 4 giocatori: 114 pixel, con i nomi corti)
+it BOMBAROLO
+en BOMBER
+es BOMBARDERO
+pt BOMBARDEIRO
+zh 炸弹达人
+ja ボム名人
+hi बम मास्टर
+
+it porti fino a 4 bombe e ne hai subito una in più
+en carry up to 4 bombs and get one extra right away
+es llevas hasta 4 bombas y recibes una más ahora
+pt levas até 4 bombas e ganhas já mais uma
+zh 最多携带4颗炸弹，并立刻多得1颗
+ja ボムを4個まで持てて、すぐに1個もらえる
+hi 4 बम तक रखो और अभी एक बम और पाओ
+
+it PASSO SVELTO
+en QUICK STEP
+es PASO VELOZ
+pt PASSO LIGEIRO
+zh 疾步
+ja はやあし
+hi तेज़ क़दम
+
+it +15% di velocità
+en +15% speed
+es +15% de velocidad
+pt +15% de velocidade
+zh 速度+15%
+ja スピード+15%
+hi रफ़्तार +15%
+
+it PELLE DURA
+en TOUGH SKIN
+es PIEL DURA
+pt PELE DURA
+zh 硬皮肤
+ja タフボディ
+hi सख़्त खाल
+
+it +30 di vita massima, subito piena
+en +30 max health, refilled right away
+es +30 de vida máxima, llena al momento
+pt +30 de vida máxima, cheia de imediato
+zh 最大生命+30，立即回满
+ja 最大HP+30、すぐに満タン
+hi अधिकतम हेल्थ +30, तुरंत पूरी
+
+it RICARICA LAMPO
+en QUICK RELOAD
+es RECARGA RAYO
+pt RECARGA RAIO
+zh 闪电装填
+ja 高速リロード
+hi तेज़ रीलोड
+
+it la barra del colpo si ricarica il 40% più in fretta
+en your shot bar refills 40% faster
+es la barra de disparo se recarga un 40% más rápido
+pt a barra de disparo recarrega 40% mais depressa
+zh 攻击槽恢复速度+40%
+ja ショットゲージの回復が40%速くなる
+hi शॉट बार 40% तेज़ी से भरता है
+
+it SUPER CARICA
+en SUPER CHARGE
+es SUPERCARGA
+pt SUPERCARGA
+zh 超级充能
+ja 超チャージ
+hi सुपर चार्ज
+
+it lo speciale si carica il 35% più in fretta
+en your special charges 35% faster
+es el especial se carga un 35% más rápido
+pt o especial carrega 35% mais depressa
+zh 必杀技充能速度+35%
+ja 必殺技のチャージが35%速くなる
+hi स्पेशल 35% तेज़ी से चार्ज होता है
+
+it COLPI PESANTI
+en HEAVY SHOTS
+es TIRO PESADO
+pt TIRO PESADO
+zh 重击
+ja ヘビーショット
+hi भारी शॉट
+
+it +25% di danni del colpo normale
+en +25% normal shot damage
+es +25% de daño del disparo normal
+pt +25% de dano do disparo normal
+zh 普通攻击伤害+25%
+ja 通常ショットのダメージ+25%
+hi सामान्य शॉट का नुकसान +25%
+
+it LUNGA GITTATA
+en LONG RANGE
+es LARGO ALCANCE
+pt LONGO ALCANCE
+zh 远程射击
+ja ロングレンジ
+hi लंबी रेंज
+
+it +25% di gittata del colpo normale
+en +25% normal shot range
+es +25% de alcance del disparo normal
+pt +25% de alcance do disparo normal
+zh 普通攻击射程+25%
+ja 通常ショットの射程+25%
+hi सामान्य शॉट की रेंज +25%
+
+it MERENDA
+en SNACK TIME
+es MERIENDA
+pt LANCHE
+zh 加餐
+ja おやつ
+hi नाश्ता
+
+it ogni mostro sconfitto ti ridà il doppio della vita
+en each defeated monster gives back double health
+es cada monstruo derrotado te devuelve el doble de vida
+pt cada monstro derrotado devolve-te o dobro da vida
+zh 每击败一个怪物，回复双倍生命
+ja モンスターを倒したときのHP回復が2倍
+hi हर हराया राक्षस दोगुनी हेल्थ लौटाता है
+
+it SCUDO
+en SHIELD
+es ESCUDO
+pt ESCUDO
+zh 护盾
+ja シールド
+hi ढाल
+
+it a ogni zona uno scudo ferma il primo colpo che prendi
+en in every zone a shield stops the first hit you take
+es en cada zona un escudo para el primer golpe que recibes
+pt em cada zona um escudo trava o primeiro golpe que levas
+zh 每个区域中，护盾会挡下你受到的第一次攻击
+ja 各ゾーンで最初に受ける攻撃をシールドが防ぐ
+hi हर ज़ोन में ढाल तुम्हें लगने वाला पहला वार रोकती है
+
+it VITA EXTRA
+en EXTRA LIFE
+es VIDA EXTRA
+pt VIDA EXTRA
+zh 额外一命
+ja 残機+1
+hi एक्स्ट्रा जान
+
+it una vita in più per questa mappa
+en one more life for this map
+es una vida más para este mapa
+pt mais uma vida neste mapa
+zh 本地图多一条命
+ja このマップで残機が1つ増える
+hi इस मैप के लिए एक जान और
+
+it CALAMITA
+en MAGNET
+es IMÁN
+pt ÍMAN
+zh 磁铁
+ja マグネット
+hi चुंबक
+
+it prendi talismani e bombe da 3 metri
+en grab charms and bombs from 3 meters away
+es recoges talismanes y bombas a 3 metros
+pt apanhas talismãs e bombas a 3 metros
+zh 在3米外就能拾取护符和炸弹
+ja 3メートル先のお守りとボムも拾える
+hi 3 मीटर दूर से ताबीज़ और बम उठा लो
+
+it BOMBE GIGANTI
+en GIANT BOMBS
+es MEGABOMBAS
+pt MEGABOMBAS
+zh 巨型炸弹
+ja ジャンボボム
+hi विशाल बम
+
+it le tue bombe fanno il 50% di danni in più su un'area più larga
+en your bombs deal 50% more damage over a wider area
+es tus bombas hacen un 50% más de daño en un área más amplia
+pt as tuas bombas causam mais 50% de dano numa área maior
+zh 你的炸弹伤害+50%，范围更大
+ja ボムのダメージが50%アップ、範囲も広くなる
+hi तुम्हारे बम 50% ज़्यादा नुकसान करते हैं, बड़े इलाक़े में
+
+it le tue bombe: +50% di danni, area più larga
+en your bombs: +50% damage, wider area
+es tus bombas: +50% de daño, más área
+pt as tuas bombas: +50% de dano, mais área
+zh 炸弹：伤害+50%，范围更大
+ja ボム：ダメージ+50%、範囲アップ
+hi तुम्हारे बम: +50% नुकसान, बड़ा इलाक़ा
+
+it SPECIALE GENEROSO
+en GENEROUS SPECIAL
+es ESPECIAL GENEROSO
+pt ESPECIAL GENEROSO
+zh 慷慨必杀
+ja おすそわけ必殺技
+hi उदार स्पेशल
+
+it GENEROSO
+en GENEROUS
+es GENEROSO
+pt GENEROSO
+zh 慷慨
+ja おすそわけ
+hi उदार
+
+it quando usi lo speciale i compagni vicini recuperano 25 vita
+en when you use your special, nearby teammates recover 25 health
+es cuando usas el especial, los compañeros cercanos recuperan 25 de vida
+pt quando usas o especial, os colegas perto recuperam 25 de vida
+zh 使用必杀技时，附近的队友回复25点生命
+ja 必殺技を使うと、近くの仲間のHPが25回復
+hi स्पेशल चलाने पर पास के साथियों को 25 हेल्थ वापस मिलती है
+
+it il tuo speciale dà 25 di vita ai compagni vicini
+en your special gives 25 health to nearby teammates
+es tu especial da 25 de vida a los compañeros cercanos
+pt o teu especial dá 25 de vida aos colegas perto
+zh 必杀技为附近队友回复25生命
+ja 必殺技で近くの仲間のHPが25回復
+hi तुम्हारा स्पेशल पास के साथियों को 25 हेल्थ देता है
+
+it PERFORANTE
+en PIERCING
+es PERFORANTE
+pt PERFURANTE
+zh 穿透
+ja 貫通
+hi आर-पार
+
+it i colpi normali attraversano un mostro in più
+en normal shots pass through one more monster
+es los disparos normales atraviesan un monstruo más
+pt os disparos normais atravessam mais um monstro
+zh 普通攻击可多穿透一个怪物
+ja 通常ショットがモンスターをもう1体つらぬく
+hi सामान्य शॉट एक और राक्षस के आर-पार जाते हैं
+
+it RIMBALZO
+en BOUNCE
+es REBOTE
+pt RICOCHETE
+zh 反弹
+ja バウンド
+hi उछाल
+
+it i colpi normali rimbalzano una volta su muri, massi e alberi
+en normal shots bounce once off walls, rocks and trees
+es los disparos normales rebotan una vez en muros, rocas y árboles
+pt os disparos normais fazem ricochete uma vez em muros, pedras e árvores
+zh 普通攻击会在墙壁、岩石和树木上反弹一次
+ja 通常ショットが壁や岩や木で1回はね返る
+hi सामान्य शॉट दीवारों, पत्थरों और पेड़ों से एक बार उछलते हैं
+
+it COLPI INFUOCATI
+en FIRE SHOTS
+es DISPAROS DE FUEGO
+pt DISPAROS DE FOGO
+zh 火焰弹
+ja ファイアショット
+hi आग वाले शॉट
+
+it INFUOCATI
+en FIRE
+es FUEGO
+pt FOGO
+zh 火焰
+ja ファイア
+hi आग
+
+it con Zolfo: i tuoi colpi incendiano i mostri
+en with Zolfo: your shots set monsters on fire
+es con Zolfo: tus disparos queman a los monstruos
+pt com o Zolfo: os teus disparos incendeiam os monstros
+zh 与佐尔福同队：你的攻击会点燃怪物
+ja ゾルフォと一緒：ショットでモンスターが燃える
+hi ज़ोल्फ़ो के साथ: तुम्हारे शॉट राक्षसों में आग लगाते हैं
+
+it COLPI GELATI
+en ICE SHOTS
+es DISPAROS DE HIELO
+pt DISPAROS DE GELO
+zh 冰冻弹
+ja アイスショット
+hi बर्फ़ीले शॉट
+
+it GELATI
+en ICE
+es HIELO
+pt GELO
+zh 冰冻
+ja アイス
+hi बर्फ़
+
+it con Marzio: i tuoi colpi rallentano i mostri
+en with Marzio: your shots slow monsters down
+es con Marzio: tus disparos frenan a los monstruos
+pt com o Marzio: os teus disparos abrandam os monstros
+zh 与马尔齐奥同队：你的攻击会减速怪物
+ja マルツィオと一緒：ショットでモンスターが遅くなる
+hi मार्ज़ियो के साथ: तुम्हारे शॉट राक्षसों को धीमा करते हैं
+
+it SCHEGGE ROVENTI
+en BLAZING SHARDS
+es ESQUIRLAS ARDIENTES
+pt ESTILHAÇOS ARDENTES
+zh 炽热碎片
+ja 灼熱のかけら
+hi दहकते टुकड़े
+
+it ROVENTI
+en BLAZING
+es ARDIENTES
+pt ARDENTES
+zh 炽热
+ja 灼熱
+hi दहकते
+
+it con Zolfo: le tue schegge incendiano i mostri
+en with Zolfo: your shards set monsters on fire
+es con Zolfo: tus esquirlas queman a los monstruos
+pt com o Zolfo: os teus estilhaços incendeiam os monstros
+zh 与佐尔福同队：你的碎片会点燃怪物
+ja ゾルフォと一緒：かけらでモンスターが燃える
+hi ज़ोल्फ़ो के साथ: तुम्हारे टुकड़े राक्षसों में आग लगाते हैं
+
+it SCHEGGE GELATE
+en FROST SHARDS
+es ESQUIRLAS HELADAS
+pt ESTILHAÇOS GELADOS
+zh 冰霜碎片
+ja 氷のかけら
+hi बर्फ़ीले टुकड़े
+
+it GELATE
+en FROST
+es HELADAS
+pt GELADOS
+zh 冰霜
+ja 氷
+hi बर्फ़ीले
+
+it con Marzio: le tue schegge rallentano i mostri
+en with Marzio: your shards slow monsters down
+es con Marzio: tus esquirlas frenan a los monstruos
+pt com o Marzio: os teus estilhaços abrandam os monstros
+zh 与马尔齐奥同队：你的碎片会减速怪物
+ja マルツィオと一緒：かけらでモンスターが遅くなる
+hi मार्ज़ियो के साथ: तुम्हारे टुकड़े राक्षसों को धीमा करते हैं
+
+it VAPORE
+en STEAM
+es VAPOR
+pt VAPOR
+zh 蒸汽
+ja スチーム
+hi भाप
+
+it ghiaccio + fuoco: il mostro rallentato che brucia scoppia in vapore
+en ice + fire: a slowed monster that burns bursts into steam
+es hielo + fuego: el monstruo frenado que arde estalla en vapor
+pt gelo + fogo: o monstro abrandado que arde explode em vapor
+zh 冰 + 火：被减速又在燃烧的怪物会爆成蒸汽
+ja 氷 + 炎：遅くなって燃えているモンスターがスチームで爆発
+hi बर्फ़ + आग: धीमा और जलता राक्षस भाप बनकर फटता है
+
+it ghiaccio + fuoco sullo stesso mostro: scoppia in vapore
+en ice + fire on the same monster: it bursts into steam
+es hielo + fuego en el mismo monstruo: estalla en vapor
+pt gelo + fogo no mesmo monstro: explode em vapor
+zh 同一怪物受到冰 + 火：爆成蒸汽
+ja 同じモンスターに氷 + 炎：スチームで爆発
+hi एक ही राक्षस पर बर्फ़ + आग: भाप बनकर फटता है
+
+
+# === Pausa ====================================================================================
+
+@T44
+it PAUSA
+en PAUSE
+es PAUSA
+pt PAUSA
+zh 暂停
+ja ポーズ
+hi पॉज़
+
+# chi comanda la pausa, accanto al gettone (S13)
+it COMANDA
+en IN CHARGE
+es AL MANDO
+pt NO COMANDO
+zh 操控中
+ja 操作中
+hi कंट्रोल में
+
+# voci (S16, fino ai valori a destra)
+it RIPRENDI
+en RESUME
+es CONTINUAR
+pt CONTINUAR
+zh 继续
+ja 再開
+hi जारी रखें
+
+# voce della pausa e titolo del riquadro dei comandi (B24)
+@B22
+it COMANDI
+en CONTROLS
+es CONTROLES
+pt COMANDOS
+zh 操作说明
+ja 操作方法
+hi कंट्रोल
+
+it MIRA
+en AIM
+es PUNTERÍA
+pt MIRA
+zh 瞄准
+ja エイム
+hi निशाना
+
+it ANTIALIAS
+en ANTIALIASING
+es ANTIALIASING
+pt ANTIALIASING
+zh 抗锯齿
+ja アンチエイリアス
+hi एंटी-एलियासिंग
+
+it MUSICA
+en MUSIC
+es MÚSICA
+pt MÚSICA
+zh 音乐
+ja 音楽
+hi संगीत
+
+it EFFETTI
+en SOUND FX
+es EFECTOS
+pt EFEITOS
+zh 音效
+ja 効果音
+hi साउंड इफ़ेक्ट
+
+it LASCIA LA PARTITA
+en LEAVE THE GAME
+es DEJAR LA PARTIDA
+pt SAIR DO JOGO
+zh 退出对局
+ja ゲームから抜ける
+hi गेम छोड़ें
+
+it TORNA AL MENU
+en BACK TO MENU
+es VOLVER AL MENÚ
+pt VOLTAR AO MENU
+zh 返回菜单
+ja メニューに戻る
+hi मेन्यू पर वापस
+
+# mira della levetta destra (S13)
+it EXTRA MORBIDA
+en EXTRA SOFT
+es EXTRA SUAVE
+pt EXTRA SUAVE
+zh 超柔和
+ja 超ソフト
+hi बहुत नरम
+
+it MORBIDA
+en SOFT
+es SUAVE
+pt SUAVE
+zh 柔和
+ja ソフト
+hi नरम
+
+it MEDIA
+en MEDIUM
+es MEDIA
+pt MÉDIA
+zh 中等
+ja ふつう
+hi मध्यम
+
+it RAPIDA
+en FAST
+es RÁPIDA
+pt RÁPIDA
+zh 灵敏
+ja クイック
+hi तेज़
+
+# antialias senza la GPU, acceso e spento (S13)
+it ASSENTE
+en UNAVAILABLE
+es NO DISPONIBLE
+pt INDISPONÍVEL
+zh 不可用
+ja 非対応
+hi उपलब्ध नहीं
+
+it SÌ
+en ON
+es SÍ
+pt SIM
+zh 开
+ja オン
+hi चालू
+
+it NO
+en OFF
+es NO
+pt NÃO
+zh 关
+ja オフ
+hi बंद
+
+it premete un tasto per entrare
+en press a button to join
+es pulsa un botón para entrar
+pt prime um botão para entrar
+zh 按任意键加入
+ja ボタンを押して参加
+hi जुड़ने के लिए कोई बटन दबाएँ
+
+# riquadro dei comandi (S15; TIENI S12)
+it chiudi
+en close
+es cerrar
+pt fechar
+zh 关闭
+ja 閉じる
+hi बंद करें
+
+it muoversi
+en move
+es moverse
+pt mover
+zh 移动
+ja 移動
+hi चलना
+
+it mirare
+en aim
+es apuntar
+pt apontar
+zh 瞄准
+ja エイム
+hi निशाना लगाना
+
+it colpo
+en shot
+es disparo
+pt disparo
+zh 攻击
+ja ショット
+hi शॉट
+
+it speciale
+en special
+es especial
+pt especial
+zh 必杀技
+ja 必殺技
+hi स्पेशल
+
+it salto
+en jump
+es salto
+pt salto
+zh 跳跃
+ja ジャンプ
+hi छलांग
+
+it lascia una bomba
+en drop a bomb
+es suelta una bomba
+pt larga uma bomba
+zh 放置炸弹
+ja ボムを置く
+hi बम रखो
+
+it pausa
+en pause
+es pausa
+pt pausa
+zh 暂停
+ja ポーズ
+hi पॉज़
+
+it TIENI
+en HOLD
+es MANTÉN
+pt MANTÉM
+zh 长按
+ja 長押し
+hi होल्ड
+
+
+# === In partita ===============================================================================
+
+# riga in alto (B13; il giro B11)
+it %s · BOSS
+en %s · BOSS
+es %s · JEFE
+pt %s · CHEFE
+zh %s · 首领
+ja %s · ボス
+hi %s · बॉस
+
+it ZONA %d/%d
+en ZONE %d/%d
+es ZONA %d/%d
+pt ZONA %d/%d
+zh 区域 %d/%d
+ja ゾーン %d/%d
+hi ज़ोन %d/%d
+
+it MOSTRI %d
+en MONSTERS %d
+es MONSTRUOS %d
+pt MONSTROS %d
+zh 怪物 %d
+ja モンスター %d
+hi राक्षस %d
+
+it VAI AVANTI
+en GO AHEAD
+es ADELANTE
+pt EM FRENTE
+zh 前进
+ja 先へ進め
+hi आगे बढ़ो
+
+# sopra un giocatore con i comandi fermi da un po' (B12)
+it COMANDI FERMI
+en CONTROLS STUCK
+es CONTROLES BLOQUEADOS
+pt COMANDOS PRESOS
+zh 操作无响应
+ja 操作が止まっています
+hi कंट्रोल अटके
+
+it altri giocatori: premete un tasto
+en more players? press a button
+es ¿más jugadores? pulsa un botón
+pt mais jogadores? prime um botão
+zh 其他玩家：按任意键加入
+ja ほかのプレイヤーもボタンを押して参加
+hi और खिलाड़ी? कोई बटन दबाएँ
+
+# scritte che volano sopra la mappa (B13)
+it SPLASH!
+en SPLASH!
+es ¡SPLASH!
+pt SPLASH!
+zh 扑通！
+ja ザブン！
+hi छपाक!
+
+it STORDITO!
+en STUNNED!
+es ¡ATURDIDO!
+pt ATORDOADO!
+zh 晕眩！
+ja 気絶！
+hi बेहोश!
+
+it AIUTO!
+en HELP!
+es ¡AYUDA!
+pt SOCORRO!
+zh 救命！
+ja たすけて！
+hi बचाओ!
+
+it GRAZIE!
+en THANKS!
+es ¡GRACIAS!
+pt OBRIGADO!
+zh 谢谢！
+ja ありがとう！
+hi धन्यवाद!
+
+# messaggi grandi al centro (T32, al massimo 600 pixel) e la riga sotto (S15)
+@T32
+it SI RIPARTE!
+en HERE WE GO AGAIN!
+es ¡OTRA VEZ!
+pt OUTRA VEZ!
+zh 重新出发！
+ja 再スタート！
+hi फिर से शुरू!
+
+it la zona resta libera - ultima vita!
+en the zone stays clear - last life!
+es la zona sigue libre - ¡última vida!
+pt a zona continua livre - última vida!
+zh 区域保持清空 - 最后一条命！
+ja ゾーンはクリアのまま - 残機ラスト！
+hi ज़ोन साफ़ रहेगा - आख़िरी जान!
+
+it la zona resta libera - ancora %d vite
+en the zone stays clear - %d lives left
+es la zona sigue libre - quedan %d vidas
+pt a zona continua livre - restam %d vidas
+zh 区域保持清空 - 还剩%d条命
+ja ゾーンはクリアのまま - 残機%d
+hi ज़ोन साफ़ रहेगा - %d जानें बची हैं
+
+it zona %d - ultima vita!
+en zone %d - last life!
+es zona %d - ¡última vida!
+pt zona %d - última vida!
+zh 区域%d - 最后一条命！
+ja ゾーン%d - 残機ラスト！
+hi ज़ोन %d - आख़िरी जान!
+
+it zona %d - ancora %d vite
+en zone %d - %d lives left
+es zona %d - quedan %d vidas
+pt zona %d - restam %d vidas
+zh 区域%d - 还剩%d条命
+ja ゾーン%d - 残機%d
+hi ज़ोन %d - %d जानें बची हैं
+
+@T32
+it ARRIVANO ALTRI!
+en MORE ARE COMING!
+es ¡VIENEN MÁS!
+pt VÊM AÍ MAIS!
+zh 更多怪物来了！
+ja まだ来るぞ！
+hi और आ रहे हैं!
+
+@T32
+it ZONA LIBERA!
+en ZONE CLEAR!
+es ¡ZONA LIBRE!
+pt ZONA LIVRE!
+zh 区域已清空！
+ja ゾーンクリア！
+hi ज़ोन साफ़!
+
+it avanti: il cancello è aperto
+en go on: the gate is open
+es adelante: la puerta está abierta
+pt em frente: o portão está aberto
+zh 前进：大门已打开
+ja 進もう：門が開いた
+hi आगे बढ़ो: दरवाज़ा खुल गया है
+
+@T32
+it SI RICOMINCIA!
+en START OVER!
+es ¡DESDE EL PRINCIPIO!
+pt DO INÍCIO!
+zh 从头再来！
+ja 最初から！
+hi शुरू से!
+
+it la mappa da capo: %d vite a testa
+en the map from the start: %d lives each
+es el mapa desde el principio: %d vidas cada uno
+pt o mapa desde o início: %d vidas cada um
+zh 地图从头开始：每人%d条命
+ja マップを最初から：1人につき残機%d
+hi मैप शुरू से: हर किसी की %d जानें
+
+it la mappa da capo: %d vite
+en the map from the start: %d lives
+es el mapa desde el principio: %d vidas
+pt o mapa desde o início: %d vidas
+zh 地图从头开始：%d条命
+ja マップを最初から：残機%d
+hi मैप शुरू से: %d जानें
+
+it arena del boss
+en boss arena
+es arena del jefe
+pt arena do chefe
+zh 首领竞技场
+ja ボスのアリーナ
+hi बॉस का अखाड़ा
+
+it pronti... via!
+en ready... go!
+es preparados... ¡ya!
+pt preparados... já!
+zh 预备……开始！
+ja よーい……スタート！
+hi तैयार... शुरू!
+
+it %s - giro %d, mostri più forti
+en %s - round %d, tougher monsters
+es %s - vuelta %d, monstruos más fuertes
+pt %s - volta %d, monstros mais fortes
+zh %s - 第%d轮，怪物更强
+ja %s - %d周目、モンスターが強くなる
+hi %s - राउंड %d, राक्षस और ताक़तवर
+
+@T32
+it VITE FINITE!
+en NO LIVES LEFT!
+es ¡SIN VIDAS!
+pt SEM VIDAS!
+zh 命用光了！
+ja 残機ゼロ！
+hi जानें ख़त्म!
+
+@T32
+it TUTTI A TERRA!
+en EVERYONE'S DOWN!
+es ¡TODOS AL SUELO!
+pt TODOS NO CHÃO!
+zh 全员倒地！
+ja 全員ダウン！
+hi सब गिर गए!
+
+it si ricomincia la mappa da capo
+en the map starts over
+es el mapa vuelve a empezar
+pt o mapa recomeça do início
+zh 地图重新开始
+ja マップを最初からやり直し
+hi मैप फिर से शुरू होगा
+
+@T32
+it VITA PERSA!
+en LIFE LOST!
+es ¡VIDA PERDIDA!
+pt VIDA PERDIDA!
+zh 失去一条命！
+ja 残機ダウン！
+hi एक जान गई!
+
+it resta 1 vita: si rifà questa zona
+en 1 life left: this zone starts over
+es queda 1 vida: se repite esta zona
+pt resta 1 vida: repete-se esta zona
+zh 还剩1条命：重来本区域
+ja 残機1：このゾーンをやり直し
+hi 1 जान बची है: यह ज़ोन फिर से
+
+it restano %d vite: si rifà questa zona
+en %d lives left: this zone starts over
+es quedan %d vidas: se repite esta zona
+pt restam %d vidas: repete-se esta zona
+zh 还剩%d条命：重来本区域
+ja 残機%d：このゾーンをやり直し
+hi %d जानें बची हैं: यह ज़ोन फिर से
+
+@T32
+it ESPLORATORE SALVATO!
+en EXPLORER RESCUED!
+es ¡EXPLORADOR RESCATADO!
+pt EXPLORADOR SALVO!
+zh 探险家得救了！
+ja 探検家を救出！
+hi खोजी बच गया!
+
+it una stella in più per questa mappa
+en one more star for this map
+es una estrella más para este mapa
+pt mais uma estrela neste mapa
+zh 本地图多得一颗星
+ja このマップのスターが1つ増えた
+hi इस मैप के लिए एक और स्टार
+
+@T32
+it GLADIATORE SCONFITTO!
+en GLADIATOR DEFEATED!
+es ¡GLADIADOR DERROTADO!
+pt GLADIADOR DERROTADO!
+zh 角斗士被击败！
+ja 剣闘士を倒した！
+hi ग्लैडिएटर हार गया!
+
+it il Colosseo è libero
+en the Colosseum is free
+es el Coliseo es libre
+pt o Coliseu está livre
+zh 斗兽场解放了
+ja コロッセオに平和がもどった
+hi कोलोसियम आज़ाद है
+
+@T32
+it SI ARRABBIA!
+en HE'S GETTING ANGRY!
+es ¡SE ENFADA!
+pt FICOU ZANGADO!
+zh 他生气了！
+ja 怒りだした！
+hi उसे ग़ुस्सा आ गया!
+
+@T32
+it È FURIOSO!
+en HE'S FURIOUS!
+es ¡ESTÁ FURIOSO!
+pt ESTÁ FURIOSO!
+zh 他暴怒了！
+ja 激怒した！
+hi वह आग-बबूला है!
+
+it il gladiatore va più veloce
+en the gladiator gets faster
+es el gladiador va más rápido
+pt o gladiador fica mais rápido
+zh 角斗士变快了
+ja 剣闘士のスピードが上がった
+hi ग्लैडिएटर और तेज़ हो गया
+
+# un giocatore a terra o senza vite (con piu' giocatori)
+@T32
+it G%d È CADUTO NEL CENOTE!
+en P%d FELL INTO THE CENOTE!
+es ¡J%d CAYÓ AL CENOTE!
+pt J%d CAIU NO CENOTE!
+zh P%d掉进了天坑！
+ja %dPが泉に落ちた！
+hi P%d कुएँ में गिर गया!
+
+@T32
+it G%d SENZA VITE!
+en P%d IS OUT OF LIVES!
+es ¡J%d SIN VIDAS!
+pt J%d SEM VIDAS!
+zh P%d没命了！
+ja %dPの残機ゼロ！
+hi P%d की जानें ख़त्म!
+
+@T32
+it G%d A TERRA!
+en P%d IS DOWN!
+es ¡J%d AL SUELO!
+pt J%d NO CHÃO!
+zh P%d倒下了！
+ja %dPダウン！
+hi P%d गिर गया!
+
+it senza vite: resta fuori fino alla fine
+en no lives left: out until the end
+es sin vidas: queda fuera hasta el final
+pt sem vidas: fica de fora até ao fim
+zh 没命了：只能观战到最后
+ja 残機ゼロ：最後まで見学
+hi जानें ख़त्म: आख़िर तक बाहर
+
+it resta fuori fino alla fine della mappa
+en out until the end of the map
+es queda fuera hasta el final del mapa
+pt fica de fora até ao fim do mapa
+zh 本地图结束前无法回来
+ja マップの最後まで見学
+hi मैप के अंत तक बाहर
+
+it resta 1 vita: rientra tra 5 secondi
+en 1 life left: back in 5 seconds
+es queda 1 vida: vuelve en 5 segundos
+pt resta 1 vida: volta daqui a 5 segundos
+zh 还剩1条命：5秒后复活
+ja 残機1：5秒後に復活
+hi 1 जान बची है: 5 सेकंड में वापसी
+
+it restano %d vite: rientra tra 5 secondi
+en %d lives left: back in 5 seconds
+es quedan %d vidas: vuelve en 5 segundos
+pt restam %d vidas: volta daqui a 5 segundos
+zh 还剩%d条命：5秒后复活
+ja 残機%d：5秒後に復活
+hi %d जानें बची हैं: 5 सेकंड में वापसी
+
+
+# === Comandi nel menu di RetroArch ============================================================
+# (cinese, giapponese e hindi qui si usano in inglese: i caratteri di RetroArch di solito non li
+# hanno; le traduzioni restano per quando li avranno)
+
+it Sinistra
+en Left
+es Izquierda
+pt Esquerda
+zh 左
+ja 左
+hi बाएँ
+
+it Destra
+en Right
+es Derecha
+pt Direita
+zh 右
+ja 右
+hi दाएँ
+
+it Su
+en Up
+es Arriba
+pt Cima
+zh 上
+ja 上
+hi ऊपर
+
+it Giù
+en Down
+es Abajo
+pt Baixo
+zh 下
+ja 下
+hi नीचे
+
+it Indietro (menu)
+en Back (menu)
+es Atrás (menú)
+pt Voltar (menu)
+zh 返回（菜单）
+ja 戻る（メニュー）
+hi वापस (मेन्यू)
+
+it Conferma (menu)
+en Confirm (menu)
+es Confirmar (menú)
+pt Confirmar (menu)
+zh 确认（菜单）
+ja 決定（メニュー）
+hi पुष्टि (मेन्यू)
+
+it Colpo normale
+en Normal shot
+es Disparo normal
+pt Disparo normal
+zh 普通攻击
+ja 通常ショット
+hi सामान्य शॉट
+
+it Colpo speciale
+en Special
+es Especial
+pt Especial
+zh 必杀技
+ja 必殺技
+hi स्पेशल
+
+it Salto
+en Jump
+es Salto
+pt Salto
+zh 跳跃
+ja ジャンプ
+hi छलांग
+
+it Bomba
+en Bomb
+es Bomba
+pt Bomba
+zh 炸弹
+ja ボム
+hi बम
+
+it Pausa
+en Pause
+es Pausa
+pt Pausa
+zh 暂停
+ja ポーズ
+hi पॉज़
+
+it Movimento X
+en Move X
+es Movimiento X
+pt Movimento X
+zh 移动 X
+ja 移動 X
+hi चलना X
+
+it Movimento Y
+en Move Y
+es Movimiento Y
+pt Movimento Y
+zh 移动 Y
+ja 移動 Y
+hi चलना Y
+
+it Mira X
+en Aim X
+es Apuntar X
+pt Mira X
+zh 瞄准 X
+ja エイム X
+hi निशाना X
+
+it Mira Y
+en Aim Y
+es Apuntar Y
+pt Mira Y
+zh 瞄准 Y
+ja エイム Y
+hi निशाना Y
+
+it Prestazioni (con START tenuti: esci)
+en Performance (held with START: quit)
+es Rendimiento (con START mantenidos: salir)
+pt Desempenho (com START mantidos: sair)
+zh 性能（与START一起按住：退出）
+ja パフォーマンス（STARTと長押し：終了）
+hi परफ़ॉर्मेंस (START के साथ दबाए रखें: बाहर)

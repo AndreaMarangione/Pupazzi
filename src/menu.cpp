@@ -16,7 +16,7 @@ namespace {
 
 const int CHARS_START_DELAY = 50;
 int g_info_t;                 // avviso temporaneo nei menu ("in arrivo")
-char g_info[128];
+char g_info[256];
 
 bool confirm(int i) { return pad_pressed(i, PAD_A) || g.start_tap[i]; }
 bool back(int i) { return pad_pressed(i, PAD_B); }
@@ -151,7 +151,7 @@ void slots_update(void) {
   const bool ok = any_confirm(&who), no = !ok && any_back();
   const int sel = g.slots_sel;
   const SlotView& v = g_slot_view[sel];
-  char buf[96];
+  char buf[256];
   switch (g.slots_pop) {
     case SP_NONE:
       if (nav == NAV_UP) g.slots_sel = (sel + SAVE_SLOTS - 1) % SAVE_SLOTS;
@@ -259,7 +259,7 @@ void mode_update(void) {
       go_screen(save_data()->story_seen ? SC_MAPS : SC_STORY);    // la prima volta, la storia
     } else {
       snd_ui(SND_UI_BACK);
-      info("CONTRO arriva con la versione 0.6");
+      info(tr("CONTRO arriva con la versione 0.6"));
     }
   } else if (any_back()) {
     snd_ui(SND_UI_BACK);
@@ -267,19 +267,32 @@ void mode_update(void) {
   }
 }
 
-// La storia: le righe compaiono una alla volta; A le mostra tutte, poi va avanti.
+// La storia: due paragrafi, a capo dove serve nella lingua scelta. Le righe compaiono una alla
+// volta; A le mostra tutte, poi va avanti.
 const char* const STORY[] = {
-  "Astro parte dalla Terra con gli amici",
-  "della Luna, di Marte e di Venere:",
-  "il giro dei pianeti comincia!",
-  "Ogni pianeta ha i suoi mostri e un boss.",
-  "",
-  "Battuto il boss, l'eroe del pianeta",
-  "entra in squadra. In ogni mappa c'è una",
-  "capsula nascosta: salvate l'esploratore!",
+  N_("Astro parte dalla Terra con gli amici della Luna, di Marte e di Venere: il giro dei pianeti comincia! "
+     "Ogni pianeta ha i suoi mostri e un boss."),
+  N_("Battuto il boss, l'eroe del pianeta entra in squadra. In ogni mappa c'è una capsula nascosta: salvate l'esploratore!"),
 };
-const int STORY_LINES = (int)(sizeof(STORY) / sizeof(STORY[0]));
-const int STORY_STEP = 34;
+const int STORY_PARAS = (int)(sizeof(STORY) / sizeof(STORY[0]));
+const int STORY_STEP = 34, STORY_MAX = 12;
+const float STORY_W = 440.0f;
+struct StoryLines { char s[STORY_MAX][ui::WRAP_LEN]; int para[STORY_MAX]; int n; };
+
+void story_lines(StoryLines* L) {
+  L->n = 0;
+  for (int p = 0; p < STORY_PARAS && L->n < STORY_MAX; ++p) {
+    const int k = ui::wrap(tr(STORY[p]), STORY_W, HF_S16, 0.5f, &L->s[L->n], STORY_MAX - L->n);
+    for (int i = 0; i < k; ++i) L->para[L->n + i] = p;
+    L->n += k;
+  }
+}
+
+int story_total(void) {
+  static StoryLines L;
+  story_lines(&L);
+  return L.n;
+}
 
 int story_shown(void) { return g.story_t / STORY_STEP + 1; }
 
@@ -287,8 +300,9 @@ void story_update(void) {
   g.story_t++;
   int who;
   if (any_confirm(&who)) {
-    if (story_shown() < STORY_LINES) {
-      g.story_t = STORY_LINES * STORY_STEP;
+    const int total = story_total();
+    if (story_shown() < total) {
+      g.story_t = total * STORY_STEP;
       snd_ui(SND_UI_MOVE);
       return;
     }
@@ -320,13 +334,13 @@ void maps_update(void) {
       snd_ui(SND_UI_BACK);
       const int w = maps_world(g.map_sel);
       if (map_in_world(g.map_sel) > 0 && world_first_map(w) >= 0 && map_unlocked(world_first_map(w))) {
-        info("si apre finendo la mappa prima");
+        info(tr("si apre finendo la mappa prima"));
       } else if (w > 0 && w < NWORLDS) {
-        char buf[64];
-        snprintf(buf, sizeof(buf), "si apre battendo il boss di %s", WORLD_NAMES[w - 1]);
+        char buf[128];
+        snprintf(buf, sizeof(buf), tr("si apre battendo il boss di %s"), tr(WORLD_NAMES[w - 1]));
         info(buf);
       } else {
-        info("mappa chiusa");
+        info(tr("mappa chiusa"));
       }
       return;
     }
@@ -462,7 +476,7 @@ void title_hud(Hud* h) {
   hud_text_glow(h, 320, base, HF_LOGO, ui::TGLOW, "PUPAZZI", 9.0f, 0);
   hud_text(h, 320, base, HF_LOGO, 0xFFFFFFFFu, "PUPAZZI", 9.0f, 0);
   const float cy = 164.0f + 9.75f;
-  char tag[96];
+  char tag[256];
   ui::fit(tag, sizeof(tag), tr("DA 1 A 4 AMICI CONTRO I MOSTRI"), HF_S15, 2.0f, 576.0f);
   ui::text(h, 320, cy + 1.0f, HF_S15, A(ui::SCRIM, 0.9f), tag, 2.0f, 0);
   ui::text(h, 320, cy, HF_S15, O(ui::FTX), tag, 2.0f, 0);
@@ -508,7 +522,7 @@ void play_time(char* buf, int n, uint32_t s) {
 // Un posto: numero, pianeta e giro, stelle, mappe aperte, tempo; vuoto o illeggibile.
 void slot_row(Hud* h, float x, float y, float w, float hh, int i, bool sel) {
   const SlotView& v = g_slot_view[i];
-  char buf[96], t[32];
+  char buf[256], t[64];
   if (sel) ui::bar_sel(h, x, y, w, hh);
   const float cy = y + hh * 0.5f;
   const uint32_t mc = O(sel ? ui::ON : ui::TX), sub = O(sel ? ui::ON : ui::MU);
@@ -526,7 +540,7 @@ void slot_row(Hud* h, float x, float y, float w, float hh, int i, bool sel) {
     ui::text(h, tx, cy + 11.0f, HF_S13, sub, tr("si riparte dall'inizio"), 0.5f);
     return;
   }
-  char wn[48];
+  char wn[96];
   hud_upper(wn, tr(WORLD_NAMES[v.world]), sizeof(wn));
   snprintf(buf, sizeof(buf), tr("%s · GIRO %d"), wn, v.giro);
   ui::text(h, tx, cy - 9.0f, HF_B16, mc, buf, 1.5f);
@@ -548,12 +562,12 @@ void slot_row(Hud* h, float x, float y, float w, float hh, int i, bool sel) {
 
 // Finestra sopra i posti: titolo e una o due righe; con le voci (azioni) o "A si' / B no".
 void slots_popup(Hud* h) {
-  char buf[96];
+  char buf[256];
   ui::overlay(h, 0.5f);
   const float W = 380.0f, X = 130.0f;
   const int i = g.slots_sel;
   if (g.slots_pop == SP_ACTIONS) {
-    const float Y = 150.0f, H = 168.0f;
+    const float Y = 146.0f, H = 176.0f;
     ui::panel(h, X, Y, W, H, 16.0f, ui::SOLID, true);
     snprintf(buf, sizeof(buf), tr("SALVATAGGIO %d"), i + 1);
     ui::text(h, X + 22.0f, Y + 30.0f, HF_B22, O(ui::TX), buf, 3.0f);
@@ -561,23 +575,24 @@ void slots_popup(Hud* h) {
     static const char* const ACT[2] = { N_("DUPLICA"), N_("ELIMINA") };
     static const char* const HINT[2] = { N_("una copia nel primo posto libero"), N_("lo cancella per sempre") };
     for (int k = 0; k < 2; ++k) {
-      const float y = Y + 66.0f + 42.0f * (float)k;
+      const float y = Y + 66.0f + 48.0f * (float)k;           // righe alte anche per cinese, giapponese e hindi
       const bool sel = k == g.slots_pop_sel;
-      if (sel) ui::bar_sel(h, X + 12.0f, y, W - 24.0f, 38.0f);
-      ui::text(h, X + 26.0f, y + 13.0f, HF_S16, O(sel ? ui::ON : (k == 1 ? ui::L2 : ui::TX)), tr(ACT[k]), 1.0f);
-      ui::text(h, X + 26.0f, y + 29.0f, HF_S12, O(sel ? ui::ON : ui::MU), tr(HINT[k]), 0.5f);
+      if (sel) ui::bar_sel(h, X + 12.0f, y, W - 24.0f, 44.0f);
+      char t[256];
+      ui::text(h, X + 26.0f, y + 14.0f, HF_S16, O(sel ? ui::ON : (k == 1 ? ui::L2 : ui::TX)), tr(ACT[k]), 1.0f);
+      ui::text(h, X + 26.0f, y + 32.0f, HF_S12, O(sel ? ui::ON : ui::MU), ui::fit(t, sizeof(t), tr(HINT[k]), HF_S12, 0.5f, W - 52.0f), 0.5f);
     }
     return;
   }
   const float Y = 170.0f, H = 128.0f;
   ui::panel(h, X, Y, W, H, 16.0f, ui::SOLID, true);
-  char q[96], fitted[96];
+  char q[256], fitted[256];
   snprintf(q, sizeof(q), g.slots_pop == SP_DELETE ? tr("ELIMINARE IL SALVATAGGIO %d?") : tr("SOVRASCRIVERE IL SALVATAGGIO %d?"), i + 1);
   ui::fit(fitted, sizeof(fitted), q, HF_B16, 1.5f, W - 44.0f);
   ui::text(h, 320.0f, Y + 32.0f, HF_B16, O(g.slots_pop == SP_DELETE ? ui::L2 : ui::TX), fitted, 1.5f, 0);
   const SlotView& v = g_slot_view[i];
   if (v.state == SAVE_LETTO) {
-    char wn[48], t[32];
+    char wn[96], t[64];
     hud_upper(wn, tr(WORLD_NAMES[v.world]), sizeof(wn));
     play_time(t, sizeof(t), v.seconds);
     snprintf(buf, sizeof(buf), tr("%s, giro %d: %d stelle, %s di gioco"), wn, v.giro, v.stars, t);
@@ -600,7 +615,7 @@ void slots_hud(Hud* h) {
   ui::scrim_top(h);
   ui::scrim_bottom(h);
   static const char* const TITLE[3] = { N_("CARICA SALVATAGGIO"), N_("GESTISCI SALVATAGGI"), N_("DOVE SALVARE?") };
-  char t[96];
+  char t[256];
   ui::fit(t, sizeof(t), tr(TITLE[g.slots_mode]), HF_T32, 3.0f, 560.0f, "...");
   ui::title(h, 320, 26, HF_T32, t, 3.0f);
   float PY = 86.0f;
@@ -643,7 +658,10 @@ void lang_hud(Hud* h) {
     const bool sel = l == g.lang_sel, cur = l == lang_get();
     if (sel) ui::bar_sel(h, IX, y + 2.0f, IW, RH - 4.0f);
     if (cur) hud_ellipse(h, IX + 16.0f, cy, 4.0f, 4.0f, O(sel ? ui::ON : ui::L1));
+    const int keep = hud_cjk_get();
+    hud_cjk(l == LANG_JA ? HUD_CJK_JP : HUD_CJK_SC);       // 中文 e 日本語 ognuno con i suoi caratteri
     ui::text(h, IX + 32.0f, cy, HF_S16, O(sel ? ui::ON : ui::TX), lang_name(l), 1.0f);
+    hud_cjk(keep);
   }
   const char* it[4] = { "A", tr("scegli"), "B", tr("indietro") };
   ui::footer(h, it, 4);
@@ -655,10 +673,11 @@ void mode_card(Hud* h, float x, float y, bool insieme, bool sel) {
   const float W = 262.0f, H = 112.0f, cx0 = x + 20.0f;
   if (sel) ui::card_sel(h, x, y, W, H);
   else ui::panel_off(h, x, y, W, H);
+  char t[256];
   if (insieme) {
     for (int k = 0; k < 4; ++k) ui::avatar(h, cx0 + 27.0f * (float)k, y + 13.0f, k, false);
-    ui::text(h, cx0, y + 66.0f, HF_T25, O(ui::TX), "INSIEME", 3.0f);
-    ui::text(h, cx0, y + 90.5f, HF_S14, O(ui::L1), "tutti insieme contro i mostri", 0.5f);
+    ui::text(h, cx0, y + 64.0f, HF_T25, O(ui::TX), tr("INSIEME"), 3.0f);
+    ui::text(h, cx0, y + 91.5f, HF_S14, O(ui::L1), ui::fit(t, sizeof(t), tr("tutti insieme contro i mostri"), HF_S14, 0.5f, W - 40.0f), 0.5f);
   } else {
     ui::avatar(h, cx0, y + 13.0f, 0, true);
     ui::avatar(h, cx0 + 27.0f, y + 13.0f, 1, true);
@@ -666,33 +685,39 @@ void mode_card(Hud* h, float x, float y, bool insieme, bool sel) {
     ui::text(h, vx, y + 29.0f, HF_B12, A(ui::TX, 0.45f), "VS", 1.0f);
     ui::avatar(h, vx + vw + 8.0f, y + 13.0f, 2, true);
     ui::avatar(h, vx + vw + 35.0f, y + 13.0f, 3, true);
-    ui::text(h, cx0, y + 66.0f, HF_T25, O(ui::DIS), "CONTRO", 3.0f);
-    ui::text(h, cx0, y + 90.5f, HF_S14, O(ui::DIS), "2 contro 2", 0.5f);
-    ui::tag(h, x + W - 16.0f, y + H - 26.5f, "IN ARRIVO", ui::A2, HF_B11, 1.5f, 6.0f, 21.0f, 1);
+    ui::text(h, cx0, y + 64.0f, HF_T25, O(ui::DIS), tr("CONTRO"), 3.0f);
+    ui::text(h, cx0, y + 91.5f, HF_S14, O(ui::DIS), tr("2 contro 2"), 0.5f);
+    ui::tag(h, x + W - 16.0f, y + H - 26.5f, tr("IN ARRIVO"), ui::A2, HF_B11, 1.5f, 6.0f, 21.0f, 1);
   }
 }
 
 void mode_hud(Hud* h) {
   ui::scrim_top(h);
   ui::scrim_bottom(h);
-  ui::title(h, 320, 36, HF_T38, "COME SI GIOCA?", 3.0f);
+  ui::title(h, 320, 36, HF_T38, tr("COME SI GIOCA?"), 3.0f);
   mode_card(h, 52, 308, true, g.menu_sel == 0);
   mode_card(h, 326, 308, false, g.menu_sel == 1);
-  footer(h, "conferma", "indietro");
+  footer(h, tr("conferma"), tr("indietro"));
 }
 
 void story_hud(Hud* h) {
   ui::scrim_top(h);
   ui::scrim_bottom(h);
-  ui::title(h, 320, 28, HF_T32, "IL GIRO DEI PIANETI", 3.0f);
+  ui::title(h, 320, 28, HF_T32, tr("IL GIRO DEI PIANETI"), 3.0f);
   ui::panel(h, 70, 84, 500, 300);
-  const int n = story_shown() < STORY_LINES ? story_shown() : STORY_LINES;
+  static StoryLines L;
+  story_lines(&L);
+  const int n = story_shown() < L.n ? story_shown() : L.n;
+  // Righe ogni 33 pixel e 20 in piu' tra i paragrafi, piu' strette se in una lingua sono di piu'.
+  const float GAP = 20.0f * (float)(STORY_PARAS - 1);
+  const float step = L.n > 1 ? fminf(33.0f, (300.0f - 72.0f - GAP) / (float)(L.n - 1)) : 33.0f;
   float cy = 84.0f + 36.0f;
   for (int k = 0; k < n; ++k) {
-    if (STORY[k][0]) ui::text(h, 320, cy, HF_S16, O(k >= 5 ? ui::L1 : ui::TX), STORY[k], 0.5f, 0);
-    cy += STORY[k][0] ? 33.0f : 20.0f;
+    if (k > 0 && L.para[k] != L.para[k - 1]) cy += 20.0f;
+    ui::text(h, 320, cy, HF_S16, O(L.para[k] > 0 ? ui::L1 : ui::TX), L.s[k], 0.5f, 0);
+    cy += step;
   }
-  footer(h, n < STORY_LINES ? "tutto" : "avanti", "indietro");
+  footer(h, n < L.n ? tr("tutto") : tr("avanti"), tr("indietro"));
 }
 
 // Stelle del giro di un pianeta: quante, quante ne servono, cosa dire a destra.
@@ -709,16 +734,16 @@ Giro giro_of(int w) {
 }
 
 void giro_text(char* buf, int n, const Giro& gr) {
-  if (gr.last) snprintf(buf, (size_t)n, "GIRO %d, L'ULTIMO", gr.giro);
-  else if (gr.ready) snprintf(buf, (size_t)n, "BOSS → GIRO %d", gr.giro + 1);
-  else snprintf(buf, (size_t)n, "%d → GIRO %d", gr.need, gr.giro + 1);
+  if (gr.last) snprintf(buf, (size_t)n, tr("GIRO %d, L'ULTIMO"), gr.giro);
+  else if (gr.ready) snprintf(buf, (size_t)n, tr("BOSS → GIRO %d"), gr.giro + 1);
+  else snprintf(buf, (size_t)n, tr("%d → GIRO %d"), gr.need, gr.giro + 1);
 }
 
 void maps_hud(Hud* h) {
-  char buf[64], name[64];
+  char buf[128], name[128];
   ui::scrim_top(h);
   ui::scrim_bottom(h);
-  ui::title(h, 320, 28, HF_T32, "SCEGLI LA MAPPA", 3.0f);
+  ui::title(h, 320, 28, HF_T32, tr("SCEGLI LA MAPPA"), 3.0f);
   int w = maps_world(g.map_sel);
   if (w < 0 || w >= NWORLDS) w = 0;
   int ids[24], n = 0;
@@ -740,8 +765,8 @@ void maps_hud(Hud* h) {
   float y = PY + 14.0f;
   if (w == 0) ui::earth(h, IX + 4.0f, y + 2.0f);
   else ui::planet(h, IX + 9.5f, y + 7.5f, w);
-  ui::text(h, IX + 40.0f, y + 15.0f, HF_B22, O(ui::TX), WORLD_NAMES[w], 3.0f);
-  snprintf(buf, sizeof(buf), "GIRO %d", world_giro(w));
+  ui::text(h, IX + 40.0f, y + 15.0f, HF_B22, O(ui::TX), tr(WORLD_NAMES[w]), 3.0f);
+  snprintf(buf, sizeof(buf), tr("GIRO %d"), world_giro(w));
   ui::tag(h, IX + IW - 4.0f, y + 15.0f, buf, ui::L1, HF_B13, 2.0f, 8.0f, 23.0f, 1);
   y += 30.0f + 10.0f;
   ui::sep(h, IX, y, IW);
@@ -755,17 +780,17 @@ void maps_hud(Hud* h) {
     const uint32_t tc = O(sel ? ui::ON : (open ? ui::TX : ui::DIS));
     float nx = IX + 10.0f;
     if (maps_is_boss(i)) {
-      nx += ui::tag(h, nx, cy, "BOSS", sel ? ui::ON : ui::A2, HF_B12, 1.0f, 5.0f, 20.0f) + 10.0f;
+      nx += ui::tag(h, nx, cy, tr("BOSS"), sel ? ui::ON : ui::A2, HF_B12, 1.0f, 5.0f, 20.0f) + 10.0f;
     } else {
       snprintf(buf, sizeof(buf), "%02d", map_in_world(i) + 1);
       ui::text(h, nx, cy, HF_S13, O(sel ? ui::ON : ui::L1), buf);
       nx += 32.0f;
     }
-    hud_upper(buf, maps_name(i), sizeof(buf));
+    hud_upper(buf, tr(maps_name(i)), sizeof(buf));
     ui::fit(name, sizeof(name), buf, HF_S17, 0.8f, IX + IW - 12.0f - 54.0f - 10.0f - nx);   // fino alle stelle
     ui::text(h, nx, cy, HF_S17, tc, name, 0.8f);
     if (open) ui::stars3(h, IX + IW - 12.0f - 54.0f, cy, save_stars(maps_id(i)), sel);
-    else ui::text(h, IX + IW - 12.0f, cy, HF_S13, tc, "CHIUSA", 1.0f, 1);
+    else ui::text(h, IX + IW - 12.0f, cy, HF_S13, tc, tr("CHIUSA"), 1.0f, 1);
     y += 38.0f;
   }
   y -= 2.0f;
@@ -790,13 +815,13 @@ void maps_hud(Hud* h) {
     y += 12.0f;
     ui::sep(h, IX, y, IW);
     y += 9.0f;
-    ui::text(h, IX + 6.0f, y + 8.0f, HF_S12, O(ui::MU), "IN ARRIVO", 2.0f);
+    ui::text(h, IX + 6.0f, y + 8.0f, HF_S12, O(ui::MU), tr("IN ARRIVO"), 2.0f);
     y += 22.0f;
     // Quattro colonne larghe quanto serve (Saturno ha gli anelli), lo spazio che avanza tra l'una e l'altra.
     float cw[4] = { 0, 0, 0, 0 }, sum = 0.0f;
     for (int k = 0; k < ns; ++k) {
       const float iw = soon[k] == 6 ? 19.0f : 15.0f;
-      cw[k % 4] = fmaxf(cw[k % 4], iw + 7.0f + hud_text_w(HF_S13, WORLD_NAMES[soon[k]], 0.8f));
+      cw[k % 4] = fmaxf(cw[k % 4], iw + 7.0f + hud_text_w(HF_S13, tr(WORLD_NAMES[soon[k]]), 0.8f));
     }
     for (int c = 0; c < 4; ++c) sum += cw[c];
     const float gap = fmaxf((IW - 12.0f - sum) / 3.0f, 8.0f);
@@ -806,7 +831,7 @@ void maps_hud(Hud* h) {
       const float pcy = y + 8.5f + 23.0f * (float)(k / 4);
       ui::planet(h, px, pcy - 7.5f, soon[k]);
       const float iw = soon[k] == 6 ? 19.0f : 15.0f;
-      ui::text(h, px + iw + 7.0f, pcy, HF_S13, O(ui::MU), WORLD_NAMES[soon[k]], 0.8f);
+      ui::text(h, px + iw + 7.0f, pcy, HF_S13, O(ui::MU), tr(WORLD_NAMES[soon[k]]), 0.8f);
     }
   }
   // Mappa personalizzata con un problema: la nota al posto del piede.
@@ -814,20 +839,20 @@ void maps_hud(Hud* h) {
     toast(h, maps_note(g.map_sel), ui::A2);
     ui::version(h);
   } else {
-    footer(h, "gioca", "indietro");
+    footer(h, tr("gioca"), tr("indietro"));
   }
 }
 
 void chars_hud(Hud* h) {
-  char buf[128], name[64];
+  char buf[256], name[128];
   ui::scrim_top(h);
   ui::scrim_bottom(h, 160.0f);
-  ui::title(h, 320, 22, HF_T38, "CHI GIOCA?", 3.0f);
-  hud_upper(name, g.L.name, sizeof(name));
+  ui::title(h, 320, 22, HF_T38, tr("CHI GIOCA?"), 3.0f);
+  hud_upper(name, tr(g.L.name), sizeof(name));
   const int w = maps_world(g.map_sel);
-  snprintf(buf, sizeof(buf), "%s · %s · GIRO %d", name, WORLD_NAMES[w >= 0 && w < NWORLDS ? w : 0], world_giro(w));
+  snprintf(buf, sizeof(buf), tr("%s · %s · GIRO %d"), name, tr(WORLD_NAMES[w >= 0 && w < NWORLDS ? w : 0]), world_giro(w));
   {
-    char fitted[128];
+    char fitted[256];
     ui::fit(fitted, sizeof(fitted), buf, HF_S15, 2.0f, 576.0f);
     ui::text(h, 321, 81, HF_S15, A(ui::SCRIM, 0.9f), fitted, 2.0f, 0);
     ui::text(h, 320, 80, HF_S15, O(ui::FTX), fitted, 2.0f, 0);
@@ -839,22 +864,24 @@ void chars_hud(Hud* h) {
   if (show >= 0) {
     // Due righe sopra le teste: chi e' (nome, da dove viene, che tipo), poi colpo e speciale.
     const CharDef& cd = CHARS[g.pick[show]];
-    snprintf(buf, sizeof(buf), "%s · %s", cd.who, cd.role);
-    const float w1 = 24.0f + 10.0f + hud_text_w(HF_B22, cd.name, 2.0f) + 12.0f + hud_text_w(HF_S13, buf, 0.5f);
-    const float w2 = 2.0f * (30.0f + 8.0f) + hud_text_w(HF_S13, cd.normal, 0.3f) + 20.0f + hud_text_w(HF_S13, cd.special, 0.3f);
+    const char *nm = tr(cd.name), *normal = tr(cd.normal), *special = tr(cd.special);
+    snprintf(buf, sizeof(buf), "%s · %s", tr(cd.who), tr(cd.role));
+    const float w1 = 24.0f + 10.0f + hud_text_w(HF_B22, nm, 2.0f) + 12.0f + hud_text_w(HF_S13, buf, 0.5f);
+    const float w2 = 2.0f * (34.0f + 8.0f) + hud_text_w(HF_S13, normal, 0.3f) + 20.0f + hud_text_w(HF_S13, special, 0.3f) + 2.0f;   // tasti larghi 34
     const float W = fminf(fmaxf(fmaxf(w1, w2) + 40.0f, 420.0f), 576.0f), X = floorf(320.0f - W * 0.5f);
     ui::panel(h, X, 94, W, 60, 12.0f);
     float x = X + 20.0f;
     x += ui::gp(h, x, 112, show) + 10.0f;
-    ui::text(h, x, 112, HF_B22, O(ui::TX), cd.name, 2.0f);
-    x += hud_text_w(HF_B22, cd.name, 2.0f) + 12.0f;
-    ui::text(h, x, 113, HF_S13, O(ui::MU), buf, 0.5f);
+    ui::text(h, x, 112, HF_B22, O(ui::TX), nm, 2.0f);
+    x += hud_text_w(HF_B22, nm, 2.0f) + 12.0f;
+    char fitted[256];
+    ui::text(h, x, 113, HF_S13, O(ui::MU), ui::fit(fitted, sizeof(fitted), buf, HF_S13, 0.5f, X + W - 20.0f - x), 0.5f);
     x = X + 20.0f;
     x += ui::keycap(h, x, 137, "R1", false) + 8.0f;
-    ui::text(h, x, 137, HF_S13, O(ui::TX), cd.normal, 0.3f);
-    x += hud_text_w(HF_S13, cd.normal, 0.3f) + 20.0f;
+    ui::text(h, x, 137, HF_S13, O(ui::TX), normal, 0.3f);
+    x += hud_text_w(HF_S13, normal, 0.3f) + 20.0f;
     x += ui::keycap(h, x, 137, "L1", false) + 8.0f;
-    ui::text(h, x, 137, HF_S13, O(ui::L1), cd.special, 0.3f);
+    ui::text(h, x, 137, HF_S13, O(ui::L1), ui::fit(fitted, sizeof(fitted), special, HF_S13, 0.3f, X + W - 20.0f - x), 0.3f);
   }
   // Un riquadro per giocatore, in basso.
   for (int i = 0; i < MAX_PLAYERS; ++i) {
@@ -863,9 +890,10 @@ void chars_hud(Hud* h) {
       ui::panel_off(h, x, y, W, H, 12.0f);
       ui::gp(h, x + 12.0f, y + 16.0f, i);
       if (blinking(20)) {
-        const float kw = 22.0f + 7.0f + hud_text_w(HF_S13, "entra", 0.5f);
+        const char* t = tr("entra");
+        const float kw = 22.0f + 7.0f + hud_text_w(HF_S13, t, 0.5f);
         ui::key(h, cx - kw * 0.5f, y + 52.0f, "A");
-        ui::text(h, cx - kw * 0.5f + 29.0f, y + 52.0f, HF_S13, O(ui::MU), "entra", 0.5f);
+        ui::text(h, cx - kw * 0.5f + 29.0f, y + 52.0f, HF_S13, O(ui::MU), t, 0.5f);
       }
       continue;
     }
@@ -874,31 +902,34 @@ void chars_hud(Hud* h) {
     else ui::panel(h, x, y, W, H, 12.0f);
     ui::gp(h, x + 12.0f, y + 16.0f, i);
     ui::face(h, x + W - 12.0f - 24.0f, y + 5.0f, 24, g.pick[i], 0);
-    ui::text(h, cx, y + 46.0f, HF_B16, O(ui::TX), cd.name, 2.0f, 0);
+    const char* nm = tr(cd.name);
+    ui::text(h, cx, y + 46.0f, HF_B16, O(ui::TX), nm, 2.0f, 0);
     if (!g.ready[i]) {
-      const float nw = hud_text_w(HF_B16, cd.name, 2.0f);
+      const float nw = hud_text_w(HF_B16, nm, 2.0f);
       ui::chev(h, cx - nw * 0.5f - 18.0f, y + 40.0f, false, ui::L1);
       ui::chev(h, cx + nw * 0.5f + 10.0f, y + 40.0f, true, ui::L1);
-      const float kw = 22.0f + 7.0f + hud_text_w(HF_S13, "pronto", 0.5f);
+      const char* t = tr("pronto");
+      const float kw = 22.0f + 7.0f + hud_text_w(HF_S13, t, 0.5f);
       ui::key(h, cx - kw * 0.5f, y + 66.0f, "A");
-      ui::text(h, cx - kw * 0.5f + 29.0f, y + 66.0f, HF_S13, O(ui::MU), "pronto", 0.5f);
+      ui::text(h, cx - kw * 0.5f + 29.0f, y + 66.0f, HF_S13, O(ui::MU), t, 0.5f);
     } else {
-      ui::text(h, cx, y + 66.0f, HF_B13, O(ui::L1), "PRONTO!", 2.0f, 0);
+      ui::text(h, cx, y + 66.0f, HF_B13, O(ui::L1), tr("PRONTO!"), 2.0f, 0);
     }
   }
-  if (g.chars_t > 0) ui::title(h, 320, 234, HF_T44, "SI PARTE!", 6.0f, false);
-  const char* it[6] = { "←→", "personaggio", "A", "pronto", "B", "esci" };
+  if (g.chars_t > 0) ui::title(h, 320, 234, HF_T44, tr("SI PARTE!"), 6.0f, false);
+  const char* it[6] = { "←→", tr("personaggio"), "A", tr("pronto"), "B", tr("esci") };
   ui::footer(h, it, 6);
 }
 
 void stats_hud(Hud* h) {
-  char buf[96], name[64];
+  char buf[256], name[128];
   const bool boss = maps_is_boss(g.map_idx);
   const int w = maps_world(g.map_idx), wn = w >= 0 && w < NWORLDS ? w : 0;
+  const char* wname = tr(WORLD_NAMES[wn]);
   ui::scrim_top(h);
   ui::scrim_bottom(h);
-  ui::title(h, 320, 22, HF_T32, boss ? "BOSS SCONFITTO!" : "MAPPA COMPLETATA!", 3.0f);
-  hud_upper(buf, g.L.name, sizeof(buf));
+  ui::title(h, 320, 22, HF_T32, boss ? tr("BOSS SCONFITTO!") : tr("MAPPA COMPLETATA!"), 3.0f);
+  hud_upper(buf, tr(g.L.name), sizeof(buf));
   ui::fit(name, sizeof(name), buf, HF_S15, 2.0f, 576.0f);
   ui::text(h, 321, 75, HF_S15, A(ui::SCRIM, 0.9f), name, 2.0f, 0);
   ui::text(h, 320, 74, HF_S15, O(ui::FTX), name, 2.0f, 0);
@@ -908,8 +939,11 @@ void stats_hud(Hud* h) {
   const float TX0 = 88.0f, TW = 464.0f, TY = 92.0f, TH = 34.0f + 28.0f * (float)rows + 6.0f;
   ui::panel(h, TX0, TY, TW, TH);
   static const float COL[3] = { 372.0f, 452.0f, 532.0f };
-  static const char* const HEAD[3] = { "SCONFITTI", "DANNI", "CADUTE" };
-  for (int k = 0; k < 3; ++k) ui::text(h, COL[k], TY + 18.0f, HF_S12, O(ui::MU), HEAD[k], 1.0f, 1);
+  static const char* const HEAD[3] = { N_("SCONFITTI"), N_("DANNI"), N_("CADUTE") };
+  for (int k = 0; k < 3; ++k) {
+    char col[64];
+    ui::text(h, COL[k], TY + 18.0f, HF_S12, O(ui::MU), ui::fit(col, sizeof(col), tr(HEAD[k]), HF_S12, 1.0f, 76.0f), 1.0f, 1);
+  }
   float y = TY + 34.0f;
   for (int i = 0; i < MAX_PLAYERS; ++i) {
     const Player& p = g.pl[i];
@@ -920,7 +954,7 @@ void stats_hud(Hud* h) {
     ui::face(h, TX0 + 34.0f, cy - 10.0f, 20, p.ch, 0);
     float x = TX0 + 60.0f;
     x += ui::gp(h, x, cy, i) + 8.0f;
-    ui::text(h, x, cy, HF_S15, O(mvp ? ui::L1 : ui::TX), CHARS[p.ch].name, 1.0f);
+    ui::text(h, x, cy, HF_S15, O(mvp ? ui::L1 : ui::TX), tr(CHARS[p.ch].name), 1.0f);
     const int v[3] = { p.kills, (int)(p.dmg_done + 0.5f), p.deaths };
     for (int k = 0; k < 3; ++k) {
       snprintf(buf, sizeof(buf), "%d", v[k]);
@@ -929,7 +963,7 @@ void stats_hud(Hud* h) {
     y += 28.0f;
   }
   // Stelle della mappa, una alla volta: quelle prese ora "saltano"; NUOVA! se nel giro non c'era.
-  static const char* const STAR_TXT[3] = { "mappa finita", "esploratore salvato", "senza ricominciare la mappa" };
+  static const char* const STAR_TXT[3] = { N_("mappa finita"), N_("esploratore salvato"), N_("senza ricominciare la mappa") };
   const float SY = TY + TH + 12.0f;
   ui::panel(h, TX0, SY, TW, 106.0f);
   for (int k = 0; k < 3; ++k) {
@@ -940,8 +974,8 @@ void stats_hud(Hud* h) {
     const int icon = pop >= 1.0f ? HI_STAR22 : (pop > 0.66f ? HI_STAR26 : (pop > 0.33f ? HI_STAR30 : HI_STAR34));
     const float s = (float)hud_icon_w(icon);
     ui::star(h, icon, TX0 + 34.0f - s * 0.5f, cy - s * 0.5f, got, O(ui::DIM2));
-    ui::text(h, TX0 + 60.0f, cy, HF_S15, O(got ? ui::TX : ui::MU), STAR_TXT[k], 0.5f);
-    if (got && ((g.stars_new >> k) & 1)) ui::tag(h, TX0 + TW - 16.0f, cy, "NUOVA!", ui::A2, HF_B11, 1.5f, 6.0f, 21.0f, 1);
+    ui::text(h, TX0 + 60.0f, cy, HF_S15, O(got ? ui::TX : ui::MU), tr(STAR_TXT[k]), 0.5f);
+    if (got && ((g.stars_new >> k) & 1)) ui::tag(h, TX0 + TW - 16.0f, cy, tr("NUOVA!"), ui::A2, HF_B11, 1.5f, 6.0f, 21.0f, 1);
   }
   // Il giro del pianeta: dopo il boss com'e' andata, altrimenti le stelle del giro.
   if (g.screen_t >= STATS_READY) {
@@ -949,24 +983,24 @@ void stats_hud(Hud* h) {
     const float pop = clampf((float)(g.screen_t - STATS_READY) / 10.0f, 0.0f, 1.0f);
     if (boss && g.giro_done && g.giro_up) {
       ui::panel(h, TX0, GY, TW, 52.0f, 16.0f, ui::BASE, true);
-      snprintf(buf, sizeof(buf), "GIRO %d APERTO!", g.giro_was + 1);
-      ui::text(h, 320, GY + 18.0f + 3.0f * (1.0f - pop), HF_B22, O(ui::L1), buf, 3.0f, 0);
-      snprintf(buf, sizeof(buf), "%s: stelle da capo, mostri più forti", WORLD_NAMES[wn]);
-      ui::text(h, 320, GY + 39.0f, HF_S13, O(ui::TX), buf, 0.5f, 0);
+      snprintf(buf, sizeof(buf), tr("GIRO %d APERTO!"), g.giro_was + 1);
+      ui::text(h, 320, GY + 17.0f + 3.0f * (1.0f - pop), HF_B22, O(ui::L1), buf, 3.0f, 0);
+      snprintf(buf, sizeof(buf), tr("%s: stelle da capo, mostri più forti"), wname);
+      ui::text(h, 320, GY + 40.0f, HF_S13, O(ui::TX), buf, 0.5f, 0);
     } else {
       ui::panel(h, TX0, GY, TW, 52.0f);
       if (boss && g.giro_done) {
         if (g.giro_was >= SAVE_GIRO_MAX) {
-          snprintf(buf, sizeof(buf), "%s: giro %d, l'ultimo!", WORLD_NAMES[wn], g.giro_was);
+          snprintf(buf, sizeof(buf), tr("%s: giro %d, l'ultimo!"), wname, g.giro_was);
           ui::text(h, 320, GY + 26.0f, HF_S15, O(ui::L1), buf, 0.5f, 0);
         } else {
-          snprintf(buf, sizeof(buf), "per il giro %d servono %d stelle: ne hai %d", g.giro_was + 1, giro_need(wn), g.giro_stars);
+          snprintf(buf, sizeof(buf), tr("per il giro %d servono %d stelle: ne hai %d"), g.giro_was + 1, giro_need(wn), g.giro_stars);
           ui::text(h, 320, GY + 17.0f, HF_S14, O(ui::L2), buf, 0.5f, 0);
-          ui::text(h, 320, GY + 37.0f, HF_S13, O(ui::MU), "rifai le mappe per le stelle che mancano", 0.5f, 0);
+          ui::text(h, 320, GY + 37.0f, HF_S13, O(ui::MU), tr("rifai le mappe per le stelle che mancano"), 0.5f, 0);
         }
       } else {
         const Giro gr = giro_of(w);
-        snprintf(buf, sizeof(buf), "%s · GIRO %d", WORLD_NAMES[wn], world_giro(w));
+        snprintf(buf, sizeof(buf), tr("%s · GIRO %d"), wname, world_giro(w));
         ui::text(h, TX0 + 20.0f, GY + 26.0f, HF_B13, O(ui::L1), buf, 2.0f);
         ui::star(h, HI_STAR15, TX0 + 200.0f, GY + 18.5f, true);
         snprintf(buf, sizeof(buf), "%d/%d", gr.stars, gr.max);
@@ -975,7 +1009,7 @@ void stats_hud(Hud* h) {
         ui::text(h, TX0 + TW - 20.0f, GY + 26.0f, HF_S13, O(gr.ready ? ui::L1 : ui::MU), buf, 1.0f, 1);
       }
     }
-    const char* it[4] = { "A", "avanti", "B", "mappe" };
+    const char* it[4] = { "A", tr("avanti"), "B", tr("mappe") };
     ui::footer(h, it, 4);
   }
 }
@@ -1153,18 +1187,18 @@ bool join_panels(Hud* h) {
     const float x = 32.5f + 147.0f * (float)i, y = 348.0f, W = 134.0f, H = 84.0f, cx = x + W * 0.5f;
     ui::panel(h, x, y, W, H, 12.0f, ui::SOLID, true);
     const float gw = ui::gp(h, x + 12.0f, y + 18.0f, i);
-    ui::text(h, x + 20.0f + gw, y + 18.0f, HF_B13, O(ui::L1), "ENTRA", 2.0f);
-    const char* name = CHARS[p.join_pick].name;
+    ui::text(h, x + 20.0f + gw, y + 18.0f, HF_B13, O(ui::L1), tr("ENTRA"), 2.0f);
+    const char* name = tr(CHARS[p.join_pick].name);
     const float nw = hud_text_w(HF_B16, name, 2.0f);
     ui::text(h, cx, y + 44.0f, HF_B16, O(ui::TX), name, 2.0f, 0);
     ui::chev(h, cx - nw * 0.5f - 18.0f, y + 38.0f, false, ui::L1);
     ui::chev(h, cx + nw * 0.5f + 10.0f, y + 38.0f, true, ui::L1);
     float kx = x + 14.0f;
     kx += ui::key(h, kx, y + 66.0f, "A") + 5.0f;
-    ui::text(h, kx, y + 66.0f, HF_S13, O(ui::MU), "sì", 0.5f);
+    ui::text(h, kx, y + 66.0f, HF_S13, O(ui::MU), tr("sì"), 0.5f);
     kx = x + W * 0.5f + 6.0f;
     kx += ui::key(h, kx, y + 66.0f, "B") + 5.0f;
-    ui::text(h, kx, y + 66.0f, HF_S13, O(ui::MU), "no", 0.5f);
+    ui::text(h, kx, y + 66.0f, HF_S13, O(ui::MU), tr("no"), 0.5f);
   }
   return any;
 }
@@ -1176,18 +1210,19 @@ void pause_help_hud(Hud* h) {
   ui::overlay(h, 0.5f);
   const float x = 60.0f, y = 96.0f, W = 520.0f, H = 236.0f;
   ui::panel(h, x, y, W, H, 16.0f, ui::SOLID, true);
-  ui::text(h, x + 22.0f, y + 31.0f, HF_B24, O(ui::TX), "COMANDI", 5.0f);
-  const float cw = hud_text_w(HF_S13, "chiudi", 1.0f);
+  ui::text(h, x + 22.0f, y + 31.0f, HF_B24, O(ui::TX), tr("COMANDI"), 5.0f);
+  const char* close = tr("chiudi");
+  const float cw = hud_text_w(HF_S13, close, 1.0f);
   ui::key(h, x + W - 22.0f - cw - 29.0f, y + 31.0f, "B");
-  ui::text(h, x + W - 22.0f, y + 31.0f, HF_S13, O(ui::MU), "chiudi", 1.0f, 1);
+  ui::text(h, x + W - 22.0f, y + 31.0f, HF_S13, O(ui::MU), close, 1.0f, 1);
   ui::sep(h, x + 22.0f, y + 59.0f, W - 44.0f);
   const float c0 = x + 24.0f, c1 = x + 24.0f + 216.0f;   // la colonna di destra e' quella lunga
   struct Row { const char* k1; const char* k2; bool stick; const char* label; bool hold; };
   static const Row ROWS[8] = {
-    { "L", 0, true, "muoversi", false }, { "R", 0, true, "mirare", false },
-    { "R1", 0, false, "colpo", true }, { "L1", 0, false, "speciale", false },
-    { "R2", 0, false, "salto", false }, { "L2", 0, false, "lascia una bomba", false },
-    { "START", 0, false, "pausa", false }, { "SELECT", "START", false, "esci", true },
+    { "L", 0, true, N_("muoversi"), false }, { "R", 0, true, N_("mirare"), false },
+    { "R1", 0, false, N_("colpo"), true }, { "L1", 0, false, N_("speciale"), false },
+    { "R2", 0, false, N_("salto"), false }, { "L2", 0, false, N_("lascia una bomba"), false },
+    { "START", 0, false, N_("pausa"), false }, { "SELECT", "START", false, N_("esci"), true },
   };
   for (int k = 0; k < 8; ++k) {
     const Row& r = ROWS[k];
@@ -1201,10 +1236,15 @@ void pause_help_hud(Hud* h) {
       px += hud_text_w(HF_S12, "+", 0.8f) + 10.0f;
       px += ui::keycap(h, px, cy, r.k2, true) + 10.0f;
     }
-    ui::text(h, px, cy, HF_S15, O(ui::TX), r.label, 0.6f);
+    // Il nome e (tasti da tenere) TIENI fino al bordo del riquadro.
+    const char* hold = tr("TIENI");
+    const float hw = r.hold ? hud_text_w(HF_S12, hold, 0.8f) + 10.0f : 0.0f;
+    char label[256];
+    ui::fit(label, sizeof(label), tr(r.label), HF_S15, 0.6f, x + W - 22.0f - px - hw);
+    ui::text(h, px, cy, HF_S15, O(ui::TX), label, 0.6f);
     if (r.hold) {
-      px += hud_text_w(HF_S15, r.label, 0.6f) + 10.0f;
-      ui::text(h, px, cy, HF_S12, O(ui::MU), "TIENI", 0.8f);
+      px += hud_text_w(HF_S15, label, 0.6f) + 10.0f;
+      ui::text(h, px, cy, HF_S12, O(ui::MU), hold, 0.8f);
     }
   }
 }
@@ -1223,15 +1263,16 @@ void play_menus_hud(Hud* h) {
   }
   ui::overlay(h, 0.72f);
   const float ta = g.pause_help ? 0.3f : 1.0f;
-  ui::title(h, 320, 22, HF_T44, "PAUSA", 8.0f, true, ta);
+  ui::title(h, 320, 22, HF_T44, tr("PAUSA"), 8.0f, true, ta);
   if (!g.pause_help) {
     // Mentre qualcuno entra le sue finestre stanno in basso (da 348): le voci si stringono e salgono
     // al posto di "COMANDA", cosi' si vedono tutte.
     const float RH = joining ? 26.0f : 32.0f, SEP = joining ? 7.0f : 11.0f;
     if (!joining) {
-      const float gw = 24.0f, tw = hud_text_w(HF_S13, "COMANDA", 2.0f), x0 = 320.0f - (gw + 8.0f + tw) * 0.5f;
+      const char* boss = tr("COMANDA");
+      const float gw = 24.0f, tw = hud_text_w(HF_S13, boss, 2.0f), x0 = 320.0f - (gw + 8.0f + tw) * 0.5f;
       ui::gp(h, x0, 85.0f, g.pause_owner);
-      ui::text(h, x0 + gw + 8.0f, 85.0f, HF_S13, O(ui::FTX), "COMANDA", 2.0f);
+      ui::text(h, x0 + gw + 8.0f, 85.0f, HF_S13, O(ui::FTX), boss, 2.0f);
     }
     // Le voci.
     const float PX = 152.0f, PY = joining ? 80.0f : 104.0f, PW = 336.0f, IX = PX + 12.0f, IW = PW - 24.0f;
@@ -1247,13 +1288,17 @@ void play_menus_hud(Hud* h) {
       const float cy = y + RH * 0.5f;
       if (sel) ui::bar_sel(h, IX, y, IW, RH);
       const uint32_t lc = O(sel ? ui::ON : (k >= PS_LEAVE ? ui::A2 : ui::TX)), vc = O(sel ? ui::ON : ui::MU);
-      static const char* const LABEL[PAUSE_ITEMS] = { "RIPRENDI", "COMANDI", "MIRA", "ANTIALIAS", "MUSICA", "EFFETTI", "LASCIA LA PARTITA", "TORNA AL MENU" };
-      ui::text(h, IX + 14.0f, cy, HF_S16, lc, LABEL[k], 1.0f);
+      static const char* const LABEL[PAUSE_ITEMS] = { N_("RIPRENDI"), N_("COMANDI"), N_("MIRA"), N_("ANTIALIAS"), N_("MUSICA"),
+                                                      N_("EFFETTI"), N_("LASCIA LA PARTITA"), N_("TORNA AL MENU") };
+      // Il nome della voce fino al valore a destra (mira: le freccette e il nome; volumi: le tacche).
+      static const float VALUE_W[PAUSE_ITEMS] = { 0.0f, 20.0f, 150.0f, 80.0f, 100.0f, 100.0f, 0.0f, 0.0f };
+      char lab[256];
+      ui::text(h, IX + 14.0f, cy, HF_S16, lc, ui::fit(lab, sizeof(lab), tr(LABEL[k]), HF_S16, 1.0f, IW - 26.0f - VALUE_W[k]), 1.0f);
       const float rx = IX + IW - 12.0f;
       switch (k) {
         case PS_CONTROLS: ui::chev(h, rx - 8.0f, cy - 6.0f, true, sel ? ui::ON : ui::L1); break;
         case PS_AIM: {
-          const char* v = aim_tune(g.pause_owner).label;
+          const char* v = tr(aim_tune(g.pause_owner).label);
           if (sel) {
             const float vw = hud_text_w(HF_S13, v, 0.8f);
             ui::chev(h, rx - 8.0f, cy - 6.0f, true, ui::ON);
@@ -1266,10 +1311,10 @@ void play_menus_hud(Hud* h) {
         }
         case PS_AA:
           if (!g.aa_avail) {
-            ui::text(h, rx, cy, HF_S13, O(sel ? ui::ON : ui::DIS), "ASSENTE", 0.8f, 1);
+            ui::text(h, rx, cy, HF_S13, O(sel ? ui::ON : ui::DIS), tr("ASSENTE"), 0.8f, 1);
           } else {
             ui::toggle(h, rx - 34.0f, cy, g.aa_on);
-            ui::text(h, rx - 42.0f, cy, HF_S13, vc, g.aa_on ? "SÌ" : "NO", 0.8f, 1);
+            ui::text(h, rx - 42.0f, cy, HF_S13, vc, g.aa_on ? tr("SÌ") : tr("NO"), 0.8f, 1);
           }
           break;
         case PS_MUSIC:
@@ -1289,7 +1334,7 @@ void play_menus_hud(Hud* h) {
   if (joining) {
     join_panels(h);
   } else if (waiting) {
-    const char* msg = "premete un tasto per entrare";
+    const char* msg = tr("premete un tasto per entrare");
     const float cy = 480.0f - ui::SAFE_Y - 11.0f;
     float ww = 4.0f + hud_text_w(HF_S13, msg, 1.0f);
     for (int i = 0; i < MAX_PLAYERS; ++i)

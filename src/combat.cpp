@@ -426,8 +426,8 @@ void explorer_rescue(Vec3 c) {
   g.expl_yaw = 0.0f;
   burst(v3(c.x, 0.8f, c.z), 18, PC_GOLD, 4.5f);
   burst(v3(c.x, 0.6f, c.z), 10, PC_GREY, 3.5f);
-  add_float_text(v3(c.x, 1.9f, c.z), 0xFFE14D, "GRAZIE!");
-  show_msg("ESPLORATORE SALVATO!", "una stella in più per questa mappa", 0xFFE14D, 2, 150);
+  add_float_text(v3(c.x, 1.9f, c.z), 0xFFE14D, N_("GRAZIE!"));
+  show_msg(tr("ESPLORATORE SALVATO!"), tr("una stella in più per questa mappa"), 0xFFE14D, 2, 150);
   snd_at(SND_RESCUE, c);
   if (g.phase == PH_MAP_DONE) stars_late_explorer();     // la mappa era gia' finita: la stella arriva lo stesso
   plat_log("esploratore salvato (mappa %d, zona %d)", g.map_idx + 1, g.zone + 1);
@@ -443,7 +443,7 @@ void explorer_update(void) {
     for (int j = 0; j < MAX_PLAYERS; ++j) {
       const Player& p = g.pl[j];
       if (!p.active || !p.alive || dist2d(p.pos, c) > HELP_DIST) continue;
-      add_float_text(v3(c.x, 1.7f, c.z), 0xFFFFFF, "AIUTO!");
+      add_float_text(v3(c.x, 1.7f, c.z), 0xFFFFFF, N_("AIUTO!"));
       snd_at(SND_HELP, c);
       g.help_t = HELP_PERIOD;
       break;

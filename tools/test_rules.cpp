@@ -21,7 +21,7 @@ static int g_fail = 0;
 static Pad g_pads[MAX_PLAYERS];
 static const char* g_shots;             // --immagini
 static char g_base[64] = "/tmp/pupazzi_test_rules_XXXXXX";
-static char g_lastmsg[160];
+static char g_lastmsg[400];
 
 static void check(bool ok, const char* what) {
   printf("%s %s\n", ok ? "  ok    " : "  ERRORE", what);
@@ -159,8 +159,13 @@ static void fresh(int map, int players, const char* chars) {
 
 int main(int argc, char** argv) {
   plat_log_open("/dev/null");
-  for (int i = 1; i + 1 < argc; ++i)
+  for (int i = 1; i + 1 < argc; ++i) {
     if (!strcmp(argv[i], "--immagini")) g_shots = argv[i + 1];
+    // --lingua xx: le schermate in un'altra lingua (le prove dei messaggi sono scritte per l'italiano)
+    if (!strcmp(argv[i], "--lingua"))
+      for (int l = 0; l < NLANGS; ++l)
+        if (!strcmp(argv[i + 1], save_lang_id(l))) lang_set(l);
+  }
   if (g_shots) {
     mkdir(g_shots, 0755);
     swr_init(640, 480);
@@ -170,7 +175,7 @@ int main(int argc, char** argv) {
     return 1;
   }
   game_set_cards_enabled(false);
-  char buf[256];
+  char buf[640];
 
   printf("1) da soli: una caduta costa una vita e si rifa' la zona\n");
   {

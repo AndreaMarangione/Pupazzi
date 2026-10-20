@@ -1,4 +1,5 @@
 #include "hud.h"
+#include "font_hud_data.h"
 #include <math.h>
 #include <stdarg.h>
 #include <stdio.h>
@@ -13,28 +14,13 @@ int16_t px16(float v) {
   return (int16_t)(r < -32000.0f ? -32000.0f : (r > 32000.0f ? 32000.0f : r));
 }
 
-// UTF-8 -> posto nelle tabelle delle facce (0..255): Latin-1 cosi' com'e', qualche simbolo da 0x80
-// (vedi tools/make_font.py). -1: carattere che non si sa disegnare; -2: fine del testo.
-int next_slot(const char*& s) {
-  const unsigned char c = (unsigned char)*s;
-  if (!c) return -2;
-  if (c < 0x80) {
-    ++s;
-    return c == 0x7F ? -1 : c;
-  }
-  unsigned cp;
-  int n;
-  if ((c & 0xE0) == 0xC0) { cp = c & 0x1Fu; n = 1; }
-  else if ((c & 0xF0) == 0xE0) { cp = c & 0x0Fu; n = 2; }
-  else if ((c & 0xF8) == 0xF0) { cp = c & 0x07u; n = 3; }
-  else { ++s; return -1; }
-  ++s;
-  for (int i = 0; i < n; ++i) {
-    const unsigned char d = (unsigned char)*s;
-    if ((d & 0xC0) != 0x80) return -1;
-    cp = (cp << 6) | (d & 0x3Fu);
-    ++s;
-  }
+int g_cjk = HUD_CJK_SC;        // cinese o giapponese per i caratteri cinesi (hud_cjk)
+int g_missing;                 // caratteri disegnati come '?' (hud_missing)
+
+// Posto nelle tabelle delle facce latine (0..255) del punto di codice: Latin-1 cosi' com'e',
+// qualche simbolo da 0x80 (vedi tools/make_font.py); -1 se non e' latino.
+int latin_slot(uint32_t cp) {
+  if (cp < 0x80) return cp == 0x7F || cp < 0x20 ? -1 : (int)cp;
   if (cp >= 0xA0 && cp <= 0xFF) return (int)cp;
   switch (cp) {
     case 0x2192: return 0x80;
@@ -49,7 +35,7 @@ int next_slot(const char*& s) {
 }
 
 // Carattere della faccia per il posto: nelle facce dei titoli (solo maiuscole) le minuscole
-// diventano maiuscole; cio' che manca diventa '?'.
+// diventano maiuscole; -1 se manca.
 int glyph_of(int face, int sl) {
   const uint16_t* map = HUD_FACE_MAP[face];
   if (map[sl] != 0xFFFF) return map[sl];
@@ -57,7 +43,39 @@ int glyph_of(int face, int sl) {
   if (sl >= 'a' && sl <= 'z') up = sl - 32;
   else if (sl >= 0xE0 && sl <= 0xFE && sl != 0xF7) up = sl - 32;
   if (up >= 0 && map[up] != 0xFFFF) return map[up];
-  return map['?'] != 0xFFFF ? map['?'] : -1;
+  return -1;
+}
+
+// Carattere della faccia di scrittura sf per il punto di codice (-1 se manca).
+int sface_cp(int sf, uint32_t cp) {
+  if (sf >= HUD_NSFACES) return -1;
+  const HudSFace& F = HUD_SFACES[sf];
+  int lo = (int)F.cp_first, hi = (int)(F.cp_first + F.cp_n) - 1;
+  while (lo <= hi) {
+    const int mid = (lo + hi) >> 1;
+    if (HUD_CPS[mid].cp == cp) return HUD_CPS[mid].glyph;
+    if (HUD_CPS[mid].cp < cp) lo = mid + 1;
+    else hi = mid - 1;
+  }
+  return -1;
+}
+
+// Parola hindi (n byte da s) gia' composta nella faccia di scrittura sf, o NULL.
+const HudWord* sface_word(int sf, const char* s, int n) {
+  if (sf >= HUD_NSFACES) return 0;
+  uint32_t h = 2166136261u;
+  for (int i = 0; i < n; ++i) h = (h ^ (uint8_t)s[i]) * 16777619u;
+  const HudSFace& F = HUD_SFACES[sf];
+  int lo = (int)F.word_first, hi = (int)(F.word_first + F.word_n) - 1;
+  const uint32_t key_len = (uint32_t)n;
+  while (lo <= hi) {
+    const int mid = (lo + hi) >> 1;
+    const HudWord& w = HUD_WORDS[mid];
+    if (w.hash == h && w.len == key_len) return &w;
+    if (w.hash < h || (w.hash == h && w.len < key_len)) lo = mid + 1;
+    else hi = mid - 1;
+  }
+  return 0;
 }
 
 int kern16(int face, int a, int b) {
@@ -74,21 +92,66 @@ int kern16(int face, int a, int b) {
   return 0;
 }
 
-// Scorre il testo: fn(carattere, penna) per ognuno; restituisce la larghezza.
+// Scorre il testo: fn(carattere, penna, dy) per ognuno (dy: pixel interi sotto la linea di base);
+// restituisce la larghezza. Latino con la crenatura; cinese e giapponese un carattere alla volta;
+// l'hindi una parola alla volta (gia' composta da make_font.py; quella che non c'e' lettera per
+// lettera). track va tra un carattere e l'altro, ma non dentro le parole hindi.
 template <class F>
 float layout(int face, const char* s, float track, F fn) {
   float pen = 0.0f;
-  int prev = -1;
-  for (const char* p = s;;) {
-    const int sl = next_slot(p);
-    if (sl == -2) break;
-    if (sl < 0) continue;
-    const int g = glyph_of(face, sl);
-    if (g < 0) continue;
-    if (prev >= 0) pen += track + (float)kern16(face, prev, sl) * (1.0f / 16.0f);
-    fn(g, pen);
+  int prev = -1;                 // posto latino di prima, per la crenatura
+  bool first = true;
+  const uint8_t* sf = HUD_FACE_SF[face];
+  for (const char* p = s; *p;) {
+    const char* q = p;
+    const uint32_t cp = hud_utf8_next(q);
+    if (hud_is_deva(cp) && sf[HUD_DEVA] != 255) {
+      const char* e = q;
+      while (*e) {
+        const char* t = e;
+        if (!hud_is_deva(hud_utf8_next(t))) break;
+        e = t;
+      }
+      if (!first) pen += track;
+      const HudWord* w = sface_word(sf[HUD_DEVA], p, (int)(e - p));
+      if (w) {
+        for (unsigned k = 0; k < w->run_n; ++k) {
+          const HudRun& r = HUD_RUNS[w->run_first + k];
+          fn((int)r.glyph, pen + (float)r.dx, (int)r.dy);
+        }
+        pen += (float)w->adv16 * (1.0f / 16.0f);
+      } else {
+        for (const char* t = p; t < e;) {
+          const int g = sface_cp(sf[HUD_DEVA], hud_utf8_next(t));
+          if (g < 0) {
+            g_missing++;
+            continue;
+          }
+          fn(g, pen, 0);
+          pen += (float)HUD_GLYPHS[g].adv16 * (1.0f / 16.0f);
+        }
+      }
+      prev = -1;
+      first = false;
+      p = e;
+      continue;
+    }
+    p = q;
+    int sl = latin_slot(cp), g = -1;
+    if (sl >= 0) g = glyph_of(face, sl);
+    else if (hud_is_cjk(cp) && sf[g_cjk] != 255) g = sface_cp(sf[g_cjk], cp);
+    if (g < 0) {
+      if (cp < 0x20) continue;                     // a capo, tab: non si disegnano
+      g_missing++;
+      sl = '?';
+      g = glyph_of(face, sl);
+      if (g < 0) continue;
+    }
+    if (!first) pen += track + (sl >= 0 && prev >= 0 ? (float)kern16(face, prev, sl) * (1.0f / 16.0f) : 0.0f);
+    fn(g, pen, 0);
     pen += (float)HUD_GLYPHS[g].adv16 * (1.0f / 16.0f);
     prev = sl;
+    first = false;
   }
   return pen;
 }
@@ -114,12 +177,12 @@ void text_impl(Hud* h, float x, float base, int face, uint32_t argb, const char*
   if (align != -1) x -= hud_text_w(face, s, track) * (align == 0 ? 0.5f : 1.0f);
   // La penna si arrotonda al pixel per ogni carattere: con il filtro lineare della GPU i caratteri
   // restano uguali a quelli del renderer software.
-  layout(face, s, track, [&](int g, float pen) {
-    const float px = floorf(x + pen + 0.5f);
+  layout(face, s, track, [&](int g, float pen, int dy) {
+    const float px = floorf(x + pen + 0.5f), py = base + (float)dy;
     if (glow) {
-      if (HUD_GLYPHS[g].glow != 0xFFFF) push_glyph(h, HUD_GLYPHS[g].glow, px, base, argb);
+      if (HUD_GLYPHS[g].glow != 0xFFFF) push_glyph(h, HUD_GLYPHS[g].glow, px, py, argb);
     } else {
-      push_glyph(h, g, px, base, argb);
+      push_glyph(h, g, px, py, argb);
     }
   });
 }
@@ -387,7 +450,35 @@ void hud_dim(Hud* h, float x, float y, float w, float hh) {
 
 float hud_text_w(int face, const char* s, float track) {
   if (face < 0 || face >= HUD_NFACES || !s) return 0.0f;
-  return layout(face, s, track, [](int, float) {});
+  return layout(face, s, track, [](int, float, int) {});
+}
+
+void hud_cjk(int script) { g_cjk = script == HUD_CJK_JP ? HUD_CJK_JP : HUD_CJK_SC; }
+int hud_cjk_get(void) { return g_cjk; }
+int hud_missing(bool reset) {
+  const int n = g_missing;
+  if (reset) g_missing = 0;
+  return n;
+}
+
+uint32_t hud_utf8_next(const char*& s) {
+  const unsigned char c = (unsigned char)*s;
+  if (!c) return 0;
+  ++s;
+  if (c < 0x80) return c;
+  uint32_t cp;
+  int n;
+  if ((c & 0xE0) == 0xC0) { cp = c & 0x1Fu; n = 1; }
+  else if ((c & 0xF0) == 0xE0) { cp = c & 0x0Fu; n = 2; }
+  else if ((c & 0xF8) == 0xF0) { cp = c & 0x07u; n = 3; }
+  else return 0xFFFD;
+  for (int i = 0; i < n; ++i) {
+    const unsigned char d = (unsigned char)*s;
+    if ((d & 0xC0) != 0x80) return 0xFFFD;
+    cp = (cp << 6) | (d & 0x3Fu);
+    ++s;
+  }
+  return cp;
 }
 
 void hud_text(Hud* h, float x, float base, int face, uint32_t argb, const char* s, float track, int align) {

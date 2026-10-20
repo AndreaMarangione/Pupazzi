@@ -5,6 +5,7 @@
 // breve); chi e' senza vite non sceglie. Qui ci sono anche gli effetti che non stanno meglio
 // altrove: scudo, vita extra, speciale generoso, bruciature e vapore delle combo.
 #include "game_int.h"
+#include "lang.h"
 #include "plat.h"
 #include "ui.h"
 #include <math.h>
@@ -13,29 +14,29 @@
 
 const CardDef CARDS[NCARDS] = {
   { "", "", NULL, false },
-  { "BOMBAROLO", "porti fino a 4 bombe e ne hai subito una in più", NULL, false },
-  { "PASSO SVELTO", "+15% di velocità", NULL, false },
-  { "PELLE DURA", "+30 di vita massima, subito piena", NULL, false },
-  { "RICARICA LAMPO", "la barra del colpo si ricarica il 40% più in fretta", NULL, false },
-  { "SUPER CARICA", "lo speciale si carica il 35% più in fretta", NULL, false },
-  { "COLPI PESANTI", "+25% di danni del colpo normale", NULL, false },
-  { "LUNGA GITTATA", "+25% di gittata del colpo normale", NULL, false },
-  { "MERENDA", "ogni mostro sconfitto ti ridà il doppio della vita", NULL, false },
-  { "SCUDO", "a ogni zona uno scudo ferma il primo colpo che prendi", NULL, false },
-  { "VITA EXTRA", "una vita in più per questa mappa", NULL, false },
-  { "CALAMITA", "prendi talismani e bombe da 3 metri", NULL, false },
-  { "BOMBE GIGANTI", "le tue bombe fanno il 50% di danni in più su un'area più larga",
-    "le tue bombe: +50% di danni, area più larga", false },
-  { "SPECIALE GENEROSO", "quando usi lo speciale i compagni vicini recuperano 25 vita",
-    "il tuo speciale dà 25 di vita ai compagni vicini", false },
-  { "PERFORANTE", "i colpi normali attraversano un mostro in più", NULL, false },
-  { "RIMBALZO", "i colpi normali rimbalzano una volta su muri, massi e alberi", NULL, false },
-  { "COLPI INFUOCATI", "con Zolfo: i tuoi colpi incendiano i mostri", NULL, true },
-  { "COLPI GELATI", "con Marzio: i tuoi colpi rallentano i mostri", NULL, true },
-  { "SCHEGGE ROVENTI", "con Zolfo: le tue schegge incendiano i mostri", NULL, true },
-  { "SCHEGGE GELATE", "con Marzio: le tue schegge rallentano i mostri", NULL, true },
-  { "VAPORE", "ghiaccio + fuoco: il mostro rallentato che brucia scoppia in vapore",
-    "ghiaccio + fuoco sullo stesso mostro: scoppia in vapore", true },
+  { N_("BOMBAROLO"), N_("porti fino a 4 bombe e ne hai subito una in più"), NULL, false },
+  { N_("PASSO SVELTO"), N_("+15% di velocità"), NULL, false },
+  { N_("PELLE DURA"), N_("+30 di vita massima, subito piena"), NULL, false },
+  { N_("RICARICA LAMPO"), N_("la barra del colpo si ricarica il 40% più in fretta"), NULL, false },
+  { N_("SUPER CARICA"), N_("lo speciale si carica il 35% più in fretta"), NULL, false },
+  { N_("COLPI PESANTI"), N_("+25% di danni del colpo normale"), NULL, false },
+  { N_("LUNGA GITTATA"), N_("+25% di gittata del colpo normale"), NULL, false },
+  { N_("MERENDA"), N_("ogni mostro sconfitto ti ridà il doppio della vita"), NULL, false },
+  { N_("SCUDO"), N_("a ogni zona uno scudo ferma il primo colpo che prendi"), NULL, false },
+  { N_("VITA EXTRA"), N_("una vita in più per questa mappa"), NULL, false },
+  { N_("CALAMITA"), N_("prendi talismani e bombe da 3 metri"), NULL, false },
+  { N_("BOMBE GIGANTI"), N_("le tue bombe fanno il 50% di danni in più su un'area più larga"),
+    N_("le tue bombe: +50% di danni, area più larga"), false },
+  { N_("SPECIALE GENEROSO"), N_("quando usi lo speciale i compagni vicini recuperano 25 vita"),
+    N_("il tuo speciale dà 25 di vita ai compagni vicini"), false },
+  { N_("PERFORANTE"), N_("i colpi normali attraversano un mostro in più"), NULL, false },
+  { N_("RIMBALZO"), N_("i colpi normali rimbalzano una volta su muri, massi e alberi"), NULL, false },
+  { N_("COLPI INFUOCATI"), N_("con Zolfo: i tuoi colpi incendiano i mostri"), NULL, true },
+  { N_("COLPI GELATI"), N_("con Marzio: i tuoi colpi rallentano i mostri"), NULL, true },
+  { N_("SCHEGGE ROVENTI"), N_("con Zolfo: le tue schegge incendiano i mostri"), NULL, true },
+  { N_("SCHEGGE GELATE"), N_("con Marzio: le tue schegge rallentano i mostri"), NULL, true },
+  { N_("VAPORE"), N_("ghiaccio + fuoco: il mostro rallentato che brucia scoppia in vapore"),
+    N_("ghiaccio + fuoco sullo stesso mostro: scoppia in vapore"), true },
 };
 
 namespace {
@@ -157,50 +158,28 @@ void card_take(int i, int c) {
 
 const float PANEL_Y = 86.0f, PANEL_H = 330.0f, LINE = 17.0f;
 const int MAX_LINES = 8;
-struct Lines { char s[MAX_LINES][96]; int n; bool cut; };
+struct Lines { char s[MAX_LINES][ui::WRAP_LEN]; int n; bool cut; };
 
-// Divide s in righe larghe al massimo w pixel (faccia face), andando a capo sugli spazi.
-void wrap(const char* s, float w, int face, Lines* out) {
-  out->n = 0;
-  out->cut = false;
-  while (*s == ' ') ++s;
-  while (*s) {
-    if (out->n >= MAX_LINES) { out->cut = true; return; }
-    int cut = 0;
-    for (int e = 0;;) {
-      while (s[e] == ' ') ++e;
-      while (s[e] && s[e] != ' ') ++e;
-      if (e >= 95) break;
-      char tmp[96];
-      memcpy(tmp, s, (size_t)e);
-      tmp[e] = 0;
-      if (cut > 0 && hud_text_w(face, tmp, 0.3f) > w) break;
-      cut = e;
-      if (!s[e]) break;
-    }
-    if (cut == 0)                                  // una parola sola troppo lunga: si tronca
-      while (cut < 95 && s[cut]) ++cut;
-    memcpy(out->s[out->n], s, (size_t)cut);
-    out->s[out->n][cut] = 0;
-    out->n++;
-    s += cut;
-    while (*s == ' ') ++s;
-  }
-}
+// Divide s in righe larghe al massimo w pixel (faccia face): a capo sugli spazi e, in cinese e
+// giapponese, tra un carattere e l'altro. cut: non ci sta in MAX_LINES righe.
+void wrap(const char* s, float w, int face, Lines* out) { out->n = ui::wrap(s, w, face, 0.3f, out->s, MAX_LINES, &out->cut); }
 
 // Nome da mostrare in un riquadro largo w: quello vero, oppure (riquadri stretti dei 4 giocatori)
 // uno piu' corto.
 const char* card_label(int c, float w, int face) {
-  if (hud_text_w(face, CARDS[c].name, 0.8f) <= w) return CARDS[c].name;
+  const char* full = tr(CARDS[c].name);
+  if (hud_text_w(face, full, 0.8f) <= w) return full;
   switch (c) {
-    case CA_GENEROSO: return "GENEROSO";
-    case CA_COLPI_FUOCO: return "INFUOCATI";
-    case CA_COLPI_GELO: return "GELATI";
-    case CA_SCHEGGE_FUOCO: return "ROVENTI";
-    case CA_SCHEGGE_GELO: return "GELATE";
-    default: return CARDS[c].name;
+    case CA_GENEROSO: return tr("GENEROSO");
+    case CA_COLPI_FUOCO: return tr("INFUOCATI");
+    case CA_COLPI_GELO: return tr("GELATI");
+    case CA_SCHEGGE_FUOCO: return tr("ROVENTI");
+    case CA_SCHEGGE_GELO: return tr("GELATE");
+    default: return full;
   }
 }
+
+const char* card_desc(int c, bool narrow) { return tr(narrow && CARDS[c].brief ? CARDS[c].brief : CARDS[c].desc); }
 
 inline uint32_t O(uint32_t rgb) { return HUD_OPAQUE(rgb); }
 
@@ -214,22 +193,23 @@ PanelFit draw_panel(Hud* h, int i, int ch, const CardOffer& o, uint32_t owned, b
   const float pad = narrow ? 12.0f : 14.0f;    // nei riquadri stretti (4 giocatori) un po' di posto in piu'
   const float py = PANEL_Y, inner = pw - 2.0f * pad, ix = px + pad, cx = px + pw * 0.5f;
   const int nface = narrow ? HF_S13 : HF_S15, dface = narrow ? HF_S12 : HF_S13;
-  char buf[200];
+  char buf[512];
   if (h) {
     if (o.done) ui::panel(h, px, py, pw, PANEL_H);
     else ui::panel(h, px, py, pw, PANEL_H, 16.0f, ui::BASE, false);
     const float gw = ui::gp(h, ix, py + 22.0f, i);
     ui::face(h, ix + gw + 8.0f, py + 12.0f, 20, ch, 0);
-    ui::text(h, ix + gw + 34.0f, py + 22.0f, HF_B13, O(ui::TX), CHARS[ch].name, 1.5f);
+    ui::text(h, ix + gw + 34.0f, py + 22.0f, HF_B13, O(ui::TX), tr(CHARS[ch].name), 1.5f);
   }
   Lines L;
   if (o.done) {
     const int c = o.card[o.sel];
-    if (h) ui::text(h, cx, py + 70.0f, HF_B22, O(ui::L1), "PRESA!", 3.0f, 0);
+    if (h) ui::text(h, cx, py + 70.0f, HF_B22, O(ui::L1), tr("PRESA!"), 3.0f, 0);
+    fit.name_cut |= hud_text_w(HF_B22, tr("PRESA!"), 3.0f) > inner;
     const char* name = card_label(c, inner, nface);
     fit.name_cut = hud_text_w(nface, name, 0.8f) > inner;
     if (h) ui::text(h, cx, py + 104.0f, nface, O(CARDS[c].combo ? ui::A2 : ui::TX), name, 0.8f, 0);
-    wrap(narrow && CARDS[c].brief ? CARDS[c].brief : CARDS[c].desc, inner, dface, &L);
+    wrap(card_desc(c, narrow), inner, dface, &L);
     float y = py + 130.0f;
     for (int k = 0; k < L.n; ++k, y += LINE)
       if (h) ui::text(h, cx, y, dface, O(ui::MU), L.s[k], 0.3f, 0);
@@ -237,9 +217,13 @@ PanelFit draw_panel(Hud* h, int i, int ch, const CardOffer& o, uint32_t owned, b
     fit.cut = L.cut;
     fit.bottom = y;
     if (others) {
-      const float wy = py + PANEL_H - 22.0f;
-      if (h && ((g.ui_tick / 20u) & 1u) == 0u) ui::text(h, cx, wy, HF_S13, O(ui::DIS), "aspetta gli altri", 0.5f, 0);
-      fit.cut |= wy - 8.0f < y || hud_text_w(HF_S13, "aspetta gli altri", 0.5f) > inner;
+      // In fondo, lampeggiando: in una riga o (lingue piu' lunghe, riquadri stretti) in due.
+      Lines W;
+      W.n = ui::wrap(tr("aspetta gli altri"), inner, HF_S13, 0.5f, W.s, 2, &W.cut);
+      const float wy = py + PANEL_H - 22.0f - 15.0f * (float)(W.n - 1);
+      for (int k = 0; k < W.n; ++k)
+        if (h && ((g.ui_tick / 20u) & 1u) == 0u) ui::text(h, cx, wy + 15.0f * (float)k, HF_S13, O(ui::DIS), W.s[k], 0.5f, 0);
+      fit.cut |= W.cut || wy - 8.0f < y;
     }
     return fit;
   }
@@ -253,19 +237,20 @@ PanelFit draw_panel(Hud* h, int i, int ch, const CardOffer& o, uint32_t owned, b
     const uint32_t col = O(sel ? ui::ON : (CARDS[c].combo ? ui::A2 : ui::TX));
     if (h) ui::text(h, ix, y + 16.0f, nface, col, name, 0.8f);
     // Etichetta COMBO a destra, se c'e' posto accanto al nome.
-    const float tw = hud_text_w(HF_B10, "COMBO", 1.0f) + 15.0f, nw = hud_text_w(nface, name, 0.8f);
+    const char* combo = tr("COMBO");
+    const float tw = hud_text_w(HF_B10, combo, 1.0f) + 15.0f, nw = hud_text_w(nface, name, 0.8f);
     if (h && CARDS[c].combo && ix + nw + 8.0f + tw <= px + pw - pad)
-      ui::tag(h, px + pw - pad, y + 16.0f, "COMBO", sel ? ui::ON : ui::A2, HF_B10, 1.0f, 6.0f, 18.0f, 1);
+      ui::tag(h, px + pw - pad, y + 16.0f, combo, sel ? ui::ON : ui::A2, HF_B10, 1.0f, 6.0f, 18.0f, 1);
   }
   // Descrizione della carta col cursore (le combo con la loro etichetta sopra).
   const int c = o.card[o.sel];
   float y = py + 44.0f + 36.0f * 3.0f + 14.0f;
   if (h) ui::sep(h, ix, y - 8.0f, inner);
   if (CARDS[c].combo) {
-    if (h) ui::text(h, ix, y + 6.0f, HF_B11, O(ui::A2), "COMBO", 1.5f);
+    if (h) ui::text(h, ix, y + 6.0f, HF_B11, O(ui::A2), tr("COMBO"), 1.5f);
     y += LINE;
   }
-  wrap(narrow && CARDS[c].brief ? CARDS[c].brief : CARDS[c].desc, inner, dface, &L);
+  wrap(card_desc(c, narrow), inner, dface, &L);
   for (int k = 0; k < L.n; ++k, y += LINE)
     if (h) ui::text(h, ix, y + 6.0f, dface, O(ui::MU), L.s[k], 0.3f);
   fit.desc_lines = L.n;
@@ -274,16 +259,22 @@ PanelFit draw_panel(Hud* h, int i, int ch, const CardOffer& o, uint32_t owned, b
   // In fondo: le carte gia' prese in questa mappa (se i nomi non ci stanno, solo quante sono:
   // succede con molte zone, nelle mappe personalizzate).
   if (owned) {
-    int len = snprintf(buf, sizeof(buf), "hai già:"), count = 0;
-    for (int k = 1; k < NCARDS && len < (int)sizeof(buf); ++k)
+    char names[384], tmp[384];
+    int count = 0;
+    names[0] = 0;
+    for (int k = 1; k < NCARDS; ++k)
       if ((owned >> k) & 1u) {
-        len += snprintf(buf + len, sizeof(buf) - (size_t)len, "%s %s", len > 9 ? "," : "", CARDS[k].name);
+        if (count) snprintf(tmp, sizeof(tmp), tr("%s, %s"), names, tr(CARDS[k].name));   // in cinese e giapponese con 、
+        else snprintf(tmp, sizeof(tmp), "%s", tr(CARDS[k].name));
+        memcpy(names, tmp, sizeof(names));
         count++;
       }
+    snprintf(buf, sizeof(buf), tr("hai già: %s"), names);
     wrap(buf, inner, HF_S12, &L);
     float oy = py + PANEL_H - 16.0f - 15.0f * (float)(L.n - 1);
     if (L.cut || oy - 10.0f < y) {
-      snprintf(buf, sizeof(buf), count == 1 ? "hai già 1 carta" : "hai già %d carte", count);
+      if (count == 1) snprintf(buf, sizeof(buf), "%s", tr("hai già 1 carta"));
+      else snprintf(buf, sizeof(buf), tr("hai già %d carte"), count);
       wrap(buf, inner, HF_S12, &L);
       oy = py + PANEL_H - 16.0f - 15.0f * (float)(L.n - 1);
     }
@@ -386,8 +377,8 @@ void cards_update(void) {
 
 void cards_hud(Hud* h) {
   ui::overlay(h, 0.72f);
-  ui::title(h, 320, 20, HF_T32, "SCEGLI UNA CARTA", 3.0f);
-  ui::text(h, 320, 70, HF_S14, HUD_OPAQUE(ui::FTX), "vale fino alla fine della mappa", 1.0f, 0);
+  ui::title(h, 320, 20, HF_T32, tr("SCEGLI UNA CARTA"), 3.0f);
+  ui::text(h, 320, 70, HF_S14, HUD_OPAQUE(ui::FTX), tr("vale fino alla fine della mappa"), 1.0f, 0);
   int who[MAX_PLAYERS], n = 0;
   bool waiting = false;
   for (int i = 0; i < MAX_PLAYERS; ++i)
@@ -401,7 +392,7 @@ void cards_hud(Hud* h) {
     panel_geom(n, k, &px, &pw);
     draw_panel(h, i, g.pl[i].ch, g.offer[i], g.pl[i].cards, waiting, px, pw);
   }
-  const char* it[4] = { "↑↓", "sceglie", "A", "prende" };
+  const char* it[4] = { "↑↓", tr("sceglie"), "A", tr("prende") };
   ui::footer(h, it, 4);
 }
 
@@ -528,8 +519,9 @@ void card_special_used(int i) {
 
 // Prove: ogni carta, scelta o appena presa, sta nel suo riquadro con 1, 2, 3 e 4 giocatori, anche
 // con due carte lunghe gia' prese.
-bool cards_layout_ok(char* why, int n) {
+bool cards_layout_ok(char* why, int n, bool all) {
   why[0] = 0;
+  bool good = true;
   // Carte gia' prese: i nomi piu' lunghi, fino a 5 (una mappa personalizzata ha al massimo 6 zone,
   // quindi al massimo 6 scelte).
   const uint32_t owned = (1u << CA_GENEROSO) | (1u << CA_SCHEGGE_GELO) | (1u << CA_SCHEGGE_FUOCO) | (1u << CA_COLPI_FUOCO) |
@@ -555,11 +547,16 @@ bool cards_layout_ok(char* why, int n) {
         o.done = done != 0;
         const PanelFit f = draw_panel(NULL, 3, CH_MARZIO, o, owned & ~(1u << c), true, px, pw);
         if (f.cut || f.name_cut || f.desc_lines > 6 || f.bottom > PANEL_Y + PANEL_H) {
-          snprintf(why, (size_t)n, "%d giocatori, %s%s: %d righe, testo fino a %.1f", np, CARDS[c].name, done ? " (presa)" : "",
-                   f.desc_lines, (double)f.bottom);
-          return false;
+          if (good)
+            snprintf(why, (size_t)n, "%d giocatori, %s%s: %d righe, testo fino a %.1f%s%s", np, CARDS[c].name, done ? " (presa)" : "",
+                     f.desc_lines, (double)f.bottom, f.name_cut ? ", nome tagliato" : "", f.cut ? ", testo tagliato" : "");
+          if (all)
+            printf("    %d giocatori, %s%s: %d righe, testo fino a %.1f%s%s\n", np, tr(CARDS[c].name), done ? " (presa)" : "", f.desc_lines,
+                   (double)f.bottom, f.name_cut ? ", nome tagliato" : "", f.cut ? ", testo tagliato" : "");
+          good = false;
+          if (!all) return false;
         }
       }
   }
-  return true;
+  return good;
 }

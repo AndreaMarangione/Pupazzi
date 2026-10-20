@@ -381,7 +381,7 @@ void monster_fall(int k) {
     const float a = D_TWO_PI * (float)j / 8.0f;
     puff(m.pos + v3(0.0f, -0.6f, 0.0f), PK_PUFF, PC_WHITE, v3(d_cos(a) * 1.4f, 3.0f, d_sin(a) * 1.4f), 0.6f, 24);
   }
-  add_float_text(v3(m.pos.x, 1.4f, m.pos.z), 0xBFEFFF, "SPLASH!");
+  add_float_text(v3(m.pos.x, 1.4f, m.pos.z), 0xBFEFFF, N_("SPLASH!"));
   snd_at(SND_SPLASH, m.pos);
   plat_log("mostro %d (%s) caduto nel cenote", k, MONS[m.type].name);
   m.hp = 0.0f;
@@ -1032,7 +1032,7 @@ void rush_crash(void) {
   for (int k = 0; k < 6; ++k) puff(hit + v3(0, 0.5f, 0), PK_PUFF, PC_SAND, rng_vec(2.5f, 0.6f, 1.0f, 2.5f), 1.4f, 30);
   add_shake(0.45f);
   snd_at(SND_BOSS_IMPACT, hit);
-  add_float_text(v3(b.pos.x, 5.6f, b.pos.z), 0xFFE14D, "STORDITO!");
+  add_float_text(v3(b.pos.x, 5.6f, b.pos.z), 0xFFE14D, N_("STORDITO!"));
   b.sq_v -= 3.0f;
   plat_log("boss: carica contro un ostacolo, stordito (fotogramma %u, vita %d)", g.tick, (int)b.hp);
   act_begin(BA_STUN);
@@ -1449,7 +1449,7 @@ void boss_update(void) {
     }
     burst(b.pos + v3(0, 1.5f, 0), 30, PC_BRONZE, 6.0f);      // pezzi dell'armatura
     add_shake(0.6f);
-    show_msg("GLADIATORE SCONFITTO!", "il Colosseo è libero", 0x7CF29A, 2, 180);
+    show_msg(tr("GLADIATORE SCONFITTO!"), tr("il Colosseo è libero"), 0x7CF29A, 2, 180);
     plat_log("boss sconfitto: gladiatore (fotogramma %u)", g.tick);
     return;
   }
@@ -1465,7 +1465,7 @@ void boss_update(void) {
       const Vec3 at = b.pos + rng_vec(1.8f, 3.5f, 2.0f, 1.8f);
       puff(at, PK_LEAF, (k % 3) ? PC_RED : PC_GOLD, rng_vec(3.0f, 0.5f, 0.0f, 3.0f), 1.0f, 80);   // piume della cresta
     }
-    show_msg(stage == 1 ? "SI ARRABBIA!" : "È FURIOSO!", "il gladiatore va più veloce", 0xFF8A5C, 2, 120);
+    show_msg(stage == 1 ? tr("SI ARRABBIA!") : tr("È FURIOSO!"), tr("il gladiatore va più veloce"), 0xFF8A5C, 2, 120);
     snd_at(SND_BOSS_ROAR, b.pos);
     plat_log("boss: fase %d (fotogramma %u)", stage + 1, g.tick);
   }
