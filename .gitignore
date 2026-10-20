@@ -1,0 +1,7 @@
+# Compilazione (si rifà con make; il pacchetto pronto per la console è in dist/)
+build/
+# Registri scaricati dalla console con ./deploy.sh risultati
+risultati/
+# Compilatore incrociato (pip install ziglang in un ambiente virtuale)
+.zig/
+__pycache__/

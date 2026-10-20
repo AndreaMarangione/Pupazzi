@@ -1,0 +1,107 @@
+MAPPE DI PUPAZZI
+
+Ogni mappa e' un file di testo: un'intestazione, una riga con tre trattini (---) e la griglia,
+un carattere per ogni casella da 1 metro. Il nord e' in alto: i giocatori partono in basso e
+vanno verso l'alto, zona dopo zona.
+
+Le mappe di serie sono nella cartella originali/. Per cambiarne una:
+  1. copiala in questa cartella (mappe/) con lo stesso nome, per esempio terra1.txt;
+  2. modificala con un editor di testo;
+  3. avvia il gioco.
+Se il file ha un errore il gioco usa la mappa di serie e nel menu delle mappe scrive cosa non
+va (per esempio "riga 12, colonna 5: carattere sconosciuto"). Per tornare alla mappa di serie
+basta cancellare la copia da questa cartella.
+Dal PC: ./deploy.sh mappa terra1.txt  (la copia sulla console)
+        ./deploy.sh togli-mappa terra1 (torna quella di serie)
+
+Le mappe della Terra, nell'ordine:  terra1.txt Le Piramidi, terra2.txt La Grande Muraglia,
+                                    terra3.txt Chichen Itza, terra_boss.txt Il Colosseo (arena del boss)
+
+INTESTAZIONE
+  nome: Le Piramidi            nome mostrato nei menu
+  mondo: terra                 il pianeta (per ora c'e' solo la terra)
+  stile: piramidi              aspetto della mappa: piramidi, chichenitza, muraglia, colosseo
+                               (senza questa riga: colosseo per le arene, piramidi per le altre)
+  zona 1: scorpioni 3, scarabei 4 | scorpioni 4
+                               mostri della zona 1: le ondate sono separate da |
+                               mostri: scorpione (o scorpioni), arciere (o arcieri: quelli di
+                               terracotta), scarabeo (o scarabei), guerriero (o guerrieri: di
+                               terracotta), scritti cosi', senza "di terracotta";
+                               da 1 a 30 per gruppo, al massimo 4 gruppi per ondata e 4 ondate
+                               (valgono ancora i nomi di prima: sciacallo per lo scorpione, lama
+                               per l'arciere)
+                               il numero cresce da solo con i giocatori e con i giri
+  boss: gladiatore             solo per l'arena del boss (serve la casella B)
+  # commento                   le righe che cominciano con # nell'intestazione si ignorano
+
+CARATTERI DELLA GRIGLIA
+  .   terreno                  ,   sentiero lastricato    spazio   fuori dalla mappa
+  #   muro (non si scavalca)   t   albero                 o   masso, rovina, statua
+  =   muretto: si scavalca saltando, i colpi passano
+  c   blocco di pietra (o cassa): ci si sale saltando
+  x   anfora, cesta o cassa che si rompe a colpi      X   con un talismano dentro (segno verde)
+  p   capsula con l'esploratore da liberare (una per mappa, nascosta)
+  *   cespuglio: chi ci sta dentro e' nascosto ai mostri lontani
+  "   erba alta, papiri, bambu', felci: nascondono anche i mostri
+  ~   acqua: non si attraversa, nemmeno saltando; i colpi passano (gli scarabei ci volano sopra)
+  O   cenote: ci si cade dentro e si perde una vita (saltandoci sopra no: e' l'atterraggio che
+      conta); i mostri che camminano non ci entrano da soli, ma una spinta (bombe, colpi forti)
+      ce li butta dentro; i colpi e gli scarabei ci passano sopra
+  T   trampolino (un tamburo): lancia lontano nella direzione in cui si va
+  P   piattaforma rialzata      Q   piattaforma con un talismano sopra
+  G   cancello tra due zone (dentro un muro, meglio largo 3-4 caselle)
+  1 2 3 4   partenze dei giocatori nella zona 1
+  m   punto da cui escono i mostri (nel Colosseo e' una botola di legno)
+  +   talismano                b   bomba                 B   boss
+
+COME SI VEDONO NEGLI STILI
+  Il gioco disegna da solo le forme morbide: angoli arrotondati tra sabbia, sentiero, prato e
+  acqua, rive con la schiuma, muri con cornici e fasce, oggetti girati e messi un po' fuori dalla
+  griglia. Le collisioni restano sulle caselle. Fuori dai muri del bordo si disegna solo la
+  striscia che la telecamera puo' mostrare (circa 14 caselle di lato, 13 a nord, 10 a sud).
+  piramidi     sabbia e lastre di calcare; muri di arenaria con la fascia dipinta; t palme;
+               o vicino a un sentiero diventa una sfinge rivolta verso il sentiero, altrove
+               rocchi di colonne, blocchi, teste di statue; = colonne spezzate; x anfore;
+               " papiri; T tamburo; G saracinesca tra due obelischi. Fuori: dune, palme rade e,
+               lontano, le piramidi di Giza.
+  chichenitza  prato della giungla; sentieri e piazze di calcare chiaro (le sacbe); muri di
+               pietra maya con il fregio dipinto a greca; t ceibe e palme; o in fila (o.o.o)
+               le colonne del Tempio dei Guerrieri, vicino a un sentiero teste del serpente
+               piumato o Chac Mool, altrove stele e Chac Mool; = muretti di pietra (in una fila
+               di 5 o piu' l'anello del gioco della pelota); c blocchi scolpiti; x vasi dipinti;
+               " felci; P piattaforme a gradoni; O il cenote con l'orlo di calcare, le pareti di
+               roccia e le liane; G palizzata sotto l'arco maya a mensola. Fuori: la giungla.
+  muraglia     colline; muri di mattoni grigi con i merli; P cammino di ronda; t pini;
+               x casse rosse; " bambu'; G portone rosso tra due torrette. Fuori: colline, pini
+               e la Muraglia che corre sulle colline a sud.
+  colosseo     sabbia dell'arena; # muro del podio (meglio a ovale: vedi terra_boss.txt);
+               o colonne spezzate; c casse; x anfore. Fuori: le gradinate.
+  Blocchi di muro pieni (rettangoli # di almeno 2x2 caselle staccati dagli altri muri):
+  piramidi: una piramide (3x3 e piu') o un obelisco (2x2); chichenitza: El Castillo, la
+  piramide a gradoni con le scalinate e il tempio in cima (5x5 e piu'), o un tempietto con le
+  colonne; muraglia: una torre di guardia (con il padiglione da 3x3); colosseo: una statua sul
+  piedistallo.
+
+REGOLE
+  - La zona 1 e' quella con le partenze. Ogni cancello G porta alla zona successiva: le zone
+    vanno in fila, senza bivi, ognuna tutta collegata (niente stanze chiuse).
+  - Ogni zona ha la sua riga "zona N:" (nell'arena del boss non serve). Il boss sta nell'ultima zona.
+  - Al massimo 48 colonne e 96 righe. Zone grandi piu' o meno come quelle di serie: 31 x 21
+    caselle, cosi' una zona intera sta nella visuale piu' larga.
+  - Il salto arriva a circa 1,1 m: blocchi (1 m) e piattaforme (0,8 m) si raggiungono, i muri no.
+  - Niente fughe (il gioco rifiuta la mappa e dice dove sta l'errore):
+      * sul bordo della griglia solo muri # (o spazi); tra la mappa e gli spazi sempre un muro,
+        anche in diagonale;
+      * tutto quello che e' disegnato dentro la griglia sta in una zona: niente terreno, acqua o
+        cenote chiusi fuori dalle zone, niente alberi o massi lontani da tutte le zone;
+      * due zone si toccano solo attraverso un cancello, anche in diagonale;
+      * dentro ogni zona si arriva a piedi dappertutto e al cancello di uscita (l'acqua e il
+        cenote non si attraversano: non devono tagliare in due una zona);
+      * un muretto = ha sempre un lato libero (chi ci atterra sopra deve poterne uscire);
+      * il cenote O sta ad almeno 3 caselle dai cancelli e dalle partenze 1-4 e non tocca la
+        capsula p.
+  - La capsula p e' come una cassa x ma ci vogliono tre volte i colpi: va dentro una zona, non
+    accanto a un cancello e lontano dal sentiero. Chi sta su un blocco o una piattaforma spara
+    sopra le casse: alla capsula ci si deve poter avvicinare stando a terra (almeno un lato
+    libero, il gioco lo controlla).
+  - I mostri che camminano non salgono su blocchi e piattaforme: i punti m vanno sul terreno.

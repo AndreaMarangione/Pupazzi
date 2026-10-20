@@ -1,0 +1,12 @@
+Caratteri dell'interfaccia (src/font_hud.h, generato da tools/make_font.py)
+
+Nel core non ci sono i file dei font: solo le immagini dei caratteri (Latin-1 e qualche simbolo:
+frecce, puntini, apostrofo tipografico) gia' disegnate alle misure usate dall'interfaccia, con i
+bordi sfumati; gli aloni dei titoli li calcola il gioco all'avvio.
+
+Chakra Petch SemiBold e Bold - tutti i testi dall'interfaccia della 0.5.2 (stile "Orbita")
+  Copyright 2018 The Chakra Petch Project Authors (https://github.com/m4rc1e/Chakra-Petch.git)
+  SIL Open Font License, Version 1.1 (testo completo in OFL-ChakraPetch.txt)
+  https://openfontlicense.org
+
+Fino alla 0.5.1 i testi usavano DejaVu Sans Bold e Poppins Bold, ora non piu'.
