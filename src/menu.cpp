@@ -87,12 +87,32 @@ int used_slots(void) {
 void new_game(int slot, int who) {
   save_slot_new(slot);
   g.menu_owner = who;
+  g.slots_pop = SP_NONE;
   go_screen(SC_MODE);
 }
 
+// Le schermate si preparano prima di andarci: gia' il primo fotogramma e' quello giusto (posti
+// aggiornati, cursore al suo posto, nessuna finestra aperta). All'avvio il titolo si prepara nel
+// suo primo aggiornamento (i salvataggi si aprono dopo).
 void back_to_title(int item) {
   go_screen(SC_TITLE);
+  slots_refresh();
   g.menu_sel = item;
+}
+
+void enter_slots(int mode) {
+  g.slots_mode = mode;
+  go_screen(SC_SLOTS);
+  slots_refresh();
+  g.slots_pop = SP_NONE;
+  g.slots_sel = 0;
+  if (mode != SL_OVERWRITE)                         // il cursore sul primo posto usato
+    while (g.slots_sel < SAVE_SLOTS - 1 && g_slot_view[g.slots_sel].state == SAVE_NUOVO) g.slots_sel++;
+}
+
+void enter_lang(void) {
+  go_screen(SC_LANG);
+  g.lang_sel = lang_get();
 }
 
 void title_update(void) {
@@ -106,12 +126,8 @@ void title_update(void) {
     case TI_NEW: {
       snd_ui(SND_UI_OK);
       const int free = first_free_slot();
-      if (free >= 0) {
-        new_game(free, who);
-      } else {
-        g.slots_mode = SL_OVERWRITE;
-        go_screen(SC_SLOTS);
-      }
+      if (free >= 0) new_game(free, who);
+      else enter_slots(SL_OVERWRITE);
       break;
     }
     case TI_LOAD:
@@ -122,13 +138,12 @@ void title_update(void) {
       } else {
         snd_ui(SND_UI_OK);
         g.menu_owner = who;
-        g.slots_mode = g.menu_sel == TI_LOAD ? SL_LOAD : SL_MANAGE;
-        go_screen(SC_SLOTS);
+        enter_slots(g.menu_sel == TI_LOAD ? SL_LOAD : SL_MANAGE);
       }
       break;
     case TI_LANG:
       snd_ui(SND_UI_OK);
-      go_screen(SC_LANG);
+      enter_lang();
       break;
     default:
       snd_ui(SND_UI_OK);
@@ -139,13 +154,6 @@ void title_update(void) {
 }
 
 void slots_update(void) {
-  if (g.screen_t == 1) {
-    slots_refresh();
-    g.slots_pop = SP_NONE;
-    g.slots_sel = 0;
-    if (g.slots_mode != SL_OVERWRITE)                 // il cursore sul primo posto usato
-      while (g.slots_sel < SAVE_SLOTS - 1 && g_slot_view[g.slots_sel].state == SAVE_NUOVO) g.slots_sel++;
-  }
   const int nav = any_nav();
   int who;
   const bool ok = any_confirm(&who), no = !ok && any_back();
@@ -228,7 +236,6 @@ void slots_update(void) {
 }
 
 void lang_update(void) {
-  if (g.screen_t == 1) g.lang_sel = lang_get();
   const int nav = any_nav();
   if (nav == NAV_UP) g.lang_sel = (g.lang_sel + NLANGS - 1) % NLANGS;
   if (nav == NAV_DOWN) g.lang_sel = (g.lang_sel + 1) % NLANGS;
@@ -264,7 +271,7 @@ void mode_update(void) {
     }
   } else if (any_back()) {
     snd_ui(SND_UI_BACK);
-    go_screen(SC_TITLE);
+    back_to_title(TI_NEW);
   }
 }
 
@@ -1125,7 +1132,7 @@ void play_menus_update(void) {
           g.joined[o] = g.ready[o] = false;
           unpause();
           if (count_active() == 0) {
-            go_screen(SC_TITLE);
+            back_to_title(TI_NEW);
             return;
           }
         } else {

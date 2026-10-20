@@ -2,7 +2,9 @@
 // File che mancano, andata e ritorno, file rovinati (troncati, binari, con righe non valide), chiavi
 // sconosciute conservate, cartella in sola lettura o che non c'e', tante scritture di fila, giri e
 // mappe aperte di ogni pianeta, i salvataggi della 0.4 e della 0.5.2 (che diventano la partita 1),
-// le partite: nuova, carica, copia, elimina. Usa solo save.cpp e plat.cpp, in una cartella temporanea.
+// le partite: nuova, carica, copia, elimina; file che non si leggono tutti (errore della scheda,
+// troppo grandi) che restano da parte, la partita 1 della 0.5.2 che non si riesce a scrivere.
+// Usa solo save.cpp e plat.cpp, in una cartella temporanea.
 //   make build/native/test_save && ./build/native/test_save
 #include "save.h"
 #include "plat.h"
@@ -66,6 +68,14 @@ static int get_file(const char* path, char* buf, int cap) {
 static bool exists(const char* path) {
   struct stat st;
   return stat(path, &st) == 0;
+}
+
+// Dove punta il collegamento path ("" se non e' un collegamento).
+static const char* link_of(const char* path) {
+  static char buf[256];
+  const ssize_t n = readlink(path, buf, sizeof(buf) - 1);
+  buf[n > 0 ? n : 0] = 0;
+  return buf;
 }
 
 static int count_of(const char* hay, const char* needle) {
@@ -616,6 +626,99 @@ int main() {
     check(!strcmp(save_world_id(0), "terra") && !strcmp(save_world_id(8), "nettuno") && !strcmp(save_world_id(9), "") &&
               !strcmp(save_world_id(-1), ""),
           "nomi dei pianeti nel file");
+  }
+
+  printf("15) file che non si leggono tutti: restano da parte\n");
+  {
+    SaveData peek;
+    // Errore della scheda: /proc/self/mem dall'inizio non si legge (EIO; anche da root).
+    const char* X = dir_of("x", true);
+    if (exists("/proc/self/mem") && symlink("/proc/self/mem", file_in(X, "pupazzi.sav")) == 0 &&
+        symlink("/proc/self/mem", file_in(X, "partita1.sav")) == 0) {
+      const int st = save_open(X);
+      check(st == SAVE_ILLEGGIBILE && strstr(save_status(), "errore della scheda") && strstr(save_status(), "pupazzi.sav.illeggibile") &&
+                is_default(save_data()),
+            save_status());
+      check(save_slot_peek(0, &peek) == SAVE_ILLEGGIBILE, "partita con l'errore della scheda: illeggibile");
+      check(save_slot_load(0) && strstr(save_slot_status(), "partita1.sav.illeggibile") && game_default(save_data()), save_slot_status());
+      save_data()->maps_open[0] = 2;
+      save_data()->music_vol = 3;
+      check(save_write(), "si scrive lo stesso");
+      check(!strcmp(link_of(file_in(X, "pupazzi.sav.illeggibile")), "/proc/self/mem") &&
+                !strcmp(link_of(file_in(X, "partita1.sav.illeggibile")), "/proc/self/mem"),
+            "i file che non si leggevano restano da parte come .illeggibile");
+      check(save_open(X) == SAVE_LETTO && save_data()->music_vol == 3 && save_slot_load(0) && save_data()->maps_open[0] == 2,
+            "i file nuovi si rileggono");
+      // Una cartella con il nome della partita non si sposta.
+      mkdir(file_in(X, "partita2.sav"), 0755);
+      check(save_slot_peek(1, &peek) == SAVE_ILLEGGIBILE && save_slot_load(1) && strstr(save_slot_status(), "c'e' una cartella") &&
+                !strstr(save_slot_status(), ".illeggibile"),
+            save_slot_status());
+      struct stat sd;
+      check(!save_write() && stat(file_in(X, "partita2.sav"), &sd) == 0 && S_ISDIR(sd.st_mode) && !exists(file_in(X, "partita2.sav.illeggibile")),
+            "la cartella resta dov'e' (la partita non si scrive)");
+    } else {
+      printf("  (niente /proc/self/mem: prova dell'errore della scheda saltata)\n");
+    }
+    // Piu' di 256 KB (non e' un salvataggio vero): si legge l'inizio, il file intero resta da parte.
+    const char* X2 = dir_of("x2", true);
+    static char big[300 * 1024];
+    int nb = snprintf(big, sizeof(big), "%s", FULL_GAME);
+    while (nb < (int)sizeof(big) - 100) nb += snprintf(big + nb, sizeof(big) - (size_t)nb, "# riga di commento per riempire il file\n");
+    check(load_bytes(X2, big, (size_t)nb) && game_full(save_data()) && strstr(save_slot_status(), "troppo grande") &&
+              strstr(save_slot_status(), "partita1.sav.illeggibile"),
+          save_slot_status());
+    save_data()->seconds++;
+    check(save_write(), "scritto");
+    struct stat sb;
+    check(stat(file_in(X2, "partita1.sav.illeggibile"), &sb) == 0 && sb.st_size == nb && save_slot_peek(0, &peek) == SAVE_LETTO &&
+              peek.seconds == 3726 && peek.maps_open[0] == 3 && peek.giro[0] == 2,
+          "il file intero resta da parte; la partita scritta si rilegge");
+    // Il file illeggibile non si riesce a mettere da parte (c'e' una cartella con quel nome): non lo si sostituisce.
+    const char* Y = dir_of("y", true);
+    mkdir(file_in(Y, "partita1.sav.illeggibile"), 0755);
+    check(load_text(Y, "solo testo\n") && strstr(save_slot_status(), "nessuna riga valida"), save_slot_status());
+    save_data()->maps_open[0] = 2;
+    int logs = g_logs;
+    const bool w1 = save_write();
+    get_file(file_in(Y, "partita1.sav"), buf, sizeof(buf));
+    check(!w1 && !strcmp(buf, "solo testo\n") && g_logs == logs + 1 && strstr(g_lastlog, "mettere da parte"), g_lastlog);
+    rmdir(file_in(Y, "partita1.sav.illeggibile"));
+    const bool w2 = save_write();
+    get_file(file_in(Y, "partita1.sav.illeggibile"), buf, sizeof(buf));
+    check(w2 && !strcmp(buf, "solo testo\n") && save_slot_peek(0, &peek) == SAVE_LETTO && peek.maps_open[0] == 2,
+          "tolta la cartella: il file va da parte e la partita si scrive");
+  }
+
+  printf("16) la partita 1 dalla 0.5.2 non si riesce a scrivere: si riprova al prossimo avvio\n");
+  {
+    const char* Z = dir_of("z", true);
+    put_text(file_in(Z, "pupazzi.sav"), "versione=1\nmira.1=1\nvolume_musica=4\nmappe.terra=4\ngiro.terra=2\nstelle.terra1=7\n");
+    mkdir(file_in(Z, "partita1.sav.tmp"), 0755);         // la partita 1 non si puo' creare
+    int logs = g_logs;
+    check(save_open(Z) == SAVE_LETTO && !exists(file_in(Z, "partita1.sav")) && g_logs == logs + 1 && strstr(g_lastlog, "non riuscito"), g_lastlog);
+    save_data()->music_vol = 3;
+    check(save_write(), "le impostazioni si scrivono");
+    get_file(file_in(Z, "pupazzi.sav"), buf, sizeof(buf));
+    check(count_of(buf, "\nsalvataggi=0\n") == 1 && count_of(buf, "\nmappe.terra=4\n") == 1, "salvataggi=0 e i progressi restano");
+    rmdir(file_in(Z, "partita1.sav.tmp"));
+    SaveData peek;
+    check(save_open(Z) == SAVE_LETTO && save_data()->music_vol == 3 && save_slot_peek(0, &peek) == SAVE_LETTO && peek.maps_open[0] == 4 &&
+              peek.giro[0] == 2 && save_stars_in(&peek, "terra1") == 7,
+          "al prossimo avvio la partita 1 c'e'");
+    get_file(file_in(Z, "pupazzi.sav"), buf, sizeof(buf));
+    check(count_of(buf, "\nsalvataggi=1\n") == 1 && count_of(buf, "salvataggi=0") == 0, "e salvataggi=1");
+    // C'e' gia' una partita: i progressi vecchi non si prendono, neanche dopo averla eliminata.
+    const char* Z2 = dir_of("z2", true);
+    put_text(file_in(Z2, "pupazzi.sav"), "versione=1\nmappe.terra=4\n");
+    put_text(file_in(Z2, "partita3.sav"), "mappe.terra=2\n");
+    save_open(Z2);
+    check(!exists(file_in(Z2, "partita1.sav")) && save_write(), "c'e' gia' una partita: niente partita 1");
+    get_file(file_in(Z2, "pupazzi.sav"), buf, sizeof(buf));
+    check(count_of(buf, "\nsalvataggi=1\n") == 1 && count_of(buf, "\nmappe.terra=4\n") == 1, "salvataggi=1, i progressi restano nel file");
+    remove(file_in(Z2, "partita3.sav"));
+    save_open(Z2);
+    check(!exists(file_in(Z2, "partita1.sav")), "eliminata la partita: i progressi vecchi non tornano");
   }
 
   char cmd[256];

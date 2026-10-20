@@ -52,7 +52,7 @@ char g_status[200], g_slot_status[200];
 File g_set, g_game;                 // impostazioni e partita attiva
 File g_scratch;                     // letture di prova (save_slot_peek) e copie
 int g_active = -1;
-bool g_marker;                      // salvataggi=1: i progressi della 0.5.2 sono gia' stati presi
+bool g_marker;                      // salvataggi=1: niente (piu') da prendere dal file della 0.5.2; 0 se non ci si e' riusciti
 bool g_full_logged;                 // troppe mappe: scritto una volta sola
 char g_out[OUT_LEN];
 char g_slot_paths[SAVE_SLOTS][300];
@@ -333,7 +333,7 @@ int serialize(const File* f, SaveData& d, char* buf, int cap) {
     put(&o, "volume_musica=%d\n", d.music_vol);
     put(&o, "volume_effetti=%d\n", d.sfx_vol);
     put(&o, "lingua=%s\n", LANG_ID[d.lang]);
-    put(&o, "salvataggi=1\n");
+    put(&o, "salvataggi=%d\n", g_marker ? 1 : 0);
   } else {
     for (int w = 0; w < SAVE_WORLDS; ++w) {
       d.maps_open[w] = (uint8_t)clampi(d.maps_open[w], w == 0 ? 1 : 0, 99);
@@ -407,8 +407,17 @@ bool write_bytes(File* f, const char* buf, int n) {
     remove(f->tmp);
     return failed(f, "non riesco a scrivere", f->tmp, e);
   }
-  if (f->backup && rename(f->path, f->bad) == 0) plat_log("salvataggio: il file illeggibile resta come %s", f->bad);
-  f->backup = false;
+  if (f->backup) {
+    // Il file illeggibile non si perde: se non lo si riesce a mettere da parte non lo si sostituisce.
+    if (rename(f->path, f->bad) == 0) {
+      plat_log("salvataggio: il file illeggibile resta come %s", f->bad);
+    } else if (errno != ENOENT) {
+      e = errno;
+      remove(f->tmp);
+      return failed(f, "non riesco a mettere da parte il file illeggibile", f->path, e);
+    }
+    f->backup = false;
+  }
   if (rename(f->tmp, f->path) != 0) {
     e = errno;
     remove(f->tmp);
@@ -433,6 +442,23 @@ bool write_file(File* f, SaveData& d) {
   return write_bytes(f, g_out, n);
 }
 
+// Il file c'e' ma non si e' potuto leggere tutto (errore della scheda, permessi): si riparte da capo,
+// senza nulla di quello che si e' letto fin li', e se e' un file vero e proprio alla prima scrittura
+// resta come NOME.illeggibile invece di sparire (una cartella con quel nome non si tocca).
+int unreadable(File* f, int e, char* status, size_t slen) {
+  struct stat st;
+  f->nextra = 0;
+  f->progress = false;
+  f->backup = stat(f->path, &st) == 0 && S_ISREG(st.st_mode);
+  const char* name = strrchr(f->path, '/');
+  name = name ? name + 1 : f->path;
+  if (f->backup)
+    snprintf(status, slen, "illeggibile: %s, si riparte da capo; alla prima scrittura il file diventa %.60s.illeggibile", why(e), name);
+  else
+    snprintf(status, slen, "illeggibile: %s, si riparte da capo", why(e));
+  return SAVE_ILLEGGIBILE;
+}
+
 // Legge il file f in d (solo le chiavi del suo tipo). status: com'e' andata. Restituisce SAVE_*.
 int read_file(File* f, SaveData* d, char* status, size_t slen, bool remember) {
   errno = 0;
@@ -443,8 +469,7 @@ int read_file(File* f, SaveData* d, char* status, size_t slen, bool remember) {
       snprintf(status, slen, "nuovo");
       return SAVE_NUOVO;
     }
-    snprintf(status, slen, "illeggibile: %s, si riparte da capo", why(e));
-    return SAVE_ILLEGGIBILE;
+    return unreadable(f, e, status, slen);
   }
   // A pezzi, una riga alla volta: un file troncato, binario o enorme non rompe nulla.
   static char chunk[4096];
@@ -473,8 +498,9 @@ int read_file(File* f, SaveData* d, char* status, size_t slen, bool remember) {
     }
   }
   const int read_errno = ferror(fp) ? (errno ? errno : EIO) : 0;
-  const bool more = total >= MAX_READ && fgetc(fp) != EOF;
+  const bool more = !read_errno && total >= MAX_READ && fgetc(fp) != EOF;
   fclose(fp);
+  if (read_errno) return unreadable(f, read_errno, status, slen);   // anche a meta' del file
   if (len_l > 0 || broken) {               // ultima riga senza a capo (o tagliata qui sopra)
     line[len_l] = 0;
     read_line(&r, line, broken || more);
@@ -482,8 +508,7 @@ int read_file(File* f, SaveData* d, char* status, size_t slen, bool remember) {
   const char* name = strrchr(f->path, '/');
   name = name ? name + 1 : f->path;
   if (total == 0) {
-    if (read_errno) snprintf(status, slen, "illeggibile: %s, si riparte da capo", why(read_errno));
-    else snprintf(status, slen, "illeggibile: file vuoto, si riparte da capo");
+    snprintf(status, slen, "illeggibile: file vuoto, si riparte da capo");
     return SAVE_ILLEGGIBILE;
   }
   if (r.ok == 0 && r.bad > 0) {
@@ -496,8 +521,10 @@ int read_file(File* f, SaveData* d, char* status, size_t slen, bool remember) {
   int n = snprintf(status, slen, "letto");
   if (r.bad > 0) n += snprintf(status + n, slen - (size_t)n, ", righe non valide ignorate: %d%s", r.bad, r.binary ? " (caratteri non di testo)" : "");
   if (r.dropped > 0 && n < (int)slen) n += snprintf(status + n, slen - (size_t)n, ", voci sconosciute di troppo perse: %d", r.dropped);
-  if (more && n < (int)slen) n += snprintf(status + n, slen - (size_t)n, ", file troppo grande: letto solo l'inizio");
-  if (read_errno && n < (int)slen) n += snprintf(status + n, slen - (size_t)n, ", lettura interrotta (%s)", why(read_errno));
+  if (more) {
+    f->backup = true;                      // il resto non si perde: alla prima scrittura il file intero resta da parte
+    if (n < (int)slen) n += snprintf(status + n, slen - (size_t)n, ", file troppo grande: letto solo l'inizio (resta come %.60s.illeggibile)", name);
+  }
   if (d->version > SAVE_VERSION && n < (int)slen)
     snprintf(status + n, slen - (size_t)n, ", scritto da una versione piu' nuova del gioco (formato %d)", d->version);
   if (remember) f->last_n = serialize(f, *d, f->last, OUT_LEN);   // i dati letti sono gia' sul disco
@@ -511,29 +538,37 @@ bool file_exists(const char* path) {
   return stat(path, &st) == 0;
 }
 
-// Dalla 0.5.2: i progressi rimasti in pupazzi.sav diventano la partita 1 (se non c'e' ancora
-// nessuna partita e non e' gia' stato fatto).
+// Dalla 0.5.2: i progressi rimasti in pupazzi.sav diventano la partita 1, una volta sola e solo se
+// non c'e' ancora nessuna partita. g_marker resta false (salvataggi=0) solo se non ci si e' riusciti:
+// si riprova al prossimo avvio.
 void migrate(void) {
-  if (g_marker || !g_set.progress) return;
+  if (g_marker) return;
+  g_marker = true;
+  if (!g_set.progress) return;                       // niente da prendere
   for (int i = 0; i < SAVE_SLOTS; ++i)
-    if (file_exists(g_slot_paths[i])) return;
+    if (file_exists(g_slot_paths[i])) return;        // ci sono gia' partite: i progressi vecchi restano dove sono
+  g_marker = false;
   static SaveData tmp;
   defaults(&tmp);
   reset_file(&g_scratch, K_GAME);
   snprintf(g_scratch.path, sizeof(g_scratch.path), "%s", g_set.path);   // si legge pupazzi.sav come partita
   char st[200];
-  read_file(&g_scratch, &tmp, st, sizeof(st), false);
+  if (read_file(&g_scratch, &tmp, st, sizeof(st), false) != SAVE_LETTO) {
+    plat_log("salvataggio: non riesco a rileggere i progressi della versione di prima (%s), riprovo al prossimo avvio", st);
+    return;
+  }
+  // Le chiavi sconosciute lette (mappe_sbloccate della 0.4...) vanno nella partita con il resto.
   snprintf(g_scratch.path, sizeof(g_scratch.path), "%s", g_slot_paths[0]);
   snprintf(g_scratch.tmp, sizeof(g_scratch.tmp), "%s.tmp", g_slot_paths[0]);
   snprintf(g_scratch.bad, sizeof(g_scratch.bad), "%s.illeggibile", g_slot_paths[0]);
+  g_scratch.backup = false;                          // riguardava pupazzi.sav, che resta com'e'
   g_scratch.last_n = -1;
-  if (write_file(&g_scratch, tmp)) {
-    plat_log("salvataggio: i progressi della versione di prima sono la partita 1 (%s)", g_slot_paths[0]);
-    g_marker = true;
-    // Si riscrive anche se in memoria nulla e' cambiato: sul disco manca ancora salvataggi=1.
-    g_set.last_n = -1;
-    write_file(&g_set, g_data);
-  }
+  if (!write_file(&g_scratch, tmp)) return;          // gia' nel registro; salvataggi=0, si riprova
+  plat_log("salvataggio: i progressi della versione di prima sono la partita 1 (%s)", g_slot_paths[0]);
+  g_marker = true;
+  // Si riscrive anche se in memoria nulla e' cambiato: sul disco manca ancora salvataggi=1.
+  g_set.last_n = -1;
+  write_file(&g_set, g_data);
 }
 
 }  // namespace
@@ -567,11 +602,13 @@ int save_open(const char* dir) {
     snprintf(g_slot_paths[i], sizeof(g_slot_paths[i]), "%s%s%s", g_dir, strcmp(g_dir, "/") ? "/" : "", name);
   }
   const int st = read_file(&g_set, &g_data, g_status, sizeof(g_status), true);
-  if (st != SAVE_LETTO) {
+  if (st == SAVE_LETTO) {
+    migrate();
+  } else {
     defaults_settings(&g_data);
     g_data.version = 0;
+    g_marker = true;                       // nel file nuovo non ci sono progressi vecchi da prendere
   }
-  if (st == SAVE_LETTO) migrate();
   return st;
 }
 
@@ -682,9 +719,9 @@ bool save_slot_copy(int from, int to) {
   if (!fp) return false;
   static char buf[OUT_LEN * 2];
   const size_t n = fread(buf, 1, sizeof(buf), fp);
-  const bool big = fgetc(fp) != EOF;
+  const bool bad = ferror(fp) != 0, big = !bad && fgetc(fp) != EOF;
   fclose(fp);
-  if (n == 0 || big) return false;
+  if (n == 0 || bad || big) return false;         // mai una copia a meta'
   reset_file(&g_scratch, K_GAME);
   snprintf(g_scratch.path, sizeof(g_scratch.path), "%s", g_slot_paths[to]);
   snprintf(g_scratch.tmp, sizeof(g_scratch.tmp), "%s.tmp", g_slot_paths[to]);

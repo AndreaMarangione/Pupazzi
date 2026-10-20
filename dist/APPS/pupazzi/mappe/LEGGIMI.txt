@@ -18,7 +18,8 @@ Le mappe della Terra, nell'ordine:  terra1.txt Le Piramidi, terra2.txt La Grande
                                     terra3.txt Chichen Itza, terra_boss.txt Il Colosseo (arena del boss)
 
 INTESTAZIONE
-  nome: Le Piramidi            nome mostrato nei menu
+  nome: Le Piramidi            nome mostrato nei menu (i nomi delle mappe di serie sono tradotti
+                               nelle altre lingue; un nome nuovo resta com'e' in tutte)
   mondo: terra                 il pianeta (per ora c'e' solo la terra)
   stile: piramidi              aspetto della mappa: piramidi, chichenitza, muraglia, colosseo
                                (senza questa riga: colosseo per le arene, piramidi per le altre)

@@ -636,7 +636,9 @@ triangoli a 60 fps fissi; con la visuale larga della 0.3.2 se ne inquadrano circ
   chiusura della pausa se si e' cambiato qualcosa e all'uscita; scrittura atomica (file
   temporaneo, fsync, rinomina). Lettura tollerante: righe rovinate ignorate, valori riportati nei
   limiti, chiavi sconosciute conservate (versioni diverse non si cancellano i dati a vicenda); un
-  file senza niente di valido si tiene da parte come `pupazzi.sav.illeggibile`.
+  file senza niente di valido si tiene da parte come `pupazzi.sav.illeggibile` (dalla 0.5.3 anche
+  uno che la scheda non riesce a leggere, o troppo grande; se non lo si riesce a mettere da parte
+  non lo si sostituisce).
 - Provato il 15–16/10: `/mnt/mmc/saves_RA/Pupazzi/pupazzi.sav`, creato al primo avvio e riletto a
   ogni avvio dopo.
 - [deciso 20/10] **Più salvataggi**: si crea una partita nuova, si carica un salvataggio, e in una
@@ -648,7 +650,8 @@ triangoli a 60 fps fissi; con la visuale larga della 0.3.2 se ne inquadrano circ
     la console. Il salvataggio di oggi diventa il numero 1.
   - *0.5.3*: impostazioni in `pupazzi.sav` (con `lingua=` e `salvataggi=1`), partite in
     `partita1.sav` ... `partita4.sav` (con `tempo=`, i secondi di gioco); al primo avvio i progressi
-    del `pupazzi.sav` della 0.5.2 (o della 0.4) diventano `partita1.sav`, una volta sola.
+    del `pupazzi.sav` della 0.5.2 (o della 0.4) diventano `partita1.sav`, una volta sola (se la
+    scrittura non riesce resta `salvataggi=0` e si riprova all'avvio dopo).
 - [proposta, fatta nella 0.5] Per ogni pianeta il giro raggiunto e le stelle del giro in corso; le stelle
   e le mappe della prateria (0.4) non valgono più per la Terra.
 - *0.5*: chiavi nuove `giro.<pianeta>` e `mappe.<pianeta>` (mappe aperte in ordine), `stelle.<mappa>`

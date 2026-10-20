@@ -299,7 +299,7 @@ static const char* const LANG_TEXT[LANG_NTEXTS][7] = {
   { "restano %d vite: rientra tra 5 secondi", "%d lives left: back in 5 seconds", "quedan %d vidas: vuelve en 5 segundos", "restam %d vidas: volta daqui a 5 segundos", "还剩%d条命：5秒后复活", "残機%d：5秒後に復活", "%d जानें बची हैं: 5 सेकंड में वापसी" },
   { "premete un tasto per entrare", "press a button to join", "pulsa un botón para entrar", "prime um botão para entrar", "按任意键加入", "ボタンを押して参加", "जुड़ने के लिए कोई बटन दबाएँ" },
   { "Prestazioni (con START tenuti: esci)", "Performance (held with START: quit)", "Rendimiento (con START mantenidos: salir)", "Desempenho (com START mantidos: sair)", "性能（与START一起按住：退出）", "パフォーマンス（STARTと長押し：終了）", "परफ़ॉर्मेंस (START के साथ दबाए रखें: बाहर)" },
-  { "PRESA!", "TAKEN!", "¡ELEGIDA!", "FEITO!", "已选择！", "ゲット！", "ले लिया!" },
+  { "PRESA!", "TAKEN!", "¡HECHO!", "FEITO!", "已选择！", "ゲット！", "ले लिया!" },
   { "fiamma che attraversa i mostri", "flame that goes through monsters", "llama que atraviesa a los monstruos", "chama que atravessa os monstros", "穿透怪物的火焰", "モンスターをつらぬく炎", "राक्षसों के आर-पार जाती लौ" },
   { "salto lunare con le schegge", "moon leap with shards", "salto lunar con esquirlas", "salto lunar com estilhaços", "带碎片的月跃", "かけらをまく月面ジャンプ", "टुकड़ों के साथ चाँद-छलांग" },
   { "INSIEME", "TOGETHER", "JUNTOS", "JUNTOS", "合作", "協力", "साथ मिलकर" },

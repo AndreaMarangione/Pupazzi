@@ -183,23 +183,32 @@ const char* card_desc(int c, bool narrow) { return tr(narrow && CARDS[c].brief ?
 
 inline uint32_t O(uint32_t rgb) { return HUD_OPAQUE(rgb); }
 
-struct PanelFit { float bottom; int desc_lines; bool name_cut; bool cut; };
+struct PanelFit { float bottom; int desc_lines; bool name_cut, head_cut, cut; };
 
 // Riquadro di un giocatore: "G1 ASTRO", le tre carte, la descrizione di quella col cursore e in
 // fondo le carte gia' prese; dopo la scelta "PRESA!". Con h NULL misura soltanto (prove).
 PanelFit draw_panel(Hud* h, int i, int ch, const CardOffer& o, uint32_t owned, bool others, float px, float pw) {
-  PanelFit fit = { 0.0f, 0, false, false };
+  PanelFit fit = { 0.0f, 0, false, false, false };
   const bool narrow = pw < 180.0f;
   const float pad = narrow ? 12.0f : 14.0f;    // nei riquadri stretti (4 giocatori) un po' di posto in piu'
   const float py = PANEL_Y, inner = pw - 2.0f * pad, ix = px + pad, cx = px + pw * 0.5f;
   const int nface = narrow ? HF_S13 : HF_S15, dface = narrow ? HF_S12 : HF_S13;
   char buf[512];
+  // In alto G1, la faccina e il nome dell'eroe: nei riquadri stretti piu' stretti e, se il nome non
+  // ci sta lo stesso (マルツィオ), senza la faccina.
+  const char* hero = tr(CHARS[ch].name);
+  const float htrack = narrow ? 1.0f : 1.5f, gw = ui::gp_w(i), hw = hud_text_w(HF_B13, hero, htrack);
+  const float fx = ix + gw + (narrow ? 6.0f : 8.0f);
+  float hx = fx + 20.0f + (narrow ? 4.0f : 6.0f);
+  const bool with_face = hx + hw <= px + pw - pad;
+  if (!with_face) hx = ix + gw + 8.0f;
+  fit.head_cut = hx + hw > px + pw - pad;
   if (h) {
     if (o.done) ui::panel(h, px, py, pw, PANEL_H);
     else ui::panel(h, px, py, pw, PANEL_H, 16.0f, ui::BASE, false);
-    const float gw = ui::gp(h, ix, py + 22.0f, i);
-    ui::face(h, ix + gw + 8.0f, py + 12.0f, 20, ch, 0);
-    ui::text(h, ix + gw + 34.0f, py + 22.0f, HF_B13, O(ui::TX), tr(CHARS[ch].name), 1.5f);
+    ui::gp(h, ix, py + 22.0f, i);
+    if (with_face) ui::face(h, fx, py + 12.0f, 20, ch, 0);
+    ui::text(h, hx, py + 22.0f, HF_B13, O(ui::TX), hero, htrack);
   }
   Lines L;
   if (o.done) {
@@ -207,7 +216,7 @@ PanelFit draw_panel(Hud* h, int i, int ch, const CardOffer& o, uint32_t owned, b
     if (h) ui::text(h, cx, py + 70.0f, HF_B22, O(ui::L1), tr("PRESA!"), 3.0f, 0);
     fit.name_cut |= hud_text_w(HF_B22, tr("PRESA!"), 3.0f) > inner;
     const char* name = card_label(c, inner, nface);
-    fit.name_cut = hud_text_w(nface, name, 0.8f) > inner;
+    fit.name_cut |= hud_text_w(nface, name, 0.8f) > inner;
     if (h) ui::text(h, cx, py + 104.0f, nface, O(CARDS[c].combo ? ui::A2 : ui::TX), name, 0.8f, 0);
     wrap(card_desc(c, narrow), inner, dface, &L);
     float y = py + 130.0f;
@@ -518,7 +527,7 @@ void card_special_used(int i) {
 }
 
 // Prove: ogni carta, scelta o appena presa, sta nel suo riquadro con 1, 2, 3 e 4 giocatori, anche
-// con due carte lunghe gia' prese.
+// con cinque carte lunghe gia' prese; e il nome di ogni eroe in alto.
 bool cards_layout_ok(char* why, int n, bool all) {
   why[0] = 0;
   bool good = true;
@@ -535,28 +544,30 @@ bool cards_layout_ok(char* why, int n, bool all) {
       snprintf(why, (size_t)n, "%d giocatori: riquadri fuori dal margine del televisore", np);
       return false;
     }
-    for (int c = 1; c < NCARDS; ++c)
-      for (int done = 0; done < 2; ++done) {
-        CardOffer o;
-        memset(&o, 0, sizeof(o));
-        o.card[0] = (uint8_t)c;
-        o.card[1] = CA_GENEROSO;
-        o.card[2] = CA_SCHEGGE_GELO;
-        o.n = 3;
-        o.on = true;
-        o.done = done != 0;
-        const PanelFit f = draw_panel(NULL, 3, CH_MARZIO, o, owned & ~(1u << c), true, px, pw);
-        if (f.cut || f.name_cut || f.desc_lines > 6 || f.bottom > PANEL_Y + PANEL_H) {
-          if (good)
-            snprintf(why, (size_t)n, "%d giocatori, %s%s: %d righe, testo fino a %.1f%s%s", np, CARDS[c].name, done ? " (presa)" : "",
-                     f.desc_lines, (double)f.bottom, f.name_cut ? ", nome tagliato" : "", f.cut ? ", testo tagliato" : "");
-          if (all)
-            printf("    %d giocatori, %s%s: %d righe, testo fino a %.1f%s%s\n", np, tr(CARDS[c].name), done ? " (presa)" : "", f.desc_lines,
-                   (double)f.bottom, f.name_cut ? ", nome tagliato" : "", f.cut ? ", testo tagliato" : "");
-          good = false;
-          if (!all) return false;
+    for (int ch = 0; ch < NCHARS; ++ch)        // ogni eroe: il nome in alto
+      for (int c = 1; c < NCARDS; ++c)
+        for (int done = 0; done < 2; ++done) {
+          CardOffer o;
+          memset(&o, 0, sizeof(o));
+          o.card[0] = (uint8_t)c;
+          o.card[1] = CA_GENEROSO;
+          o.card[2] = CA_SCHEGGE_GELO;
+          o.n = 3;
+          o.on = true;
+          o.done = done != 0;
+          const PanelFit f = draw_panel(NULL, 3, ch, o, owned & ~(1u << c), true, px, pw);
+          if (f.cut || f.name_cut || f.head_cut || f.desc_lines > 6 || f.bottom > PANEL_Y + PANEL_H) {
+            const char* hc = f.head_cut ? ", nome dell'eroe tagliato" : "";
+            if (good)
+              snprintf(why, (size_t)n, "%d giocatori, %s, %s%s: %d righe, testo fino a %.1f%s%s%s", np, CHARS[ch].name, CARDS[c].name,
+                       done ? " (presa)" : "", f.desc_lines, (double)f.bottom, f.name_cut ? ", nome tagliato" : "", hc, f.cut ? ", testo tagliato" : "");
+            if (all)
+              printf("    %d giocatori, %s, %s%s: %d righe, testo fino a %.1f%s%s%s\n", np, tr(CHARS[ch].name), tr(CARDS[c].name), done ? " (presa)" : "",
+                     f.desc_lines, (double)f.bottom, f.name_cut ? ", nome tagliato" : "", hc, f.cut ? ", testo tagliato" : "");
+            good = false;
+            if (!all) return false;
+          }
         }
-      }
   }
   return good;
 }

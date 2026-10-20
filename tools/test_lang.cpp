@@ -1,6 +1,7 @@
 // Prove delle lingue (0.5.3): tr trova i testi; ogni testo della tabella, in ogni lingua, si disegna
-// senza caratteri che mancano (nelle facce piccole e nelle facce grandi in cui si usa); a capo e
-// puntini non spezzano le parole hindi e in cinese e giapponese si va a capo tra i caratteri.
+// senza caratteri che mancano e con le parole hindi gia' composte (nelle facce piccole e nelle facce
+// grandi in cui si usa); a capo e puntini non spezzano le parole hindi, in cinese e giapponese si va
+// a capo tra i caratteri, una parola piu' larga della riga si spezza senza perdere nulla.
 //   make build/native/test_lang && ./build/native/test_lang
 #include "lang.h"
 #include "hud.h"
@@ -143,6 +144,9 @@ int main() {
     // Un carattere che nessuno ha: si conta (e si disegna '?').
     hud_text_w(HF_S13, "\xE2\x99\xA5", 0.0f);
     check(hud_missing(true) == 1, "carattere sconosciuto: contato");
+    // Una parola hindi che non e' tra quelle composte (testi cambiati senza rigenerare i caratteri).
+    hud_text_w(HF_S13, "क्षत्रियों", 0.0f);
+    check(hud_missing(true) >= 1, "parola hindi non composta: contata");
   }
 
   printf("3) larghezze e a capo\n");
@@ -183,6 +187,30 @@ int main() {
     lang_set(LANG_IT);
     const int ni = ui::wrap("uno due tre quattro cinque sei", 60.0f, HF_S14, 0.5f, L, 6, &cut);
     check(ni >= 3 && !cut && !strchr(L[0], ' ') == false, "italiano: a capo sugli spazi come prima");
+    // Una parola piu' larga della riga: spezzata, nulla si perde, e cut lo dice.
+    const char* longw = "precipitevolissimevolmente e poi basta";
+    const int nl = ui::wrap(longw, 60.0f, HF_S14, 0.5f, L, 12, &cut);
+    char a[256], b[256];
+    int na = 0, nb = 0;
+    for (const char* p = longw; *p && na < 255; ++p)
+      if (*p != ' ') a[na++] = *p;
+    a[na] = 0;
+    ok = cut && nl >= 4;
+    for (int k = 0; k < nl; ++k) {
+      ok &= hud_text_w(HF_S14, L[k], 0.5f) <= 60.0f && !strstr(L[k], "\xE2\x80\xA6");
+      for (const char* p = L[k]; *p && nb < 255; ++p)
+        if (*p != ' ') b[nb++] = *p;
+    }
+    b[nb] = 0;
+    check(ok && !strcmp(a, b), "parola piu' larga della riga: spezzata senza perdere nulla, cut");
+    // In hindi no: la parola resta intera (o i puntini), e cut.
+    lang_set(LANG_HI);
+    s = tr("Battuto il boss, l'eroe del pianeta entra in squadra. In ogni mappa c'è una capsula nascosta: salvate l'esploratore!");
+    const int nh = ui::wrap(s, 24.0f, HF_S16, 0.5f, L, 12, &cut);
+    ok = cut && nh >= 1;
+    for (int k = 0; k < nh; ++k) ok &= whole_words(L[k], s);
+    check(ok, "hindi in una riga strettissima: parole mai spezzate, cut");
+    lang_set(LANG_IT);
   }
 
   printf(g_fail ? "\n%d prove fallite\n" : "\ntutto bene\n", g_fail);

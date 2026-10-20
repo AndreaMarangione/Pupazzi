@@ -1073,7 +1073,7 @@ hi लें
 @B22
 it PRESA!
 en TAKEN!
-es ¡ELEGIDA!
+es ¡HECHO!
 pt FEITO!
 zh 已选择！
 ja ゲット！

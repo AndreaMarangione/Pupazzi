@@ -76,7 +76,8 @@ void hud_upper(char* dst, const char* src, int n);
 enum { HUD_CJK_SC = 0, HUD_CJK_JP = 1, HUD_DEVA = 2 };
 void hud_cjk(int script);
 int hud_cjk_get(void);
-// Caratteri disegnati come '?' perche' nessuna faccia li ha (prove); reset: si riparte da zero.
+// Caratteri disegnati come '?' perche' nessuna faccia li ha, e parole hindi che non sono tra quelle
+// gia' composte (disegnate lettera per lettera); reset: si riparte da zero.
 int hud_missing(bool reset);
 // Punto di codice del carattere UTF-8 in s, e s va avanti (0 alla fine; 0xFFFD se non e' valido).
 uint32_t hud_utf8_next(const char*& s);

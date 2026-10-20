@@ -25,7 +25,8 @@
 //   volume_musica=6        da 0 a 10 (fino alla 0.4 predefinito 7)
 //   volume_effetti=8       da 0 a 10
 //   lingua=it              it, en, es, pt, zh, ja, hi (dalla 0.5.3)
-//   salvataggi=1           (dalla 0.5.3) i progressi del file della 0.5.2 sono gia' diventati partita1.sav
+//   salvataggi=1           (dalla 0.5.3) niente da prendere dal file della 0.5.2 (gia' diventato
+//                          partita1.sav, o non c'era); 0 se non ci si e' riusciti: si riprova all'avvio
 // partitaN.sav:
 //   versione=2
 //   storia_pianeti=0       storia del giro dei pianeti gia' vista (0 o 1)
@@ -44,9 +45,12 @@
 // Dalla 0.5.2 alla 0.5.3: se pupazzi.sav ha ancora i progressi (mappe.*, giro.*, stelle.*,
 // storia_pianeti) e non c'e' nessuna partita, diventano partita1.sav; in pupazzi.sav restano (una
 // 0.5.2 rimessa sulla console li ritrova) e la riga salvataggi=1 dice che sono gia' stati presi.
+// Se c'e' gia' una partita i progressi vecchi non si prendono piu'.
 // Dalla 0.4: mappe_sbloccate, storia_vista e le stelle della prateria restano dove sono, come le
 // chiavi sconosciute.
 //
+// Un file che non si legge tutto (rovinato, errore della scheda, troppo grande) alla prima scrittura
+// resta come NOME.illeggibile; se non lo si riesce a mettere da parte non lo si sostituisce.
 // In ogni file: valori fuori dai limiti si riportano nei limiti, righe non valide si ignorano. Le
 // chiavi che questa versione non conosce si riscrivono uguali in fondo al file: versioni diverse del
 // gioco non si cancellano i dati a vicenda (regola: una chiave non cambia mai significato, una

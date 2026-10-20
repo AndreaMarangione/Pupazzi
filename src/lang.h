@@ -15,10 +15,12 @@ static_assert(NLANGS == SAVE_LANGS, "save.h e lang.h devono avere le stesse ling
 
 #define N_(s) s
 
-// Il testo nella lingua scelta (it e' il testo italiano, come nella tabella).
-const char* tr(const char* it);
+// Il testo nella lingua scelta (it e' il testo italiano, come nella tabella). format_arg: usato come
+// formato di printf, il compilatore controlla gli argomenti sul testo italiano (le traduzioni hanno
+// gli stessi %, lo controlla make_lang.py).
+const char* tr(const char* it) __attribute__((format_arg(1)));
 // Nella lingua l (i comandi per RetroArch).
-const char* tr_in(int l, const char* it);
+const char* tr_in(int l, const char* it) __attribute__((format_arg(2)));
 // Il testo e' nella tabella (prove).
 bool tr_known(const char* it);
 void lang_set(int l);

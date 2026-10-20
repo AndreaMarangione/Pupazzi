@@ -115,6 +115,20 @@ def conversions(s):
         i = m.end()
 
 
+def lone_percent(s):
+    """Il primo % di s che non comincia una conversione (ne' %%), o None. In un testo usato come
+    formato printf lo leggerebbe lo stesso ("50% di" diventa "% d", con il flag spazio)."""
+    i = 0
+    while True:
+        j = s.find("%", i)
+        if j < 0:
+            return None
+        m = CONV.match(s, j)
+        if not m:
+            return s[j:j + 4]
+        i = m.end()
+
+
 def check_format(it, tr):
     a, b = conversions(it), conversions(tr)
     if a is None:
@@ -182,16 +196,27 @@ def code_keys():
     return keys
 
 
-def map_names():
+NAME_MAX = 39                         # byte del nome di una mappa (Level::name in level.h, meno lo 0)
+
+
+def map_names(errors=None):
+    """{nome: file:riga} delle mappe di serie, letti come level.cpp: solo le righe prima di ---, la
+    chiave in minuscolo o maiuscolo, spazi attorno tolti. Un nome piu' lungo di NAME_MAX byte il
+    gioco lo taglierebbe (e non lo troverebbe piu' nella tabella): errore."""
     out = {}
     for path in sorted(glob.glob(os.path.join(ROOT, "maps", "*.txt"))):
         lines = open(path, encoding="utf-8").read().split("\n")
         if "---" not in (l.strip() for l in lines):          # non e' una mappa (LEGGIMI.txt)
             continue
         for n, line in enumerate(lines, 1):
-            m = re.match(r"^\s*nome\s*:\s*(.*?)\s*$", line)
+            if line.strip() == "---":
+                break
+            m = re.match(r"^[ \t]*nome[ \t]*:[ \t]*(.*?)[ \t\r]*$", line, re.I | re.A)
             if m:
-                out[m.group(1)] = "%s:%d" % (os.path.relpath(path, ROOT), n)
+                where = "%s:%d" % (os.path.relpath(path, ROOT), n)
+                if errors is not None and len(m.group(1).encode("utf-8")) > NAME_MAX:
+                    errors.append((0, "nome di mappa troppo lungo %r (%s): al massimo %d byte" % (m.group(1), where, NAME_MAX)))
+                out[m.group(1)] = where
     return out
 
 
@@ -206,11 +231,22 @@ def check(texts, errors):
                 e = check_format(it, t.t[l])
                 if e:
                     errors.append((t.line, "%s, %s: %s (%r)" % (it[:40], l, e, t.t[l][:60])))
+        hi = t.t.get("hi", "")
+        for m in re.finditer(r"%(?:\d+\$)?s", hi):
+            near = hi[m.start() - 1:m.start()] + hi[m.end():m.end() + 1]
+            if any("\u0900" <= c <= "\u097f" for c in near):
+                errors.append((t.line, "%s, hi: %%s attaccato a una parola (%r): le parole hindi si compongono intere, serve uno spazio"
+                               % (it[:40], hi[max(0, m.start() - 6):m.end() + 6])))
+        if conversions(it):                  # si usa come formato: un % da solo si scrive %%
+            for l in LANGS:
+                p = lone_percent(t.t.get(l, ""))
+                if p is not None:
+                    errors.append((t.line, "%s, %s: %r in un testo con %%d o %%s: un %% da solo si scrive %%%%" % (it[:40], l, p)))
     keys = code_keys()
     for k, where in sorted(keys.items()):
         if k and k not in by_key:
             errors.append((0, "manca nella tabella %r (%s)" % (k, ", ".join(where[:3]))))
-    names = map_names()
+    names = map_names(errors)
     for k, where in names.items():
         if k not in by_key:
             errors.append((0, "manca nella tabella il nome di mappa %r (%s)" % (k, where)))
@@ -237,7 +273,7 @@ def c_str(s):
         elif ch == "?":
             out.append("?")
         elif ord(ch) < 0x20:
-            out.append("\\x%02x" % ord(ch))
+            out.append("\\%03o" % ord(ch))     # ottale: al massimo 3 cifre, non si attacca a quelle dopo
         else:
             out.append(ch)
     return '"' + "".join(out) + '"'

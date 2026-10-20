@@ -1,6 +1,7 @@
 // Disegno: oggetti della scena con le loro animazioni, telecamera e HUD della partita.
 #include "game_int.h"
 #include "maps.h"
+#include "plat.h"
 #include "ui.h"
 #include <stdio.h>
 #include <string.h>
@@ -1503,4 +1504,12 @@ void game_build_frame(FrameDesc* fd, int w, int h, Hud* hud) {
   hud_reset(hud);
   if (g.screen == SC_PLAY) build_play_hud(hud, fd->cam);
   else menu_build_hud(hud, fd->cam);
+  // Caratteri che il gioco non sa disegnare (si vedono come '?'; nomi di mappe personalizzate, o
+  // testi cambiati senza rigenerare i caratteri): una volta nel registro.
+  static bool missing_logged = false;
+  const int miss = hud_missing(true);
+  if (miss > 0 && !missing_logged) {
+    missing_logged = true;
+    plat_log("testo con caratteri che il gioco non sa disegnare (%d, lingua %s): si vedono come ?", miss, save_lang_id(lang_get()));
+  }
 }

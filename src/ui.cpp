@@ -141,16 +141,32 @@ int wrap(const char* s, float w, int face, float track, char (*out)[WRAP_LEN], i
       p = q;
     }
     if (best == 0 || width_of(s, best, face, track) > w) {
-      // Una parola sola piu' lunga della riga: tagliata dove sta (fit mette i puntini).
-      best = 0;
+      // Gia' il primo pezzo e' piu' largo della riga: lo si spezza dove arriva la riga e il resto va
+      // sotto (nulla si perde); una parola hindi, composta tutta intera, non si spezza: i puntini.
+      // In ogni caso cut lo dice (nelle prove e' un testo da accorciare).
+      if (cut) *cut = true;
+      int run = 0;
+      bool deva = false;
       for (const char* p = s; *p && *p != ' ';) {
         const char* q = p;
-        hud_utf8_next(q);
+        deva |= hud_is_deva(hud_utf8_next(q));
         if ((int)(q - s) >= WRAP_LEN - 1) break;
+        run = (int)(q - s);
+        p = q;
+      }
+      best = deva ? run : 0;
+      for (const char* p = s; !deva && (int)(p - s) < run;) {
+        const char* q = p;
+        hud_utf8_next(q);
+        if (best > 0 && width_of(s, (int)(q - s), face, track) > w) break;
         best = (int)(q - s);
         p = q;
       }
-      if (best == 0) best = 1;
+      if (best == 0) {
+        const char* q = s;
+        hud_utf8_next(q);
+        best = (int)(q - s);
+      }
       best_next = best;
       while (s[best_next] == ' ') ++best_next;
     }
@@ -267,10 +283,16 @@ float tag(Hud* h, float x, float cy, const char* s, uint32_t color, int face, fl
   return w;
 }
 
+float gp_w(int player, int face) {
+  char buf[16];
+  snprintf(buf, sizeof(buf), tr("G%d"), (player & 3) + 1);
+  return fmaxf(24.0f, hud_text_w(face, buf, 0.5f) + 8.0f);
+}
+
 float gp(Hud* h, float x, float cy, int player, int face) {
   char buf[16];
   snprintf(buf, sizeof(buf), tr("G%d"), (player & 3) + 1);     // G1 in italiano, P1 in inglese...
-  const float w = fmaxf(24.0f, hud_text_w(face, buf, 0.5f) + 8.0f);
+  const float w = gp_w(player, face);
   hud_box(h, x, cy - 9.0f, w, 18.0f, 4.0f, O(PLAYER[player & 3]));
   text(h, x + w * 0.5f, cy, face, O((player & 3) == 3 ? 0x06102E : 0xFFFFFF), buf, 0.5f, 0);
   return w;

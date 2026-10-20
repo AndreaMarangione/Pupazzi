@@ -34,8 +34,9 @@ void overlay(Hud* h, float a);
 // non hanno quel carattere, "..."). Non spezza i caratteri UTF-8 ne' le parole hindi. Restituisce dst.
 const char* fit(char* dst, int n, const char* s, int face, float track, float w, const char* ell = "\xE2\x80\xA6");
 // Righe larghe al massimo w pixel, a capo sugli spazi e (cinese, giapponese) tra un carattere e
-// l'altro; se non bastano max righe l'ultima finisce con "…" e cut (se c'e') diventa true.
-// Restituisce quante righe.
+// l'altro; se non bastano max righe l'ultima finisce con "…" e cut (se c'e') diventa true. Una
+// parola piu' larga della riga si spezza (una parola hindi no: i puntini) e anche allora cut e'
+// true. Restituisce quante righe.
 const int WRAP_LEN = 256;
 int wrap(const char* s, float w, int face, float track, char (*out)[WRAP_LEN], int max, bool* cut = 0);
 
@@ -66,6 +67,7 @@ void version(Hud* h);
 float tag(Hud* h, float x, float cy, const char* s, uint32_t color, int face, float track, float padx, float hh, int align = -1);
 // Gettone del giocatore (G1...): colore del giocatore, scritta bianca; restituisce la larghezza.
 float gp(Hud* h, float x, float cy, int player, int face = HF_B11);
+float gp_w(int player, int face = HF_B11);   // larghezza di gp, senza disegnare
 // Tasti nel popup dei comandi: tasto rettangolare (R1, START...) e levetta tonda (L, R).
 float keycap(Hud* h, float x, float cy, const char* s, bool small);
 float stick(Hud* h, float x, float cy, const char* s);

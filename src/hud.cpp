@@ -15,7 +15,7 @@ int16_t px16(float v) {
 }
 
 int g_cjk = HUD_CJK_SC;        // cinese o giapponese per i caratteri cinesi (hud_cjk)
-int g_missing;                 // caratteri disegnati come '?' (hud_missing)
+int g_missing;                 // caratteri disegnati come '?' e parole hindi non composte (hud_missing)
 
 // Posto nelle tabelle delle facce latine (0..255) del punto di codice: Latin-1 cosi' com'e',
 // qualche simbolo da 0x80 (vedi tools/make_font.py); -1 se non e' latino.
@@ -121,6 +121,7 @@ float layout(int face, const char* s, float track, F fn) {
         }
         pen += (float)w->adv16 * (1.0f / 16.0f);
       } else {
+        g_missing++;               // parola non composta (testi cambiati senza rigenerare i caratteri)
         for (const char* t = p; t < e;) {
           const int g = sface_cp(sf[HUD_DEVA], hud_utf8_next(t));
           if (g < 0) {

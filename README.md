@@ -275,13 +275,15 @@ nella riga "salvataggio:" del registro. Dalla 0.5.3 i file sono due tipi:
 Si scrive a fine mappa, dopo la storia, quando si chiude la pausa dopo aver cambiato qualcosa,
 quando si cambia lingua e all'uscita, sempre in modo sicuro (prima un file a parte, poi lo scambio:
 se la console si spegne a metà resta quello di prima). I file sono di testo e spiegano da soli cosa
-contengono; un file in cui non c'è niente di valido si vede come ILLEGGIBILE: caricandolo si
-riparte da zero e il file vecchio resta da parte come `partitaN.sav.illeggibile`. Per liberare un
-posto basta eliminarlo dal gioco (o cancellare il file).
+contengono; un file in cui non c'è niente di valido, o che la scheda non riesce a leggere, si vede
+come ILLEGGIBILE: caricandolo si riparte da zero e il file vecchio resta da parte come
+`partitaN.sav.illeggibile` (non si cancella mai: se non lo si riesce a mettere da parte la partita
+non si scrive). Per liberare un posto basta eliminarlo dal gioco (o cancellare il file).
 
 La prima volta la partita della 0.5.2 (o della 0.4) diventa la **partita 1**, con tutti i progressi;
 in `pupazzi.sav` i dati vecchi restano (una 0.5.2 rimessa sulla console li ritrova) e la riga
 `salvataggi=1` dice che sono già stati presi: se poi si eliminano tutte le partite non tornano.
+Se la partita 1 non si riesce a scrivere resta `salvataggi=0` e si riprova all'avvio dopo.
 Con un salvataggio della 0.4 restano mira, antialias e volumi; la storia nuova si vede la prima
 volta e la Terra riparte dalla prima mappa.
 
