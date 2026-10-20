@@ -503,12 +503,27 @@ Fatto senza console, anche sui file veri del firmware (immagine della MOD 4.0.3)
   riserva provata (se il driver della console rifiutasse lo shader nuovo si gioca lo stesso, invece
   dello schermo nero); revisione indipendente: nessun difetto bloccante, 8 tra medi e piccoli
   corretti.
+- 0.5.3: salvataggi a 4 posti (nuova, carica, duplica, elimina, posti pieni, file rovinati, troppo
+  grandi o che la scheda non riesce a leggere, la partita della 0.5.2 e della 0.4 che diventa la
+  partita 1, anche quando non si riesce a scriverla) e 7 lingue (ogni testo in ogni lingua si
+  disegna con i suoi caratteri, parole hindi composte e mai spezzate, a capo in cinese e giapponese
+  con le regole della punteggiatura, carte misurate in tutte le lingue da 1 a 4 giocatori);
+  schermate guardate in tutte e 7 le lingue; software e GPU confrontati su 35 schermate in italiano,
+  hindi e giapponese (al massimo 55 pixel diversi); stessa partita su gcc, clang, PC, ARM32 e ARM64
+  (anche i menu in hindi con salvataggi e lingue); campagna con 1, 2 e 4 giocatori automatici;
+  AddressSanitizer, UBSan e ThreadSanitizer puliti (menu in hindi, cinese e giapponese, migrazione
+  della 0.5.2); RetroArch a 64 bit della console con il driver `gl`; voce di menu nel RetroArch a 32
+  bit in emulazione, anche con i salvataggi della 0.4 e della 0.5.2; revisione indipendente: nessun
+  difetto bloccante, 2 medi e 5 piccoli corretti.
 
-Si può sapere solo sulla console: la nuova interfaccia sullo schermo e sulla TV (testi da 12–16
-pixel, margini) e quanto costa lo shader nuovo alla Mali in menu, pausa e carte; come si gioca
-davvero, la fluidità con la Mali sulle mappe nuove con la visuale da 22 a 30 m (fino a 46 mila
-triangoli inviati, a Chichén Itzá e nel Colosseo con 4 giocatori), quanto dura il gladiatore con
-giocatori veri, il sonoro sulla TV e i comandi dalle altre console sul Wi-Fi vero.
+Si può sapere solo sulla console: le lingue sullo schermo e sulla TV (cinese e giapponese da 14
+pixel, hindi da 15), la visuale vicina sullo schermo della console e il cambio attaccando e
+staccando l'HDMI, la partita 1 presa dal salvataggio vero della 0.5.2, i tempi di avvio con
+l'atlante dei caratteri più grande; l'interfaccia sullo schermo e sulla TV (testi da 12–16 pixel,
+margini) e quanto costa lo shader alla Mali in menu, pausa e carte; come si gioca davvero, la
+fluidità con la Mali sulle mappe (fino a 46 mila triangoli inviati, a Chichén Itzá e nel Colosseo
+con 4 giocatori), quanto dura il gladiatore con giocatori veri, il sonoro sulla TV e i comandi
+dalle altre console sul Wi-Fi vero.
 
 ## Note tecniche
 
