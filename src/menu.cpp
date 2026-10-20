@@ -4,6 +4,7 @@
 // Nei menu A conferma e B torna indietro; START breve vale come A.
 // Dalla 0.5.2 il disegno e' nello stile Orbita (ui.h), in pixel a 640x480 come i mockup.
 #include "game_int.h"
+#include "lang.h"
 #include "maps.h"
 #include "plat.h"
 #include "save.h"
@@ -15,7 +16,7 @@ namespace {
 
 const int CHARS_START_DELAY = 50;
 int g_info_t;                 // avviso temporaneo nei menu ("in arrivo")
-char g_info[64];
+char g_info[128];
 
 bool confirm(int i) { return pad_pressed(i, PAD_A) || g.start_tap[i]; }
 bool back(int i) { return pad_pressed(i, PAD_B); }
@@ -42,19 +43,208 @@ void info(const char* s) {
   g_info_t = 120;
 }
 
+// --- salvataggi (0.5.3) ----------------------------------------------------------------------
+
+// Cosa si mostra di ogni posto: il pianeta piu' lontano raggiunto con il suo giro, le stelle del giro,
+// le mappe aperte, il tempo di gioco.
+struct SlotView { int state, world, giro, stars, smax, open, total; uint32_t seconds; };
+SlotView g_slot_view[SAVE_SLOTS];
+
+void slots_refresh(void) {
+  save_write();                    // la partita attiva com'e' adesso (il tempo di gioco)
+  static SaveData d;
+  for (int i = 0; i < SAVE_SLOTS; ++i) {
+    SlotView& v = g_slot_view[i];
+    memset(&v, 0, sizeof(v));
+    v.state = save_slot_peek(i, &d);
+    int w = 0;
+    for (int k = 1; k < NWORLDS; ++k)
+      if (world_maps(k) > 0 && (d.maps_open[k] > 0 || d.giro[k] > 1)) w = k;
+    v.world = w;
+    v.giro = d.giro[w];
+    v.total = world_maps(w);
+    v.smax = 3 * v.total;
+    for (int m = 0; m < maps_count(); ++m)
+      if (maps_world(m) == w) v.stars += star_count(save_stars_in(&d, maps_id(m)));
+    v.open = d.maps_open[w] < v.total ? d.maps_open[w] : v.total;
+    if (w == 0 && v.open < 1) v.open = 1;
+    v.seconds = d.seconds;
+  }
+}
+
+int first_free_slot(void) {
+  for (int i = 0; i < SAVE_SLOTS; ++i)
+    if (g_slot_view[i].state == SAVE_NUOVO) return i;
+  return -1;
+}
+
+int used_slots(void) {
+  int n = 0;
+  for (int i = 0; i < SAVE_SLOTS; ++i) n += g_slot_view[i].state != SAVE_NUOVO;
+  return n;
+}
+
+void new_game(int slot, int who) {
+  save_slot_new(slot);
+  g.menu_owner = who;
+  go_screen(SC_MODE);
+}
+
+void back_to_title(int item) {
+  go_screen(SC_TITLE);
+  g.menu_sel = item;
+}
+
 void title_update(void) {
+  if (g.screen_t == 1) slots_refresh();
   const int nav = any_nav();
-  if (nav == NAV_UP || nav == NAV_DOWN) g.menu_sel ^= 1;
+  if (nav == NAV_UP) g.menu_sel = (g.menu_sel + TITLE_ITEMS - 1) % TITLE_ITEMS;
+  if (nav == NAV_DOWN) g.menu_sel = (g.menu_sel + 1) % TITLE_ITEMS;
+  int who;
+  if (!any_confirm(&who)) return;
+  switch (g.menu_sel) {
+    case TI_NEW: {
+      snd_ui(SND_UI_OK);
+      const int free = first_free_slot();
+      if (free >= 0) {
+        new_game(free, who);
+      } else {
+        g.slots_mode = SL_OVERWRITE;
+        go_screen(SC_SLOTS);
+      }
+      break;
+    }
+    case TI_LOAD:
+    case TI_MANAGE:
+      if (used_slots() == 0) {
+        snd_ui(SND_UI_BACK);
+        info(tr("nessun salvataggio: comincia una nuova partita"));
+      } else {
+        snd_ui(SND_UI_OK);
+        g.menu_owner = who;
+        g.slots_mode = g.menu_sel == TI_LOAD ? SL_LOAD : SL_MANAGE;
+        go_screen(SC_SLOTS);
+      }
+      break;
+    case TI_LANG:
+      snd_ui(SND_UI_OK);
+      go_screen(SC_LANG);
+      break;
+    default:
+      snd_ui(SND_UI_OK);
+      plat_log("scelto Esci dal titolo");
+      game_request_quit();
+      break;
+  }
+}
+
+void slots_update(void) {
+  if (g.screen_t == 1) {
+    slots_refresh();
+    g.slots_pop = SP_NONE;
+    g.slots_sel = 0;
+    if (g.slots_mode != SL_OVERWRITE)                 // il cursore sul primo posto usato
+      while (g.slots_sel < SAVE_SLOTS - 1 && g_slot_view[g.slots_sel].state == SAVE_NUOVO) g.slots_sel++;
+  }
+  const int nav = any_nav();
+  int who;
+  const bool ok = any_confirm(&who), no = !ok && any_back();
+  const int sel = g.slots_sel;
+  const SlotView& v = g_slot_view[sel];
+  char buf[96];
+  switch (g.slots_pop) {
+    case SP_NONE:
+      if (nav == NAV_UP) g.slots_sel = (sel + SAVE_SLOTS - 1) % SAVE_SLOTS;
+      if (nav == NAV_DOWN) g.slots_sel = (sel + 1) % SAVE_SLOTS;
+      if (ok) {
+        if (g.slots_mode == SL_OVERWRITE) {
+          snd_ui(SND_UI_OK);
+          g.slots_pop = SP_OVERWRITE;
+        } else if (v.state == SAVE_NUOVO) {
+          snd_ui(SND_UI_BACK);
+          info(tr("posto libero"));
+        } else if (g.slots_mode == SL_LOAD) {
+          snd_ui(SND_UI_OK);
+          save_slot_load(sel);
+          g.menu_owner = who;
+          go_screen(SC_MODE);
+        } else {
+          snd_ui(SND_UI_OK);
+          g.slots_pop = SP_ACTIONS;
+          g.slots_pop_sel = 0;
+        }
+      } else if (no) {
+        snd_ui(SND_UI_BACK);
+        back_to_title(g.slots_mode == SL_LOAD ? TI_LOAD : (g.slots_mode == SL_MANAGE ? TI_MANAGE : TI_NEW));
+      }
+      break;
+    case SP_ACTIONS:
+      if (nav == NAV_UP || nav == NAV_DOWN) g.slots_pop_sel ^= 1;
+      if (ok) {
+        if (g.slots_pop_sel == 1) {
+          snd_ui(SND_UI_OK);
+          g.slots_pop = SP_DELETE;
+          break;
+        }
+        const int free = first_free_slot();
+        if (free < 0) {
+          snd_ui(SND_UI_BACK);
+          info(tr("nessun posto libero: elimina prima un salvataggio"));
+        } else if (save_slot_copy(sel, free)) {
+          snd_ui(SND_UI_OK);
+          snprintf(buf, sizeof(buf), tr("copiato nel posto %d"), free + 1);
+          info(buf);
+          slots_refresh();
+        } else {
+          snd_ui(SND_UI_BACK);
+          info(tr("copia non riuscita"));
+        }
+        g.slots_pop = SP_NONE;
+      } else if (no) {
+        snd_ui(SND_UI_BACK);
+        g.slots_pop = SP_NONE;
+      }
+      break;
+    default:   // SP_DELETE, SP_OVERWRITE: A si', B no
+      if (ok) {
+        if (g.slots_pop == SP_OVERWRITE) {
+          snd_ui(SND_UI_OK);
+          new_game(sel, who);
+          break;
+        }
+        const bool done = save_slot_delete(sel);
+        snd_ui(done ? SND_UI_OK : SND_UI_BACK);
+        snprintf(buf, sizeof(buf), done ? tr("salvataggio %d eliminato") : tr("non riesco a eliminare il salvataggio %d"), sel + 1);
+        info(buf);
+        slots_refresh();
+        g.slots_pop = SP_NONE;
+        if (used_slots() == 0) back_to_title(TI_NEW);    // non resta niente da gestire
+      } else if (no) {
+        snd_ui(SND_UI_BACK);
+        g.slots_pop = SP_NONE;
+      }
+      break;
+  }
+}
+
+void lang_update(void) {
+  if (g.screen_t == 1) g.lang_sel = lang_get();
+  const int nav = any_nav();
+  if (nav == NAV_UP) g.lang_sel = (g.lang_sel + NLANGS - 1) % NLANGS;
+  if (nav == NAV_DOWN) g.lang_sel = (g.lang_sel + 1) % NLANGS;
   int who;
   if (any_confirm(&who)) {
     snd_ui(SND_UI_OK);
-    if (g.menu_sel == 0) {
-      g.menu_owner = who;
-      go_screen(SC_MODE);
-    } else {
-      plat_log("scelto Esci dal titolo");
-      game_request_quit();
+    if (g.lang_sel != lang_get()) {
+      lang_set(g.lang_sel);
+      save_data()->lang = (uint8_t)g.lang_sel;
+      save_write();
+      plat_log("lingua: %s", save_lang_id(g.lang_sel));
     }
+    back_to_title(TI_LANG);
+  } else if (any_back()) {
+    snd_ui(SND_UI_BACK);
+    back_to_title(TI_LANG);
   }
 }
 
@@ -272,11 +462,192 @@ void title_hud(Hud* h) {
   hud_text_glow(h, 320, base, HF_LOGO, ui::TGLOW, "PUPAZZI", 9.0f, 0);
   hud_text(h, 320, base, HF_LOGO, 0xFFFFFFFFu, "PUPAZZI", 9.0f, 0);
   const float cy = 164.0f + 9.75f;
-  ui::text(h, 320, cy + 1.0f, HF_S15, A(ui::SCRIM, 0.9f), "DA 1 A 4 AMICI CONTRO I MOSTRI", 2.0f, 0);
-  ui::text(h, 320, cy, HF_S15, O(ui::FTX), "DA 1 A 4 AMICI CONTRO I MOSTRI", 2.0f, 0);
-  ui::button(h, 320, 332, 230, 50, "GIOCA", HF_B24, 5.0f, g.menu_sel == 0);
-  ui::button(h, 320, 394, 160, 38, "ESCI", HF_B16, 4.0f, g.menu_sel == 1);
-  footer(h, "conferma", "indietro");
+  char tag[96];
+  ui::fit(tag, sizeof(tag), tr("DA 1 A 4 AMICI CONTRO I MOSTRI"), HF_S15, 2.0f, 576.0f);
+  ui::text(h, 320, cy + 1.0f, HF_S15, A(ui::SCRIM, 0.9f), tag, 2.0f, 0);
+  ui::text(h, 320, cy, HF_S15, O(ui::FTX), tag, 2.0f, 0);
+  // Le voci a destra (gli eroi stanno a sinistra: la telecamera del titolo e' spostata).
+  const float PX = 372.0f, PW = 236.0f, PY = 198.0f, RH = 38.0f, IX = PX + 10.0f, IW = PW - 20.0f;
+  ui::panel(h, PX, PY, PW, 16.0f + RH * (float)TITLE_ITEMS);
+  static const char* const LABEL[TITLE_ITEMS] = { N_("NUOVA PARTITA"), N_("CARICA SALVATAGGIO"), N_("GESTISCI SALVATAGGI"), N_("LINGUA"),
+                                                  N_("ESCI") };
+  const bool none = used_slots() == 0;
+  for (int k = 0; k < TITLE_ITEMS; ++k) {
+    const float y = PY + 8.0f + RH * (float)k, cy2 = y + RH * 0.5f;
+    const bool sel = k == g.menu_sel, off = none && (k == TI_LOAD || k == TI_MANAGE);
+    if (sel) ui::bar_sel(h, IX, y + 2.0f, IW, RH - 4.0f);
+    const uint32_t c = O(sel ? ui::ON : (off ? ui::DIS : (k == TI_QUIT ? ui::A2 : ui::TX)));
+    float tx = IX + 14.0f, room = IW - 28.0f;
+    if (k == TI_LANG) {                        // il mappamondo: si trova anche senza capire la lingua
+      ui::globe(h, tx + 7.5f, cy2, sel ? ui::ON : ui::L1);
+      tx += 23.0f;
+      room -= 23.0f;
+      const char* ln = lang_name(lang_get());
+      const float lw = hud_text_w(HF_S13, ln, 0.5f);
+      ui::text(h, IX + IW - 14.0f, cy2, HF_S13, O(sel ? ui::ON : ui::MU), ln, 0.5f, 1);
+      room -= lw + 10.0f;
+    }
+    ui::fit(tag, sizeof(tag), tr(LABEL[k]), HF_S16, 1.0f, room);
+    ui::text(h, tx, cy2, HF_S16, c, tag, 1.0f);
+  }
+  if (g_info_t > 0) toast(h, g_info, ui::L1);
+  else {
+    const char* it[2] = { "A", tr("conferma") };
+    ui::footer(h, it, 2);
+  }
+  ui::version(h);
+}
+
+// Durata del gioco: "12 min", "1 h 05 min".
+void play_time(char* buf, int n, uint32_t s) {
+  const uint32_t m = s / 60u;
+  if (m < 60u) snprintf(buf, (size_t)n, tr("%u min"), m);
+  else snprintf(buf, (size_t)n, tr("%u h %02u min"), m / 60u, m % 60u);
+}
+
+// Un posto: numero, pianeta e giro, stelle, mappe aperte, tempo; vuoto o illeggibile.
+void slot_row(Hud* h, float x, float y, float w, float hh, int i, bool sel) {
+  const SlotView& v = g_slot_view[i];
+  char buf[96], t[32];
+  if (sel) ui::bar_sel(h, x, y, w, hh);
+  const float cy = y + hh * 0.5f;
+  const uint32_t mc = O(sel ? ui::ON : ui::TX), sub = O(sel ? ui::ON : ui::MU);
+  // Il numero in un tondo.
+  hud_ring(h, x + 30.0f, cy, 16.0f, 16.0f, 2.0f, O(sel ? ui::ON : ui::L1));
+  snprintf(buf, sizeof(buf), "%d", i + 1);
+  ui::text(h, x + 30.0f, cy, HF_B16, O(sel ? ui::ON : ui::L1), buf, 0.0f, 0);
+  const float tx = x + 62.0f;
+  if (v.state == SAVE_NUOVO) {
+    ui::text(h, tx, cy, HF_B16, O(sel ? ui::ON : ui::DIS), tr("POSTO LIBERO"), 1.5f);
+    return;
+  }
+  if (v.state == SAVE_ILLEGGIBILE) {
+    ui::text(h, tx, cy - 9.0f, HF_B16, O(sel ? ui::ON : ui::L2), tr("ILLEGGIBILE"), 1.5f);
+    ui::text(h, tx, cy + 11.0f, HF_S13, sub, tr("si riparte dall'inizio"), 0.5f);
+    return;
+  }
+  char wn[48];
+  hud_upper(wn, tr(WORLD_NAMES[v.world]), sizeof(wn));
+  snprintf(buf, sizeof(buf), tr("%s · GIRO %d"), wn, v.giro);
+  ui::text(h, tx, cy - 9.0f, HF_B16, mc, buf, 1.5f);
+  float lx = tx;
+  ui::star(h, HI_STAR15, lx, cy + 11.0f - 7.5f, true, O(ui::DIM2));
+  lx += 21.0f;
+  snprintf(buf, sizeof(buf), "%d/%d", v.stars, v.smax);
+  ui::text(h, lx, cy + 11.0f, HF_S13, mc, buf, 0.5f);
+  lx += hud_text_w(HF_S13, buf, 0.5f) + 14.0f;
+  snprintf(buf, sizeof(buf), tr("%d/%d mappe"), v.open, v.total);
+  ui::text(h, lx, cy + 11.0f, HF_S13, sub, buf, 0.5f);
+  lx += hud_text_w(HF_S13, buf, 0.5f) + 14.0f;
+  play_time(t, sizeof(t), v.seconds);
+  ui::text(h, lx, cy + 11.0f, HF_S13, sub, t, 0.5f);
+  // Il pianeta a destra.
+  if (v.world == 0) ui::earth(h, x + w - 40.0f, cy - 13.0f);
+  else ui::planet(h, x + w - 34.0f, cy - 7.5f, v.world);
+}
+
+// Finestra sopra i posti: titolo e una o due righe; con le voci (azioni) o "A si' / B no".
+void slots_popup(Hud* h) {
+  char buf[96];
+  ui::overlay(h, 0.5f);
+  const float W = 380.0f, X = 130.0f;
+  const int i = g.slots_sel;
+  if (g.slots_pop == SP_ACTIONS) {
+    const float Y = 150.0f, H = 168.0f;
+    ui::panel(h, X, Y, W, H, 16.0f, ui::SOLID, true);
+    snprintf(buf, sizeof(buf), tr("SALVATAGGIO %d"), i + 1);
+    ui::text(h, X + 22.0f, Y + 30.0f, HF_B22, O(ui::TX), buf, 3.0f);
+    ui::sep(h, X + 22.0f, Y + 56.0f, W - 44.0f);
+    static const char* const ACT[2] = { N_("DUPLICA"), N_("ELIMINA") };
+    static const char* const HINT[2] = { N_("una copia nel primo posto libero"), N_("lo cancella per sempre") };
+    for (int k = 0; k < 2; ++k) {
+      const float y = Y + 66.0f + 42.0f * (float)k;
+      const bool sel = k == g.slots_pop_sel;
+      if (sel) ui::bar_sel(h, X + 12.0f, y, W - 24.0f, 38.0f);
+      ui::text(h, X + 26.0f, y + 13.0f, HF_S16, O(sel ? ui::ON : (k == 1 ? ui::L2 : ui::TX)), tr(ACT[k]), 1.0f);
+      ui::text(h, X + 26.0f, y + 29.0f, HF_S12, O(sel ? ui::ON : ui::MU), tr(HINT[k]), 0.5f);
+    }
+    return;
+  }
+  const float Y = 170.0f, H = 128.0f;
+  ui::panel(h, X, Y, W, H, 16.0f, ui::SOLID, true);
+  char q[96], fitted[96];
+  snprintf(q, sizeof(q), g.slots_pop == SP_DELETE ? tr("ELIMINARE IL SALVATAGGIO %d?") : tr("SOVRASCRIVERE IL SALVATAGGIO %d?"), i + 1);
+  ui::fit(fitted, sizeof(fitted), q, HF_B16, 1.5f, W - 44.0f);
+  ui::text(h, 320.0f, Y + 32.0f, HF_B16, O(g.slots_pop == SP_DELETE ? ui::L2 : ui::TX), fitted, 1.5f, 0);
+  const SlotView& v = g_slot_view[i];
+  if (v.state == SAVE_LETTO) {
+    char wn[48], t[32];
+    hud_upper(wn, tr(WORLD_NAMES[v.world]), sizeof(wn));
+    play_time(t, sizeof(t), v.seconds);
+    snprintf(buf, sizeof(buf), tr("%s, giro %d: %d stelle, %s di gioco"), wn, v.giro, v.stars, t);
+    ui::fit(fitted, sizeof(fitted), buf, HF_S13, 0.5f, W - 44.0f);
+    ui::text(h, 320.0f, Y + 58.0f, HF_S13, O(ui::MU), fitted, 0.5f, 0);
+  }
+  // A si', B no (come le finestre per entrare).
+  const char* yes = tr("sì");
+  const char* no = tr("no");
+  const float ww = 22.0f + 7.0f + hud_text_w(HF_S14, yes, 0.5f) + 34.0f + 22.0f + 7.0f + hud_text_w(HF_S14, no, 0.5f);
+  float kx = 320.0f - ww * 0.5f;
+  kx += ui::key(h, kx, Y + 96.0f, "A") + 7.0f;
+  ui::text(h, kx, Y + 96.0f, HF_S14, O(ui::TX), yes, 0.5f);
+  kx += hud_text_w(HF_S14, yes, 0.5f) + 34.0f;
+  kx += ui::key(h, kx, Y + 96.0f, "B") + 7.0f;
+  ui::text(h, kx, Y + 96.0f, HF_S14, O(ui::TX), no, 0.5f);
+}
+
+void slots_hud(Hud* h) {
+  ui::scrim_top(h);
+  ui::scrim_bottom(h);
+  static const char* const TITLE[3] = { N_("CARICA SALVATAGGIO"), N_("GESTISCI SALVATAGGI"), N_("DOVE SALVARE?") };
+  char t[96];
+  ui::fit(t, sizeof(t), tr(TITLE[g.slots_mode]), HF_T32, 3.0f, 560.0f, "...");
+  ui::title(h, 320, 26, HF_T32, t, 3.0f);
+  float PY = 86.0f;
+  if (g.slots_mode == SL_OVERWRITE) {
+    ui::fit(t, sizeof(t), tr("i posti sono pieni: la partita nuova prende il posto di quella scelta"), HF_S14, 0.5f, 576.0f);
+    ui::text(h, 321, 79, HF_S14, A(ui::SCRIM, 0.9f), t, 0.5f, 0);
+    ui::text(h, 320, 78, HF_S14, O(ui::FTX), t, 0.5f, 0);
+    PY = 96.0f;
+  }
+  const float PX = 84.0f, PW = 472.0f, RH = 62.0f, GAP = 6.0f;
+  ui::panel(h, PX, PY, PW, 20.0f + RH * (float)SAVE_SLOTS + GAP * (float)(SAVE_SLOTS - 1));
+  for (int i = 0; i < SAVE_SLOTS; ++i) {
+    const float y = PY + 10.0f + (RH + GAP) * (float)i;
+    if (i > 0) ui::sep(h, PX + 24.0f, y - GAP * 0.5f, PW - 48.0f);
+    slot_row(h, PX + 10.0f, y, PW - 20.0f, RH, i, i == g.slots_sel);
+  }
+  if (g.slots_pop != SP_NONE) {
+    slots_popup(h);
+    return;
+  }
+  if (g_info_t > 0) {
+    toast(h, g_info, ui::L1);
+    ui::version(h);
+    return;
+  }
+  static const char* const ACT[3] = { N_("carica"), N_("scegli"), N_("sovrascrivi") };
+  const char* it[4] = { "A", tr(ACT[g.slots_mode]), "B", tr("indietro") };
+  ui::footer(h, it, 4);
+  ui::version(h);
+}
+
+void lang_hud(Hud* h) {
+  ui::scrim_top(h);
+  ui::scrim_bottom(h);
+  ui::title(h, 320, 26, HF_T32, tr("LINGUA"), 3.0f);
+  const float RH = 38.0f, PW = 300.0f, PX = 170.0f, PY = 82.0f, IX = PX + 10.0f, IW = PW - 20.0f;
+  ui::panel(h, PX, PY, PW, 16.0f + RH * (float)NLANGS);
+  for (int l = 0; l < NLANGS; ++l) {
+    const float y = PY + 8.0f + RH * (float)l, cy = y + RH * 0.5f;
+    const bool sel = l == g.lang_sel, cur = l == lang_get();
+    if (sel) ui::bar_sel(h, IX, y + 2.0f, IW, RH - 4.0f);
+    if (cur) hud_ellipse(h, IX + 16.0f, cy, 4.0f, 4.0f, O(sel ? ui::ON : ui::L1));
+    ui::text(h, IX + 32.0f, cy, HF_S16, O(sel ? ui::ON : ui::TX), lang_name(l), 1.0f);
+  }
+  const char* it[4] = { "A", tr("scegli"), "B", tr("indietro") };
+  ui::footer(h, it, 4);
+  ui::version(h);
 }
 
 // Scheda di Come si gioca: Insieme (i 4 eroi) o Contro (2 contro 2, in arrivo).
@@ -620,6 +991,8 @@ void menu_update(void) {
     case SC_CHARS: chars_update(); break;
     case SC_STATS: stats_update(); break;
     case SC_STORY: story_update(); break;
+    case SC_SLOTS: slots_update(); break;
+    case SC_LANG: lang_update(); break;
     default: break;
   }
 }
@@ -764,6 +1137,8 @@ void menu_build_hud(Hud* h, const Camera& cam) {
     case SC_CHARS: chars_hud(h); break;
     case SC_STATS: stats_hud(h); break;
     case SC_STORY: story_hud(h); break;
+    case SC_SLOTS: slots_hud(h); break;
+    case SC_LANG: lang_hud(h); break;
     default: break;
   }
 }

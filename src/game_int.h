@@ -106,7 +106,13 @@ enum ShotKind {
 };
 
 enum { PH_FIGHT = 0, PH_ENTER, PH_CLEAR, PH_MAP_DONE, PH_WIPE };
-enum { SC_TITLE = 0, SC_MODE, SC_MAPS, SC_CHARS, SC_PLAY, SC_STATS, SC_STORY };
+enum { SC_TITLE = 0, SC_MODE, SC_MAPS, SC_CHARS, SC_PLAY, SC_STATS, SC_STORY, SC_SLOTS, SC_LANG, NSCREENS };
+// Prima schermata (0.5.3): nuova partita, carica, gestisci i salvataggi, lingua, esci.
+enum { TI_NEW = 0, TI_LOAD, TI_MANAGE, TI_LANG, TI_QUIT, TITLE_ITEMS };
+// Schermata dei salvataggi: per caricarne uno, per gestirli (duplica, elimina) o, con la nuova partita
+// e i posti pieni, per scegliere quale sovrascrivere. Finestre sopra: azioni, conferma.
+enum { SL_LOAD = 0, SL_MANAGE, SL_OVERWRITE };
+enum { SP_NONE = 0, SP_ACTIONS, SP_DELETE, SP_OVERWRITE };
 // Voci della pausa: riprendi, comandi (0.5.2: apre il riquadro con i tasti), mira, antialias, musica,
 // effetti, lascia la partita, torna al menu.
 enum { PS_RESUME = 0, PS_CONTROLS, PS_AIM, PS_AA, PS_MUSIC, PS_SFX, PS_LEAVE, PS_MENU, PAUSE_ITEMS };
@@ -321,6 +327,8 @@ struct Game {
   int chars_t;
   int map_sel, map_shown, map_load_t;
   char map_note[120];
+  int slots_mode, slots_sel, slots_pop, slots_pop_sel;   // salvataggi (SL_*, posto col cursore, SP_*, voce della finestra)
+  int lang_sel;
   int pause_owner, pause_sel;
   bool paused;
   bool pause_help;            // nella pausa e' aperto il riquadro dei comandi

@@ -48,6 +48,9 @@ const char* game_aim_name(int player);
 void game_set_aa_available(bool avail);
 void game_set_aa_on(bool on);                       // come la voce della pausa (all'avvio e' acceso)
 bool game_aa_wanted(void);
+// Schermo: con l'HDMI (TV) la visuale va da 22 a 30 m, sullo schermo della console da 15 a 30. Il
+// core lo legge dal sistema (all'avvio e' come con l'HDMI). Cambia solo l'inquadratura, non la partita.
+void game_set_hdmi(bool on);
 // Chiamata dal core subito dopo save_open (retro_load_game): il gioco prende le impostazioni dal salvataggio (save.h).
 void game_save_loaded(void);
 // Carte (dalla 0.4): all'avvio attive; spente il gioco va esattamente come prima (prove).

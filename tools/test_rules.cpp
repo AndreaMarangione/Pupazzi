@@ -103,6 +103,12 @@ static int boss_map(void) {
   return -1;
 }
 
+// Come nel gioco: le impostazioni, poi la partita 1 (caricata o, se non c'e', nuova).
+static void open_game(const char* dir) {
+  save_open(dir);
+  if (!save_slot_load(0)) save_slot_new(0);
+}
+
 static bool file_has(const char* path, const char* what) {
   static char buf[32768];
   FILE* f = fopen(path, "rb");
@@ -168,7 +174,7 @@ int main(int argc, char** argv) {
 
   printf("1) da soli: una caduta costa una vita e si rifa' la zona\n");
   {
-    save_open(save_dir("uno"));
+    open_game(save_dir("uno"));
     fresh(0, 1, "0");
     Player& p = g.pl[0];
     check(p.lives == START_LIVES && !p.out, "si parte con 3 vite");
@@ -218,7 +224,7 @@ int main(int argc, char** argv) {
 
   printf("3) terza stella: da soli si puo' cadere, basta non finire le vite\n");
   {
-    save_open(save_dir("tre"));
+    open_game(save_dir("tre"));
     fresh(0, 1, "0");
     kill_player(0);
     step(WIPE_ZONE_FRAMES);
@@ -237,7 +243,7 @@ int main(int argc, char** argv) {
 
   printf("4) VITA EXTRA: una vita in piu' subito\n");
   {
-    save_open(save_dir("quattro"));
+    open_game(save_dir("quattro"));
     game_set_cards_enabled(true);
     game_init();
     memset(g_pads, 0, sizeof(g_pads));
@@ -267,7 +273,7 @@ int main(int argc, char** argv) {
 
   printf("5) in piu' giocatori: si rientra dopo 5 secondi accanto a un compagno\n");
   {
-    save_open(save_dir("cinque"));
+    open_game(save_dir("cinque"));
     fresh(0, 2, "01");
     Player& a = g.pl[0];
     Player& b = g.pl[1];
@@ -338,7 +344,7 @@ int main(int argc, char** argv) {
 
   printf("8) in piu' giocatori, a terra tutti insieme anche con vite: mappa da capo\n");
   {
-    save_open(save_dir("otto"));
+    open_game(save_dir("otto"));
     fresh(0, 3, "012");
     enter_next();
     kill_player(0);
@@ -353,7 +359,7 @@ int main(int argc, char** argv) {
 
   printf("9) chi esce e rientra nella stessa mappa ha le vite che aveva\n");
   {
-    save_open(save_dir("nove"));
+    open_game(save_dir("nove"));
     fresh(0, 2, "01");
     Player& b = g.pl[1];
     kill_player(1);
@@ -401,7 +407,7 @@ int main(int argc, char** argv) {
 
   printf("9b) chi esce e rientra: VITA EXTRA non si riprende, le statistiche restano\n");
   {
-    save_open(save_dir("noveb"));
+    open_game(save_dir("noveb"));
     fresh(0, 2, "01");
     Player& b = g.pl[1];
     b.cards |= 1u << CA_VITA;          // presa all'inizio della mappa
@@ -425,7 +431,7 @@ int main(int argc, char** argv) {
 
   printf("9c) boss battuto mentre cade l'ultimo giocatore: la mappa e' vinta\n");
   {
-    save_open(save_dir("novec"));
+    open_game(save_dir("novec"));
     const int bm = boss_map();
     fresh(bm, 1, "3");
     g.spawn_wait = 0;
@@ -461,7 +467,7 @@ int main(int argc, char** argv) {
   printf("10) giri: dopo il boss con almeno 10 stelle si apre il giro dopo\n");
   {
     const char* dir = save_dir("dieci");
-    save_open(dir);
+    open_game(dir);
     const int bm = boss_map();
     check(bm >= 0 && world_maps(WORLD_TERRA) == 4 && world_giro(WORLD_TERRA) == 1, "la Terra ha 4 mappe, giro 1");
     save_set_stars(maps_id(0), 7);
@@ -476,7 +482,7 @@ int main(int argc, char** argv) {
               world_stars(WORLD_TERRA) == 0,
           buf);
     char path[256], key[64];
-    snprintf(path, sizeof(path), "%s/pupazzi.sav", dir);
+    snprintf(path, sizeof(path), "%s/partita1.sav", dir);
     snprintf(key, sizeof(key), "\nstelle.%s=0\n", maps_id(0));
     check(file_has(path, "\ngiro.terra=2\n") && file_has(path, key) && file_has(path, "\nmappe.luna=1\n"),
           "salvato: giro.terra=2, stelle da zero, la Luna aperta");
@@ -514,7 +520,7 @@ int main(int argc, char** argv) {
   printf("11) giri: con meno di 10 stelle no (e l'esploratore salvato alla fine puo' fare la decima)\n");
   {
     const char* dir = save_dir("undici");
-    save_open(dir);
+    open_game(dir);
     const int bm = boss_map();
     save_set_stars(maps_id(0), 7);
     save_set_stars(maps_id(1), 3);
@@ -542,15 +548,16 @@ int main(int argc, char** argv) {
   printf("12) mappe aperte per pianeta; il salvataggio della 0.4 ricomincia dalla prima mappa\n");
   {
     const char* dir = save_dir("dodici");
-    char path[256];
-    snprintf(path, sizeof(path), "%s/pupazzi.sav", dir);
-    FILE* f = fopen(path, "wb");
+    char path[256], old[256];
+    snprintf(path, sizeof(path), "%s/partita1.sav", dir);
+    snprintf(old, sizeof(old), "%s/pupazzi.sav", dir);       // il file della 0.4: diventa la partita 1
+    FILE* f = fopen(old, "wb");
     if (f) {
       fputs("versione=1\nmappe_sbloccate=4\nstoria_vista=1\nstelle.prateria1=7\nstelle.prateria2=7\nstelle.prateria3=7\n"
             "stelle.prateria_boss=7\n", f);
       fclose(f);
     }
-    save_open(dir);
+    open_game(dir);
     game_init();
     bool ok = map_unlocked(0) && world_giro(WORLD_TERRA) == 1;
     for (int i = 1; i < maps_count(); ++i) ok &= !map_unlocked(i);
@@ -601,7 +608,7 @@ int main(int argc, char** argv) {
     uint64_t h[2] = { 0, 0 };
     int deaths[2] = { 0, 0 };
     for (int run = 0; run < 2; ++run) {
-      save_open(save_dir(run ? "q2" : "q1"));
+      open_game(save_dir(run ? "q2" : "q1"));
       game_set_cards_enabled(true);
       game_init();
       game_quick_start(0, 2, "03");
@@ -627,7 +634,7 @@ int main(int argc, char** argv) {
 
   if (g_shots) {
     printf("15) schermate dell'HUD\n");
-    save_open(save_dir("immagini"));
+    open_game(save_dir("immagini"));
     fresh(0, 1, "0");
     step(30);
     shot("hud_1_giocatore");

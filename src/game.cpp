@@ -1,6 +1,7 @@
 // Flusso del gioco: schermate, campagna, mappe, zone, ondate, cancelli, vite e mappe da capo,
 // stelle e giri dei pianeti, telecamera.
 #include "game_int.h"
+#include "lang.h"
 #include "maps.h"
 #include "plat.h"
 #include "save.h"
@@ -16,7 +17,11 @@ namespace {
 bool g_inited, g_quit;
 bool g_settings_dirty;        // impostazioni della pausa da salvare
 const float PITCH_PLAY = 0.98f, PITCH_MENU = 0.5f;
-const float CAM_DIST_MIN = 22.0f, CAM_DIST_MAX = 30.0f;   // in partita (0.5: 15 e 30; 0.3.2-0.4: 15 e 21; fino alla 0.3.1: 11 e 17)
+// In partita: da CAM_DIST_MIN (gruppo vicino) a CAM_DIST_MAX (gruppo largo); senza HDMI, sullo schermo
+// piccolo della console, si parte piu' vicino (0.5.3). Prima: 0.5.1-0.5.2 da 22 a 30 per tutti; 0.5 da 15
+// a 30; 0.3.2-0.4 da 15 a 21; fino alla 0.3.1 da 11 a 17.
+const float CAM_DIST_MIN = 22.0f, CAM_DIST_MIN_LCD = 15.0f, CAM_DIST_MAX = 30.0f;
+bool g_hdmi = true;
 // Terreno inquadrato dalla telecamera di gioco a distanza d (inclinazione 0,98, campo 0,87 in
 // game_draw.cpp, schermo 4:3), in metri per metro di distanza: verso nord (in alto) fino a 0,81 d
 // dal punto inquadrato, verso sud 0,425 d; di lato, s metri a sud del punto inquadrato (s
@@ -627,7 +632,8 @@ void update_camera(bool snap) {
     Vec3 c = v3(0, 0, 0);
     for (int i = 0; i < 4; ++i) c = c + g.L.zones[0].start[i] * 0.25f;
     want = v3(c.x, 0.85f, c.z + 0.2f);
-    dist = g.screen == SC_CHARS ? 5.6f : 6.6f;
+    if (g.screen == SC_TITLE) want.x -= 1.8f;       // 0.5.3: gli eroi a sinistra, le voci a destra
+    dist = g.screen == SC_CHARS ? 5.6f : (g.screen == SC_TITLE ? 7.4f : 6.6f);
     pitch = g.screen == SC_CHARS ? 0.36f : PITCH_MENU;
     back = true;
     if (g.screen == SC_STATS) {
@@ -694,7 +700,7 @@ void update_camera(bool snap) {
         cz = cz0 + 0.5f * (float)k;
       }
     }
-    dist = clampf(dist, CAM_DIST_MIN, CAM_DIST_MAX);
+    dist = clampf(dist, g_hdmi ? CAM_DIST_MIN : CAM_DIST_MIN_LCD, CAM_DIST_MAX);
     // Ai bordi della zona ci si ferma mostrando poco oltre, a ogni distanza, ma chi gioca resta
     // nell'inquadratura: prima nord-sud (se il punto fermato al bordo lascerebbe fuori qualcuno,
     // si torna verso quello voluto quanto basta), poi di lato con la riga in cui si trova ognuno.
@@ -809,6 +815,12 @@ static void settings_save(void) {
 void game_update(const Pad pads[MAX_PLAYERS]) {
   g.ui_tick++;
   g.screen_t++;
+  // Tempo di gioco della partita attiva (fuori dalla prima schermata e dalle sue pagine).
+  static int s_frames;
+  if (save_slot() >= 0 && g.screen != SC_TITLE && g.screen != SC_SLOTS && g.screen != SC_LANG && ++s_frames >= 60) {
+    s_frames = 0;
+    save_data()->seconds++;
+  }
   update_pad_states(pads);
   if (g.screen == SC_PLAY) {
     play_update(pads);
@@ -842,19 +854,29 @@ void game_start_tap(int player) {
 }
 
 bool game_paused(void) { return g.screen == SC_PLAY && g.paused; }
+
+void game_set_hdmi(bool on) {
+  if (on == g_hdmi) return;
+  g_hdmi = on;
+  plat_log("schermo: %s, visuale da %.0f a %.0f m", on ? "HDMI (TV)" : "della console", (double)(on ? CAM_DIST_MIN : CAM_DIST_MIN_LCD),
+           (double)CAM_DIST_MAX);
+}
 void game_set_aa_available(bool avail) { g.aa_avail = avail; }
 void game_set_aa_on(bool on) { g.aa_on = on; }
 bool game_aa_wanted(void) { return g.aa_avail && g.aa_on; }
 void game_save_loaded(void) {
-  // Impostazioni salvate: mira di ogni posto, antialias, volumi.
+  // Impostazioni salvate: mira di ogni posto, antialias, volumi, lingua.
   const SaveData* sd = save_data();
   for (int i = 0; i < MAX_PLAYERS && i < SAVE_PLAYERS; ++i)
     if (sd->aim[i] < NAIMLEVELS) g.aim_level[i] = sd->aim[i];
   g.aa_on = sd->antialias;
   audio_set_volume(sd->music_vol, sd->sfx_vol);
+  lang_set(sd->lang);
   g_settings_dirty = false;
   // Prove: la partita veloce (giocatori automatici, PUPAZZI_MAPPA) comincia prima che il core legga
-  // il salvataggio; se il pianeta e' a un altro giro la mappa riparte con quello.
+  // il salvataggio e gioca nella partita 1 (se non c'e' la crea); se il pianeta e' a un altro giro
+  // la mappa riparte con quello.
+  if (g.screen == SC_PLAY && g.tick == 0 && save_slot() < 0 && !save_slot_load(0)) save_slot_new(0);
   if (g.screen == SC_PLAY && g.tick == 0 && g.loop != world_giro(maps_world(g.map_idx)) - 1) {
     plat_log("salvataggio letto: %s e' al giro %d, la mappa di prova riparte", WORLD_NAMES[maps_world(g.map_idx)],
              world_giro(maps_world(g.map_idx)));

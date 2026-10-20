@@ -82,6 +82,8 @@ void toggle(Hud* h, float x, float cy, bool on);
 // Pianeta piccolo (15 pixel) del pianeta w (WORLD_NAMES), dall'angolo in alto a sinistra; la Terra (26).
 void planet(Hud* h, float x, float y, int w, float a = 1.0f);
 void earth(Hud* h, float x, float y);
+// Mappamondo (15 pixel) centrato su cx, cy: la voce Lingua.
+void globe(Hud* h, float cx, float cy, uint32_t color);
 // Freccetta > (8 x 12) e < .
 void chev(Hud* h, float x, float y, bool right, uint32_t color);
 

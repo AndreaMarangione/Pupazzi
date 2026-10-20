@@ -86,7 +86,50 @@ static struct {
   RenderStats st;
   unsigned frame;
   char out_dir[256];
+  int hdmi_force;             // PUPAZZI_HDMI=0/1 (prove): schermo fisso; -1 si legge dal sistema
+  int hdmi_src;               // da dove: 0 niente (si resta come con l'HDMI), 1 extcon, 2 switch
 } A;
+
+// HDMI collegato? Lo stesso file che legge il RetroArch della console ("HDMI=1"); su altri kernel
+// /sys/class/switch/hdmi/state ("1"). Se non c'e' nessuno dei due (PC) si resta come con l'HDMI.
+static int hdmi_read(int* src) {
+  char buf[64];
+  FILE* f = fopen("/sys/class/extcon/hdmi/state", "r");
+  if (f) {
+    const size_t n = fread(buf, 1, sizeof(buf) - 1, f);
+    fclose(f);
+    buf[n] = 0;
+    const char* p = strstr(buf, "HDMI=");
+    if (p) {
+      *src = 1;
+      return p[5] == '1' ? 1 : 0;
+    }
+  }
+  f = fopen("/sys/class/switch/hdmi/state", "r");
+  if (f) {
+    const int c = fgetc(f);
+    fclose(f);
+    if (c == '0' || c == '1') {
+      *src = 2;
+      return c == '1' ? 1 : 0;
+    }
+  }
+  *src = 0;
+  return -1;
+}
+
+static void hdmi_poll(bool first) {
+  int on = A.hdmi_force;
+  int src = 3;
+  if (on < 0) on = hdmi_read(&src);
+  if (first) {
+    static const char* const SRC[4] = { "nessun file dell'HDMI (si gioca come con la TV)", "/sys/class/extcon/hdmi/state",
+                                        "/sys/class/switch/hdmi/state", "PUPAZZI_HDMI" };
+    plat_log("HDMI: %s, da %s", on < 0 ? "non si sa" : (on ? "collegato" : "staccato"), SRC[src]);
+    A.hdmi_src = src;
+  }
+  if (on >= 0) game_set_hdmi(on != 0);
+}
 
 static void log_sink(const char* line) {
   if (log_cb) log_cb(RETRO_LOG_INFO, "[pupazzi] %s\n", line);
@@ -677,6 +720,9 @@ RETRO_API void retro_init(void) {
   const char* hud = getenv("PUPAZZI_HUD");
   A.hud_off = hud && *hud == '0';
   A.hud_fixed = hud && !strcmp(hud, "fisso");
+  A.hdmi_force = env_int("PUPAZZI_HDMI", -1);
+  if (A.hdmi_force > 1) A.hdmi_force = 1;
+  hdmi_poll(true);
   A.bots = env_int("PUPAZZI_BOT", 0);
   if (A.bots < 0) A.bots = 0;
   if (A.bots > MAX_PLAYERS) A.bots = MAX_PLAYERS;
@@ -849,6 +895,7 @@ RETRO_API void retro_run(void) {
   }
 
   read_input();
+  if (A.frame % 60 == 59 && A.hdmi_force < 0 && A.hdmi_src != 0) hdmi_poll(false);   // ogni secondo: si puo' staccare in partita
   if (A.bots) game_bot_pads(A.pads, A.bots);
   handle_controls();
   if (A.use_gl && !A.gl_ready && ++A.gl_wait == 600) {
@@ -914,7 +961,9 @@ RETRO_API void retro_run(void) {
   if (A.frame % STAT_PERIOD == 0) {
     GameInfo gi;
     game_info(&gi);
-    static const char* const SCREEN[7] = { "titolo", "modalita'", "mappe", "personaggi", "partita", "fine mappa", "storia" };
+    static const char* const SCREEN[] = { "titolo", "modalita'", "mappe", "personaggi", "partita", "fine mappa", "storia",
+                                          "salvataggi", "lingua" };
+    const int NSCREEN = (int)(sizeof(SCREEN) / sizeof(SCREEN[0]));
     AudioStats as;
     audio_get_stats(&as);
     audio_clear_stats();
@@ -926,7 +975,7 @@ RETRO_API void retro_run(void) {
     plat_log("stato: f=%u fps %.1f, frame %.1f (max %.1f) | core %.2f = sim %.2f + disegno %.2f | audio %.2f (voci %d, scartate %u) | RA %.2f | tri %d/%d%s | %s, mappa %d (giro %d) zona %d mostri %d giocatori %d/%d vite %s%s",
              A.frame, (double)A.fps, (double)A.frame_avg, (double)A.frame_max, (double)A.e_core, (double)A.e_sim, (double)(A.e_geo + A.e_ras),
              (double)A.e_audio, as.voices_peak, as.dropped, (double)A.e_video, st.tris_drawn, st.tris_in, A.use_gl && game_aa_wanted() ? " aa" : "",
-             SCREEN[gi.screen < 7 && gi.screen >= 0 ? gi.screen : 0], gi.map, gi.loop, gi.zone, gi.enemies, gi.alive, gi.players, lives,
+             SCREEN[gi.screen < NSCREEN && gi.screen >= 0 ? gi.screen : 0], gi.map, gi.loop, gi.zone, gi.enemies, gi.alive, gi.players, lives,
              game_paused() ? " (pausa)" : "");
   }
 }

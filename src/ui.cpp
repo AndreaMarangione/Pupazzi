@@ -302,6 +302,13 @@ void earth(Hud* h, float x, float y) {
   hud_icon(h, HI_EARTH_RING, x, y, A(L1, 0.7f));
 }
 
+void globe(Hud* h, float cx, float cy, uint32_t color) {
+  const uint32_t c = (color >> 24) ? color : O(color);
+  hud_ring(h, cx, cy, 7.5f, 7.5f, 1.5f, c);
+  hud_ring(h, cx, cy, 3.2f, 7.5f, 1.3f, c);
+  hud_box(h, cx - 7.0f, cy - 0.65f, 14.0f, 1.3f, 0.0f, c);
+}
+
 void chev(Hud* h, float x, float y, bool right, uint32_t color) {
   hud_icon(h, right ? HI_CHEV_R : HI_CHEV_L, x, y, (color >> 24) ? color : O(color));
 }

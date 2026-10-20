@@ -29,6 +29,12 @@ static Pad g_pads[MAX_PLAYERS];
 static char g_base[64] = "/tmp/pupazzi_test_maps_XXXXXX";
 static uint32_t g_seed = 0;          // secondo argomento: altre partite a caso
 
+// Come nel gioco: le impostazioni, poi la partita 1 (caricata o, se non c'e', nuova).
+static void open_game(const char* dir) {
+  save_open(dir);
+  if (!save_slot_load(0)) save_slot_new(0);
+}
+
 static void check(bool ok, const char* what) {
   printf("%s %s\n", ok ? "  ok    " : "  ERRORE", what);
   if (!ok) g_fail++;
@@ -871,7 +877,7 @@ int main(int argc, char** argv) {
     printf("mkdtemp non riuscita\n");
     return 1;
   }
-  save_open(g_base);
+  open_game(g_base);
   game_set_cards_enabled(false);
   test_static();
   test_fuzz(per_zone);

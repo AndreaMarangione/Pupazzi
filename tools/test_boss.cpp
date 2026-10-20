@@ -31,6 +31,12 @@ static char buf[512];
 static int g_trace;                     // --traccia N: nelle lotte una riga ogni N fotogrammi
 static const char* g_only;              // --solo PERSONAGGI: solo le lotte con questi personaggi (e salta le prove)
 
+// Come nel gioco: le impostazioni, poi la partita 1 (caricata o, se non c'e', nuova).
+static void open_game(const char* dir) {
+  save_open(dir);
+  if (!save_slot_load(0)) save_slot_new(0);
+}
+
 static void check(bool ok, const char* what) {
   printf("%s %s\n", ok ? "  ok    " : "  ERRORE", what);
   if (!ok) g_fail++;
@@ -550,7 +556,7 @@ static void test_determinism(void) {
   printf("9) la stessa lotta due volte: la stessa partita fotogramma per fotogramma\n");
   uint64_t h[2], e[2];
   for (int run = 0; run < 2; ++run) {
-    save_open(save_dir(run ? "det2" : "det1"));
+    open_game(save_dir(run ? "det2" : "det1"));
     game_set_cards_enabled(true);
     h[run] = bot_run(3, "023", 5000, 0, &e[run]);
   }
@@ -625,7 +631,7 @@ static void fights(int per, int lag) {
   for (const Group& gr : G) {
     if (g_only && strcmp(g_only, gr.chars)) continue;
     for (int k = 0; k < per; ++k) {
-      save_open(save_dir("lotte"));
+      open_game(save_dir("lotte"));
       const Fight r = fight(gr.n, gr.chars, gr.limit, 17 * k);
       printf("  %d giocatori (%s), prova %d: %s in %d fotogrammi (%.1f minuti), cadute %d, zone rifatte %d, mappe da capo %d, colpi presi %d;"
              " fendenti %d, cariche %d (stordito %d), spaccaterra %d, giavellotti %d%s\n",
@@ -755,7 +761,7 @@ int main(int argc, char** argv) {
     printf("mkdtemp non riuscita\n");
     return 1;
   }
-  save_open(save_dir("prove"));
+  open_game(save_dir("prove"));
   game_set_cards_enabled(false);
   game_init();
   if (boss_map() < 0) {

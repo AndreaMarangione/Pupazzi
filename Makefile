@@ -12,7 +12,7 @@
 
 SRC := src/core.cpp src/game.cpp src/game_draw.cpp src/player.cpp src/combat.cpp src/monsters.cpp \
        src/flow.cpp src/menu.cpp src/bot.cpp src/cards.cpp src/level.cpp src/level_mesh.cpp src/maps.cpp src/models.cpp \
-       src/swr.cpp src/glr.cpp src/hud.cpp src/ui.cpp src/mesh.cpp src/plat.cpp src/save.cpp src/audio.cpp
+       src/swr.cpp src/glr.cpp src/hud.cpp src/ui.cpp src/lang.cpp src/mesh.cpp src/plat.cpp src/save.cpp src/audio.cpp
 HDR := $(wildcard src/*.h)
 # Mappe della campagna, in ordine: incorporate nel core e copiate nella cartella mappe/ della console.
 MAPS := maps/terra1.txt maps/terra2.txt maps/terra3.txt maps/terra_boss.txt
