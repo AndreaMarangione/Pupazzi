@@ -12,8 +12,8 @@ Ciò che è indicato come *prototipo* è il comportamento della versione 0.2.0, 
 console l'11/10/2026; *0.3*, *0.4* indicano come quella versione realizza una voce (valori da
 provare sulla console e da confermare).
 
-Ultimo aggiornamento: 19/10/2026 (interfaccia nuova in tutte le schermate: stile Orbita con i colori
-Tramonto, scelti sui mockup; pausa con la voce Comandi; via alla 0.5.2).
+Ultimo aggiornamento: 20/10/2026 (dopo la prova della 0.5.2: salvataggi, lingue, gioco in rete con
+ognuno il suo schermo, visuale vicina senza HDMI; si comincia al via di Andrea).
 
 ## 1. Il gioco in breve
 
@@ -85,6 +85,20 @@ Tramonto, scelti sui mockup; pausa con la voce Comandi; via alla 0.5.2).
     quelli arrivati a ogni fotogramma (RetroArch non le apre più): niente ritardo, e sulle altre
     console non cambia nulla. Resta il limite dei messaggi persi (raro in casa), coperto dai 30
     secondi qui sopra.
+- [deciso 20/10] **Gioco in rete, ognuno con il suo schermo**: oltre alla TV con le console-controller
+  (che resta), ogni console fa girare il gioco e lo mostra sul suo schermo, **con la telecamera
+  centrata sul proprio eroe**.
+  - [proposta] Voce GIOCO IN RETE: una console crea la partita, le altre (fino a 4 in tutto) la
+    trovano da sole nella stessa Wi-Fi e si uniscono; tutte con la stessa versione del gioco (lo
+    controlla il gioco). Un giocatore per console, menu come ora, ognuno col suo pad; i progressi si
+    salvano sulla console che ha creato la partita.
+  - [proposta] Tra le console passano solo i tasti: il gioco fa la stessa partita su ogni console
+    (verificato a ogni versione su ARM a 32 e 64 bit e sul PC). Comandi con circa 50 ms di ritardo
+    per assorbire gli scatti della Wi-Fi; se una console si scollega il suo eroe esce e gli altri
+    continuano.
+  - [proposta] Con una telecamera per eroe, in rete niente limite di distanza tra i giocatori (i
+    cancelli tengono comunque tutti nella stessa zona); ai bordi dello schermo una freccia nel colore
+    di ogni compagno fuori vista. Ogni console usa la sua visuale (capitolo 4).
 - [deciso 17/10] **Vite in più giocatori**: ognuno ha 3 vite per mappa; chi cade rientra dopo 5
   secondi accanto a un compagno e perde una vita; finite le vite non rientra più. Se cadono tutti
   nello stesso momento (anche con vite rimaste) la mappa ricomincia da capo. Da soli: capitolo 4.
@@ -144,6 +158,12 @@ Tramonto, scelti sui mockup; pausa con la voce Comandi; via alla 0.5.2).
     disegnano con meno dettaglio se la console ne ha bisogno.
   - [deciso 18/10, dopo la prova della 0.5] Con i personaggi vicini (anche da soli) la visuale è
     troppo vicina: la distanza minima si allontana. *0.5.1*: da 22 a 30 m.
+  - [deciso 20/10] Sullo schermo della console (HDMI staccato) la visuale è troppo lontana: senza
+    HDMI vicina, con l'HDMI come ora.
+    - [proposta] Il gioco legge da solo se l'HDMI è collegato (`/sys/class/extcon/hdmi/state`, lo
+      stesso file del RetroArch della console) e cambia anche a partita in corso. Senza HDMI da 15
+      m con il gruppo vicino fino a 30 m con il gruppo largo (il limite tra i personaggi resta
+      31×21 m); con l'HDMI da 22 a 30 m.
 - **Mira** [deciso 13/10]: si mira con la levetta destra, come in Brawl Stars; niente mira
   automatica (cambia la decisione dell'11/10).
   - [proposta] Levetta destra inclinata: il personaggio si gira e spara in quella direzione; a
@@ -561,6 +581,15 @@ triangoli a 60 fps fissi; con la visuale larga della 0.3.2 se ne inquadrano circ
     Contro) compaiono al posto del piede. Scelta degli eroi: sopra le teste due righe con chi è,
     colpo (R1) e speciale (L1). Carte e fine mappa nello stesso stile, dentro il margine; in pausa e
     durante le carte la riga in alto della partita si nasconde.
+- [deciso 20/10] **Prima schermata**: NUOVA PARTITA, CARICA SALVATAGGIO, GESTISCI SALVATAGGI (una
+  schermata a parte per duplicare ed eliminare i salvataggi), LINGUA; resta ESCI. Salvataggi nel
+  capitolo 12.
+- [deciso 20/10] **Lingua**: dalla prima schermata una pagina per scegliere tra inglese, italiano,
+  spagnolo, portoghese (del Portogallo), cinese (semplificato), giapponese e hindi.
+  - [proposta] Ogni lingua scritta nella sua lingua (English, Italiano, Español, Português, 中文,
+    日本語, हिन्दी); cambia subito tutto il gioco e resta salvata nella console. Traduzioni di Claude,
+    di tutti i testi (menu, storia, carte, messaggi); caratteri Noto Sans (licenza libera) per
+    cinese, giapponese e hindi, solo quelli che servono.
 - [deciso 17/10] Icone dei giocatori in alto a sinistra (capitolo 2) e giro sempre in vista
   (capitolo 8).
   - [proposta, fatta nella 0.5] La riga in alto (pianeta, mappa, giro, zona, mostri; nell'arena la vita
@@ -608,6 +637,13 @@ triangoli a 60 fps fissi; con la visuale larga della 0.3.2 se ne inquadrano circ
   file senza niente di valido si tiene da parte come `pupazzi.sav.illeggibile`.
 - Provato il 15–16/10: `/mnt/mmc/saves_RA/Pupazzi/pupazzi.sav`, creato al primo avvio e riletto a
   ogni avvio dopo.
+- [deciso 20/10] **Più salvataggi**: si crea una partita nuova, si carica un salvataggio, e in una
+  schermata a parte si duplicano e si eliminano quelli che ci sono.
+  - [proposta] 4 salvataggi. Per ognuno: pianeta e giro, stelle, mappe aperte, tempo di gioco.
+    Nuova partita nel primo posto libero (se sono pieni chiede quale sovrascrivere); Carica con
+    l'elenco (voce grigia se non ce n'è nessuno); Duplica nel primo posto libero, Elimina con la
+    conferma. Nel salvataggio solo la partita: lingua, volumi, mira e antialias restano unici per
+    la console. Il salvataggio di oggi diventa il numero 1.
 - [proposta, fatta nella 0.5] Per ogni pianeta il giro raggiunto e le stelle del giro in corso; le stelle
   e le mappe della prateria (0.4) non valgono più per la Terra.
 - *0.5*: chiavi nuove `giro.<pianeta>` e `mappe.<pianeta>` (mappe aperte in ordine), `stelle.<mappa>`
@@ -640,7 +676,9 @@ Il gioco completo si consegna a tappe; ognuna si prova sulla console prima della
 | 0.4.1 | zone con compiti diversi e mini-boss; scenette col Burattinaio; Fungo e Girasole giocabili, liberati dall'albero gigante; livelli che sbloccano carte; bonus; cappelli e difficoltà Incubo — superata il 17/10: compiti nelle zone, mini-boss, livelli e bonus dopo la Terra, il resto non c'è più |
 | 0.5 | [deciso 17/10] tema del sistema solare: la Terra (Piramidi, Machu Picchu, Grande Muraglia, Colosseo) e i 4 eroi iniziali al posto di prateria e pupazzi; visuale più larga con il limite tra i personaggi uguale alla visuale; vite; icone dei giocatori; stelle che aprono i giri di ogni pianeta; mappe due terzi più grandi e meno pixellate; comandi delle altre console senza ritardo — consegnata il 17/10, da provare |
 | 0.5.1 | [deciso 18/10] visuale minima più lontana; mappe tutte giocabili senza acqua attraversabile, paesaggio ridotto; gladiatore che insegue e combatte; Chichén Itzá con i cenote al posto di Machu Picchu; scorpione e arciere di terracotta al posto di sciacallo e lama — consegnata il 18/10 |
-| 0.5.2 | [deciso 19/10] interfaccia nuova (stile Orbita, colori Tramonto) in tutte le schermate e nell'HUD; pausa con la voce COMANDI; mappe al centro |
+| 0.5.2 | [deciso 19/10] interfaccia nuova (stile Orbita, colori Tramonto) in tutte le schermate e nell'HUD; pausa con la voce COMANDI; mappe al centro — consegnata il 19/10, provata il 20/10 ("molto bella") |
+| 0.5.3 | [deciso 20/10] visuale vicina senza HDMI; più salvataggi (nuova, carica, gestisci: duplica ed elimina); 7 lingue |
+| 0.5.4 | [deciso 20/10] gioco in rete con ognuno il suo schermo e la telecamera sul proprio eroe |
 | 0.6 e dopo | un pianeta per versione, nell'ordine del viaggio: Luna, Marte, Venere, Mercurio, Giove, Saturno, Urano, Nettuno; compiti nelle zone, mini-boss, livelli e bonus; modalità Contro |
 | dopo | app per le console-controller; gioco via internet (da valutare) |
 
@@ -720,3 +758,10 @@ Il gioco completo si consegna a tappe; ognuna si prova sulla console prima della
   pausa senza l'elenco dei tasti, che si leggono da una voce del menu in un riquadro; Scegli la
   mappa con il riquadro al centro. Il pianeta Terra va bene per ora. Dai 4 mockup scelto lo stile
   Orbita, dalle 4 varianti di colore Tramonto. Via alla 0.5.2.
+- **20/10/2026**, dopo la prova della 0.5.2 ("è molto bella"): si aggiunge sostanza. Più salvataggi
+  (prima schermata con nuova partita, carica salvataggio, gestisci salvataggi per duplicarli ed
+  eliminarli); lingua da scegliere nella prima schermata tra inglese, italiano, spagnolo,
+  portoghese del Portogallo, cinese semplificato, giapponese e hindi; gioco in rete con ognuno il
+  suo schermo e la telecamera centrata sul proprio eroe; visuale vicina quando si gioca sullo
+  schermo della console, come ora con l'HDMI. Ordine proposto: 0.5.3 visuale, salvataggi e lingue;
+  0.5.4 gioco in rete. Si comincia al via.
