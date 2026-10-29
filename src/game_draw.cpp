@@ -229,6 +229,33 @@ void push_player(int i) {
     push(&M.ring_big[i], scaled(xf_mul(xf_translate(c), xf_rot_x(D_HALF_PI - g.cam_pitch)), k, k, k));
     push(&M.ring_big[i], scaled(xf_mul(at(c + v3(0, -0.15f, 0), (float)g.ui_tick * 0.04f), xf_rot_x(0.35f)), k * 1.05f, k, k * 1.05f));
   }
+  // Bonus delle casse (0.5.4): anello del colore del bonus ai piedi; VELOCITA' lascia una scia azzurra,
+  // FURIA ha le fiamme sulle mani, INVINCIBILE una bolla d'oro. Negli ultimi 2 secondi lampeggiano.
+  for (int k = 0; k < NPW_TIMED; ++k) {
+    const int t = p.pw_t[k];
+    if (t <= 0 || (t < PW_WARN && ((g.ui_tick >> 3) & 1u))) continue;
+    const float pulse = 0.85f + 0.08f * d_sin((float)g.ui_tick * 0.25f + (float)k);
+    push(&M.pw_ring[k], xf_mul(xf_translate(v3(p.pos.x, gy + 0.01f * (float)k, p.pos.z)), xf_scale(pulse, 1.0f, pulse)));
+    if (k == PW_SPEED) {
+      const float v = sqrtf(p.vx * p.vx + p.vz * p.vz);
+      if (v > 0.5f)
+        for (int j = 1; j <= 3; ++j) {
+          const Vec3 q = p.pos + v3(-p.vx / v * 0.35f * (float)j, 0.35f, -p.vz / v * 0.35f * (float)j);
+          const float s = 1.1f - 0.25f * (float)j;
+          push(&M.glow[PC_ENERGY], scaled(at(q, 0.0f), s, s * 0.7f, s));
+        }
+    } else if (k == PW_FURY) {
+      for (int h = 0; h < 2; ++h) {
+        const float s = 1.0f + 0.3f * d_sin((float)g.ui_tick * 1.3f + (float)h * 2.1f);
+        push(&M.glow[PC_FIRE], scaled(at(tip[h], 0.0f), s, s, s));
+      }
+    } else {
+      const float s = 1.12f + 0.05f * d_sin((float)g.ui_tick * 0.2f);
+      const Vec3 cc = v3(p.pos.x, p.pos.y + 0.7f, p.pos.z);
+      push(&M.pw_ring[k], scaled(xf_mul(xf_translate(cc), xf_rot_x(D_HALF_PI - g.cam_pitch)), s, s, s));
+      push(&M.pw_ring[k], scaled(xf_mul(at(cc + v3(0, -0.15f, 0), (float)g.ui_tick * 0.05f), xf_rot_x(0.35f)), s * 1.05f, s, s * 1.05f));
+    }
+  }
   if (p.aiming && !p.frozen) push_aim(i);
   if (p.blizzard_t > 0) {
     const float r = CHARS[CH_MARZIO].sp_range;
@@ -921,6 +948,19 @@ void push_world(void) {
       const float s = pop * (1.0f + 0.25f * (1.0f - pop));
       push(&M.talisman, scaled(at(c.x, mi.y + 0.75f + 0.12f * d_sin(ph) + 0.6f * (1.0f - pop), c.z, (float)g.ui_tick * 0.05f), s, s, s));
       push(&M.talisman_glow, xf_mul(xf_translate(v3(c.x, mi.y, c.z)), xf_scale(1.0f + 0.15f * d_sin(ph * 2.0f), 1.0f, 1.0f + 0.15f * d_sin(ph * 2.0f))));
+    } else if (mi.kind == IT_POWER) {
+      // Bonus delle casse (0.5.4): la moneta salta fuori dalla cassa rotta, poi ondeggia girata verso
+      // la telecamera (dall'alto una moneta dritta si vedrebbe di taglio).
+      const int k = g.item_pw[it] < NPOWERS ? g.item_pw[it] : 0;
+      const float ph = (float)g.ui_tick * 0.07f + (float)it * 1.3f;
+      const float u = clampf((float)g.item_t[it] / 20.0f, 0.0f, 1.0f);       // salto: in 20 fotogrammi
+      const float y = mi.y + 0.85f + 0.1f * d_sin(ph) + 1.2f * u * (1.0f - u) * 2.0f;
+      const float s = (0.4f + 0.6f * u) * 1.35f;
+      const Xform face = xf_mul(xf_rot_x(-g.cam_pitch), xf_rot_y(0.5f * d_sin(ph * 0.8f)));
+      push(&M.pw_coin[k], scaled(xf_mul(xf_translate(v3(c.x, y, c.z)), face), s, s, s));
+      const float r = 0.62f + 0.06f * d_sin(ph * 2.0f);
+      push(&M.pw_ring[k], xf_mul(xf_translate(v3(c.x, mi.y, c.z)), xf_scale(r, 1.0f, r)));
+      push(shadow(0), xf_translate(v3(c.x, mi.y, c.z)));
     } else {
       push(&M.bomb, at(c.x, mi.y, c.z, 0.6f));
       push(shadow(0), xf_translate(v3(c.x, mi.y, c.z)));
@@ -1308,6 +1348,23 @@ float player_icons(Hud* h) {
       if (blink(10)) {
         hud_box(h, x + CARD - 21.0f, HY + 1.0f, 20.0f, 16.0f, 3.0f, A(0x101418, 0.85f));
         hud_icon(h, HI_WIFI, x + CARD - 20.0f, HY + 2.0f, O(0xFF4A3A));
+      }
+    }
+    // Bonus delle casse (0.5.4): sotto i cuori il disegno di ogni bonus in corso e quanto ne resta
+    // (negli ultimi 2 secondi lampeggia).
+    int nb = 0;
+    for (int k = 0; k < NPW_TIMED; ++k) nb += p.pw_t[k] > 0;
+    if (nb > 0 && p.alive) {
+      float px = x + CARD * 0.5f - (16.0f * (float)nb - 2.0f) * 0.5f;
+      for (int k = 0; k < NPW_TIMED; ++k) {
+        const int t = p.pw_t[k];
+        if (t <= 0) continue;
+        const bool off = t < PW_WARN && ((g.ui_tick >> 3) & 1u);
+        hud_icon(h, HI_PW0 + k, px + 1.0f, HY + CARD + 19.0f, A(ui::SCRIM, 0.9f));
+        hud_icon(h, HI_PW0 + k, px, HY + CARD + 18.0f, off ? A(PW_RGB[k], 0.35f) : O(PW_RGB[k]));
+        hud_rect(h, px, HY + CARD + 34.0f, 14.0f, 2.0f, 0x101418);
+        hud_rect(h, px, HY + CARD + 34.0f, 14.0f * clampf((float)t / (float)PW_FRAMES[k], 0.0f, 1.0f), 2.0f, PW_RGB[k]);
+        px += 16.0f;
       }
     }
     // Vite: cuori pieni per quelle rimaste, vuoti per quelle perse (3, o 4 con VITA EXTRA).

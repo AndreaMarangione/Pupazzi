@@ -28,7 +28,7 @@
 # solo i caratteri dei testi segnati cosi' in lang/testi.txt.
 #
 # Disegni: cuori, X, le facce dei 4 eroi in 3 strati, stelle, freccette, la Terra e i pianeti, la
-# rete e le frecce verso i compagni (0.5.4), a ogni misura che serve; il gioco li colora
+# rete, le frecce verso i compagni e i bonus delle casse (0.5.4), a ogni misura che serve; il gioco li colora
 # disegnandoli uno sopra l'altro.
 #
 # Nel file generato: per ogni carattere e disegno la posizione nell'atlante (largo 2048, alto
@@ -323,6 +323,24 @@ def g_arrow(k):
     return f
 
 
+# Bonus delle casse (0.5.4, riquadro 14): >> VELOCITA', fiamma FURIA, scudo INVINCIBILE, fulmine CARICA
+# (come sulle monete del gioco, vedi build_powers in models.cpp).
+def g_power(k):
+    def f(d, P):
+        if k == 0:
+            for j in range(2):
+                x = 0.16 + 0.36 * j
+                stroke(d, P, [(x, 0.16), (x + 0.3, 0.5), (x, 0.84)], 0.17)
+        elif k == 1:
+            d.polygon([P(0.5, 0.02), P(0.78, 0.42), P(0.86, 0.66), P(0.74, 0.88), P(0.5, 0.98), P(0.26, 0.88), P(0.14, 0.66), P(0.22, 0.42)],
+                      fill=255)
+        elif k == 2:
+            d.polygon([P(0.12, 0.08), P(0.88, 0.08), P(0.88, 0.5), P(0.7, 0.78), P(0.5, 0.96), P(0.3, 0.78), P(0.12, 0.5)], fill=255)
+        else:
+            d.polygon([P(0.64, 0.02), P(0.2, 0.56), P(0.47, 0.56), P(0.34, 0.98), P(0.82, 0.4), P(0.54, 0.4)], fill=255)
+    return f
+
+
 # La Terra (riquadro 26): mare, terre, anello sottile.
 def earth_sea(d, P):
     circle(d, P, 0.5, 0.5, 11.0 / 26.0)
@@ -395,6 +413,7 @@ ICONS = [("HEART", g_heart, 12, 12), ("HEART_EMPTY", g_heart_empty, 12, 12), ("C
          ("PL_STREAK", pl_streak, 15, 15), ("PL_BANDS", pl_bands, 15, 15), ("SAT_BODY", sat_body, 19, 15), ("SAT_RING", sat_ring, 19, 15),
          ("WIFI", g_wifi, 18, 14)]
 ICONS += [("ARW%d" % k, g_arrow(k), 20, 20) for k in range(8)]
+ICONS += [("PW%d" % k, g_power(k), 14, 14) for k in range(4)]
 for px in (20, 24, 30, 40):
     for k, fn in enumerate(FACE_LAYERS):
         ICONS.append(("FACE%d_%d" % (px, k), fn, px, px))

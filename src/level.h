@@ -39,7 +39,7 @@ enum CellType {
   C_ROCK,       // 'o'  masso, rovina, colonna spezzata
   C_LOW,        // '='  muretto basso: si scavalca saltando, i colpi passano
   C_CRATE,      // 'c'  blocco da 1 m: ci si sale saltando
-  C_BREAK,      // 'x'  anfora o cassa che si rompe a colpi ('X' con un talismano dentro, 'p' capsula con l'esploratore)
+  C_BREAK,      // 'x'  anfora o cassa che si rompe a colpi, con un bonus dentro (0.5.4); 'X' con un talismano, 'p' capsula con l'esploratore
   C_BUSH,       // '*'  cespuglio: nasconde i giocatori
   C_GRASS,      // '"'  erba alta, papiri, bambu': nasconde tutti
   C_WATER,      // '~'  acqua: non si attraversa, nemmeno saltando; i colpi passano (chi vola ci passa sopra)
@@ -61,7 +61,9 @@ enum { WORLD_TERRA = 0, WORLD_LUNA, WORLD_MARTE, WORLD_VENERE, WORLD_MERCURIO, W
 // resta quello della 0.5 (game.cpp sceglie la musica per indice): Chichen Itza (0.5.1) ha preso
 // il posto di Machu Picchu.
 enum { STYLE_PIRAMIDI = 0, STYLE_CHICHENITZA, STYLE_MURAGLIA, STYLE_COLOSSEO, NSTYLES };
-enum { IT_TALISMAN = 0, IT_BOMB = 1 };
+// Oggetti della mappa: talismano (cura), bomba da raccogliere, bonus nascosto in una cassa 'x' (0.5.4:
+// quale si decide quando la cassa si rompe, vedi PW_* in game_int.h).
+enum { IT_TALISMAN = 0, IT_BOMB = 1, IT_POWER = 2 };
 // Mostri che le mappe possono chiamare nelle ondate e boss delle arene (Terra). Dalla 0.5.1 il
 // corridore (MO_SCORPIONE) e' lo scorpione e il tiratore (MO_ARCIERE) l'arciere di terracotta.
 enum { MO_SCORPIONE = 0, MO_ARCIERE, MO_SCARABEO, MO_GUERRIERO, MO_NTYPES };
@@ -106,7 +108,7 @@ struct Gate {
 struct MapItem {
   uint8_t kind, zone;
   int16_t cx, cz;
-  int16_t crate;                       // talismano dentro una cassa: indice in dyn[], altrimenti -1
+  int16_t crate;                       // talismano o bonus dentro una cassa: indice in dyn[], altrimenti -1
   float y;                             // quota del piano su cui sta
 };
 struct DynCell { uint8_t type, zone, capsule; int16_t cx, cz; float hp; };  // hp: casse che si rompono; capsule 1: capsula dell'esploratore 'p'

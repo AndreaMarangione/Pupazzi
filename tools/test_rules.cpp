@@ -1,7 +1,7 @@
 // Prove delle regole (0.5): vite (da soli: zona rifatta, finite le vite mappa da capo; in piu'
 // giocatori rientro dopo 5 secondi, senza vite fuori, tutti a terra insieme mappa da capo), chi
 // esce e rientra, VITA EXTRA, terza stella, giri dei pianeti aperti con le stelle, difficolta' del
-// giro, mappe aperte per pianeta e salvataggio della 0.4. Usa il gioco senza frontend (come
+// giro, mappe aperte per pianeta e salvataggio della 0.4; dalla 0.5.4 i bonus delle casse. Usa il gioco senza frontend (come
 // test_aim) e un salvataggio in una cartella temporanea.
 //   make build/native/test_rules && ./build/native/test_rules [--immagini CARTELLA]
 // Con --immagini scrive anche le schermate dell'HUD (PPM a 640x480, renderer software): icone
@@ -645,6 +645,154 @@ int main(int argc, char** argv) {
     check(h[0] == h[1] && deaths[0] == deaths[1] && deaths[0] >= 1, buf);
   }
 
+  printf("14b) bonus delle casse (0.5.4): VELOCITA', FURIA, INVINCIBILE, CARICA\n");
+  {
+    open_game(save_dir("bonus"));
+    // Ogni cassa 'x' dentro le zone ha un bonus; le casse con il talismano e la capsula no.
+    for (int m = 0; m < maps_count(); ++m) {
+      fresh(m, 1, "0");
+      int crates = 0, powers = 0, wrong = 0;
+      for (int d = 0; d < g.L.ndyn; ++d) {
+        const DynCell& dc = g.L.dyn[d];
+        if (dc.type != C_BREAK || dc.capsule || g.L.zone[dc.cz][dc.cx] < 0) continue;
+        int tal = 0, pw = 0;
+        for (int it = 0; it < g.L.nitems; ++it)
+          if (g.L.items[it].crate == d) (g.L.items[it].kind == IT_POWER ? pw : tal)++;
+        if (tal) continue;
+        crates++;
+        powers += pw;
+        wrong += pw != 1;
+      }
+      snprintf(buf, sizeof(buf), "%s: %d casse vuote, %d bonus dentro", maps_id(m), crates, powers);
+      check(crates > 0 && powers == crates && wrong == 0, buf);
+    }
+    // Rompere le casse: il bonus salta fuori, a caso tra i quattro (con le proporzioni giuste).
+    fresh(0, 1, "0");
+    int seen[NPOWERS] = { 0, 0, 0, 0 }, total = 0;
+    for (int round = 0; round < 60; ++round) {
+      items_reset(-1);
+      level_reset_dynamic(&g.L, -1);
+      for (int it = 0; it < g.L.nitems; ++it) {
+        const MapItem& mi = g.L.items[it];
+        if (mi.kind != IT_POWER) continue;
+        crate_damage(mi.crate, 1000.0f, v3(0, 0, 0));
+        if (g.item_on[it] && g.item_pw[it] < NPOWERS) {
+          seen[g.item_pw[it]]++;
+          total++;
+        }
+      }
+    }
+    snprintf(buf, sizeof(buf), "%d casse rotte: VELOCITA' %d, FURIA %d, INVINCIBILE %d, CARICA %d", total, seen[0], seen[1], seen[2], seen[3]);
+    check(total >= 400 && seen[0] > total / 5 && seen[1] > total / 6 && seen[2] > total / 8 && seen[3] > total / 6 && seen[0] < total / 2, buf);
+
+    // Il bonus si prende passandoci sopra (dopo il salto fuori dalla cassa).
+    auto first_power = [&](int pw) {
+      fresh(0, 2, "01");
+      for (int it = 0; it < g.L.nitems; ++it) {
+        const MapItem& mi = g.L.items[it];
+        if (mi.kind != IT_POWER || mi.zone != 0) continue;
+        crate_damage(mi.crate, 1000.0f, v3(0, 0, 0));
+        g.item_pw[it] = (uint8_t)pw;
+        return it;
+      }
+      return -1;
+    };
+    for (int pw = 0; pw < NPOWERS; ++pw) {
+      const int it = first_power(pw);
+      const MapItem& mi = g.L.items[it];
+      g.pl[0].pos = cell_center(&g.L, mi.cx, mi.cz);
+      step(1);
+      const bool early = g.item_on[it];
+      step(25);
+      const Player& p = g.pl[0];
+      const bool got = !g.item_on[it] && (pw == PW_CHARGE ? p.charge >= pl_special_cost(p) : p.pw_t[pw] > PW_FRAMES[pw] - 30);
+      snprintf(buf, sizeof(buf), "%s: non subito (salta fuori), poi preso da chi ci passa", PW_NAME[pw]);
+      check(early && got, buf);
+    }
+    // CARICA con lo speciale gia' pronto resta per gli altri.
+    {
+      const int it = first_power(PW_CHARGE);
+      const MapItem& mi = g.L.items[it];
+      g.pl[0].charge = pl_special_cost(g.pl[0]);
+      g.pl[0].pos = cell_center(&g.L, mi.cx, mi.cz);
+      step(30);
+      const bool stays = g.item_on[it];
+      g.pl[1].pos = g.pl[0].pos;
+      step(2);
+      check(stays && !g.item_on[it] && g.pl[1].charge >= pl_special_cost(g.pl[1]), "CARICA: chi ha gia' lo speciale pronto la lascia, la prende un compagno");
+    }
+    // VELOCITA': si corre il 40% in piu'.
+    {
+      float dist[2];
+      for (int k = 0; k < 2; ++k) {
+        fresh(0, 1, "0");
+        g.pl[0].pw_t[PW_SPEED] = k ? PW_FRAMES[PW_SPEED] : 0;
+        const Vec3 a = g.pl[0].pos;
+        g_pads[0].ly = -1.0f;
+        step(40);
+        g_pads[0].ly = 0.0f;
+        dist[k] = dist2d(a, g.pl[0].pos);
+      }
+      snprintf(buf, sizeof(buf), "VELOCITA': in 40 fotogrammi %.2f m invece di %.2f (x%.2f)", (double)dist[1], (double)dist[0], (double)(dist[1] / dist[0]));
+      check(dist[1] > dist[0] * 1.3f && dist[1] < dist[0] * 1.5f, buf);
+    }
+    // FURIA: danni doppi; INVINCIBILE: nessun danno, finche' dura.
+    {
+      fresh(0, 1, "0");
+      monster_spawn(MO_SCORPIONE, false, 0);
+      int k = -1;
+      for (int m = 0; m < MAX_MONSTERS; ++m)
+        if (g.mo[m].alive) k = m;
+      const float hp0 = g.mo[k].hp;
+      damage_monster(k, 10.0f, 0, v3(1, 0, 0), 0.0f, true);
+      const float d1 = hp0 - g.mo[k].hp;
+      g.pl[0].pw_t[PW_FURY] = PW_FRAMES[PW_FURY];
+      damage_monster(k, 10.0f, 0, v3(1, 0, 0), 0.0f, true);
+      const float d2 = hp0 - d1 - g.mo[k].hp;
+      snprintf(buf, sizeof(buf), "FURIA: un colpo da 10 toglie %.0f (senza: %.0f)", (double)d2, (double)d1);
+      check(d1 == 10.0f && d2 == 20.0f, buf);
+      Player& p = g.pl[0];
+      p.invuln = 0;
+      p.pw_t[PW_INVINCIBLE] = 5;
+      const float h0 = p.hp;
+      hurt_player(0, 30.0f, p.pos + v3(1, 0, 0), 5.0f);
+      const bool none = p.hp == h0;
+      step(6);
+      hurt_player(0, 30.0f, p.pos + v3(1, 0, 0), 0.0f);
+      check(none && p.pw_t[PW_INVINCIBLE] == 0 && p.hp == h0 - 30.0f, "INVINCIBILE: niente danni finche' dura, poi di nuovo");
+    }
+    // Il tempo dei bonus si ferma in pausa; cadendo i bonus finiscono; contano nell'impronta.
+    {
+      fresh(0, 2, "01");
+      g.pl[0].pw_t[PW_FURY] = 100;
+      g.paused = true;
+      step(30);
+      const int still = g.pl[0].pw_t[PW_FURY];
+      g.paused = false;
+      step(30);
+      const int after = g.pl[0].pw_t[PW_FURY];
+      const uint64_t h0 = game_state_hash();
+      g.pl[0].pw_t[PW_SPEED] = 7;
+      const uint64_t h1 = game_state_hash();
+      kill_player(0);
+      snprintf(buf, sizeof(buf), "in pausa resta %d, poi %d; a terra niente bonus; impronta diversa", still, after);
+      check(still == 100 && after == 70 && h1 != h0 && g.pl[0].pw_t[PW_FURY] == 0 && g.pl[0].pw_t[PW_SPEED] == 0, buf);
+    }
+    // Zona rifatta (da soli): le casse tornano intere, con il bonus di nuovo dentro.
+    {
+      fresh(0, 1, "0");
+      int it = -1;
+      for (int k = 0; k < g.L.nitems; ++k)
+        if (g.L.items[k].kind == IT_POWER && g.L.items[k].zone == 0) { it = k; break; }
+      const int d = g.L.items[it].crate;
+      crate_damage(d, 1000.0f, v3(0, 0, 0));
+      const bool out = g.item_on[it] && g.L.dyn[d].hp <= 0.0f;
+      kill_player(0);
+      for (int k = 0; k < WIPE_ZONE_FRAMES + 10 && g.phase == PH_WIPE; ++k) step();
+      check(out && !g.item_on[it] && g.L.dyn[d].hp > 0.0f, "zona rifatta: la cassa torna intera con il bonus dentro");
+    }
+  }
+
   if (g_shots) {
     printf("15) schermate dell'HUD\n");
     open_game(save_dir("immagini"));
@@ -661,6 +809,21 @@ int main(int argc, char** argv) {
     kill_player(1);
     step(110);
     shot("hud_4_giocatori");
+    // Bonus (0.5.4): due bonus in corso su G1 (uno quasi finito), uno su G4; monete fuori dalle casse.
+    fresh(0, 4, "0123");
+    g.pl[0].pw_t[PW_SPEED] = 500;
+    g.pl[0].pw_t[PW_FURY] = 90;
+    g.pl[3].pw_t[PW_INVINCIBLE] = 300;
+    {
+      int n = 0;
+      for (int it = 0; it < g.L.nitems && n < 4; ++it)
+        if (g.L.items[it].kind == IT_POWER && g.L.items[it].zone == 0) {
+          crate_damage(g.L.items[it].crate, 1000.0f, v3(0, 0, 0));
+          g.item_pw[it] = (uint8_t)(n++);
+        }
+    }
+    step(40);
+    shot("hud_bonus");
 
     // Telecamera con il gruppo sparso nella zona 1 (ai bordi deve vedersi poco oltre la zona).
     printf("16) telecamera\n");

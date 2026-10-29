@@ -90,6 +90,9 @@ struct Models {
   // Colpi (guardano verso +Z).
   Mesh bullet, rocket, rocket_fire, shard, frost, frost_mist, lava, arrow, javelin;
   Mesh talisman, talisman_glow, bomb, bomb_spark;
+  // Bonus delle casse (0.5.4, PW_* in game_int.h): moneta che gira con il disegno del bonus sulle due
+  // facce (centro nell'origine, facce verso +-Z) e anello a terra (da 0,62 a 0,74 m: si scala).
+  Mesh pw_coin[4], pw_ring[4];
   Mesh shadow[4];        // piccola, media, grande, boss (sul prato)
   Mesh shadow_tone[2][4];  // le stesse ombre su sabbia e su pietra (il disegno sceglie dal terreno della mappa)
   Mesh ring[4], ring_big[4];
@@ -110,6 +113,7 @@ struct Models {
 extern Models M;
 extern const uint32_t PLAYER_RGB[NSETS];
 extern const uint32_t PARTICLE_RGB[NPCOL];
+extern const uint32_t PW_RGB[4];       // colori dei bonus: azzurro (VELOCITA'), rosso (FURIA), oro (INVINCIBILE), viola (CARICA)
 
 void models_build(void);
 void models_free(void);

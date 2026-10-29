@@ -39,6 +39,15 @@ const int WIPE_ZONE_FRAMES = 150, WIPE_MAP_FRAMES = 180;   // dopo "a terra": zo
 // del giro in corso si apre il giro dopo, piu' difficile, e le stelle ripartono da zero.
 const int GIRO_STARS = 10;
 const float SPAN_X = 31.0f, SPAN_Z = 21.0f;   // quanto si possono allontanare i giocatori: quanto inquadra la telecamera a 30 m (17/10)
+// Bonus nelle casse 'x' (0.5.4, deciso con Andrea il 29/10): rompendo una cassa ne salta fuori uno a
+// caso, e lo prende chi ci passa sopra. VELOCITA' (+40% per 10 s), FURIA (danni doppi per 10 s),
+// INVINCIBILE (niente danni per 6 s; non SCUDO, che e' una carta), CARICA (speciale subito pronto).
+enum { PW_SPEED = 0, PW_FURY, PW_INVINCIBLE, PW_CHARGE, NPOWERS };
+const int NPW_TIMED = 3;                      // i primi tre durano (Player::pw_t); CARICA e' subito
+const int PW_FRAMES[NPW_TIMED] = { 600, 600, 360 };
+const float PW_SPEED_K = 1.4f, PW_FURY_K = 2.0f;
+const int PW_WARN = 120;                      // gli ultimi 2 secondi il bonus lampeggia
+extern const char* const PW_NAME[NPOWERS];    // "VELOCITA'!"... (N_, per add_float_text)
 const int FROZEN_FRAMES = 30 * 60;            // controller fermo sullo stesso stato: il personaggio si ferma
 
 enum { AIM_LINE = 0, AIM_FAN, AIM_LOB, AIM_AREA };
@@ -173,6 +182,8 @@ struct Player {
   // Vite della mappa in corso.
   int lives;                  // vite rimaste (cadere ne toglie una)
   bool out;                   // senza vite: a terra fino alla fine della mappa (o finche' non ricomincia)
+  // Bonus delle casse (0.5.4): fotogrammi che restano di VELOCITA', FURIA, INVINCIBILE (0: niente).
+  int pw_t[NPW_TIMED];
 };
 
 struct Monster {
@@ -292,7 +303,7 @@ struct Marker {
 };
 
 // Numeri dei danni e delle cure: i colpi ravvicinati sullo stesso bersaglio si sommano.
-struct FloatText { bool alive; int life, key, value; uint32_t rgb; Vec3 pos; char txt[10]; };
+struct FloatText { bool alive; int life, key, value; uint32_t rgb; Vec3 pos; char txt[16]; };
 
 // Tasti del giocatore per i menu: nav e' la direzione appena scelta (0 nessuna, 1 su, 2 giu',
 // 3 sinistra, 4 destra), con la ripetizione automatica tenendo premuto.
@@ -370,6 +381,7 @@ struct Game {
   Marker mk[MAX_MARKERS];
   bool item_on[LV_MAX_ITEMS];
   int item_t[LV_MAX_ITEMS];
+  uint8_t item_pw[LV_MAX_ITEMS];  // bonus uscito da quella cassa (PW_*), deciso quando si rompe
   float squash[LV_MAX_DYN];     // cespugli ed erba schiacciati da chi ci passa
   int crate_hit[LV_MAX_DYN];    // casse appena colpite (traballano)
   int tramp_t[LV_MAX_DYN];      // trampolini appena usati
@@ -428,7 +440,10 @@ extern Game g;
 static inline bool has_card(const Player& p, int c) { return ((p.cards >> c) & 1u) != 0u; }
 // Valori del personaggio con le carte: li usano il gioco, il disegno (mira, barre) e i giocatori
 // automatici. Senza la carta restano esattamente quelli di CHARS.
-static inline float pl_speed(const Player& p) { return has_card(p, CA_PASSO) ? CHARS[p.ch].speed * 1.15f : CHARS[p.ch].speed; }
+static inline float pl_speed(const Player& p) {
+  const float s = has_card(p, CA_PASSO) ? CHARS[p.ch].speed * 1.15f : CHARS[p.ch].speed;
+  return p.pw_t[PW_SPEED] > 0 ? s * PW_SPEED_K : s;   // VELOCITA' (bonus delle casse)
+}
 static inline float pl_range(const Player& p) { return has_card(p, CA_GITTATA) ? CHARS[p.ch].range * 1.25f : CHARS[p.ch].range; }
 static inline float pl_special_cost(const Player& p) {
   return has_card(p, CA_SUPER) ? CHARS[p.ch].special_cost * 0.65f : CHARS[p.ch].special_cost;
@@ -523,10 +538,11 @@ void bombs_update(void);
 void items_reset(int zone);   // zona < 0: tutta la mappa
 void items_update(void);
 void crate_damage(int d, float dmg, Vec3 from);
+bool power_take(int player, int pw);   // bonus PW_* al giocatore (false: CARICA che non gli serve)
 void burst(Vec3 p, int n, int col, float speed);
 void puff(Vec3 p, int kind, int col, Vec3 vel, float size, int life);
 void add_float(Vec3 p, uint32_t rgb, int key, int value, char sign);
-void add_float_text(Vec3 p, uint32_t rgb, const char* txt);   // scritta che sale (al massimo 9 caratteri)
+void add_float_text(Vec3 p, uint32_t rgb, const char* txt);   // scritta che sale (al massimo 15 byte: il testo italiano, tradotto nel disegno)
 void explorer_update(void);   // l'esploratore chiama aiuto; poi, salvato, festeggia e se ne va
 void explorer_rescue(Vec3 c); // capsula aperta: stella dell'esploratore
 void add_shake(float a);

@@ -7,6 +7,7 @@
 
 Models M;
 const uint32_t PLAYER_RGB[NSETS] = { 0xE8463C, 0x3C82E8, 0x3FC04A, 0xF2C230, 0x8A8E94 };
+const uint32_t PW_RGB[4] = { 0x3FD8FF, 0xFF4A3A, 0xFFC83C, 0xB06CFF };
 const uint32_t PARTICLE_RGB[NPCOL] = { 0xE8463C, 0x3C82E8, 0x3FC04A, 0xF2C230, 0xFFFFFF, 0xFFD23C, 0x4CD964, 0x9A9EA4,
                                        0xB57A45, 0xF0D060, 0xEAF6FF, 0xFF7A1F, 0x2A2630, 0x5DBF4F, 0xE04040, 0x8A6A4A,
                                        0xD5EFA2, 0xE8892A, 0xC67C4E, 0x22B8A0, 0xF7EED9, 0xE6C68A, 0xA89A88, 0xD9A040,
@@ -1358,6 +1359,73 @@ const uint32_t CP_WHITE = 0xF1F3F7, CP_ORANGE = 0xFF7F2A, CP_DARK = 0x4A505C, CP
 const float CP_RIM_Y = 0.62f, CP_RIM_R = 0.36f;
 
 // Scafo a scodella con la parete di dentro, pavimento, fascia arancio, zampette.
+// Bonus delle casse (0.5.4): moneta dal bordo scuro con il disegno bianco del bonus, in rilievo sulle
+// due facce (dietro specchiato, cosi' girando si legge sempre uguale). Disegni fatti di pezzi convessi:
+// >> per VELOCITA', una fiamma per FURIA, uno scudo per INVINCIBILE, un fulmine per CARICA.
+// Barra da (ax, ay) a (bx, by) larga 2t, sulla faccia tra z0 e z1 (sx: -1 la faccia di dietro).
+void coin_bar(float ax, float ay, float bx, float by, float t, float z0, float z1, float sx, uint32_t col) {
+  const float dx = bx - ax, dy = by - ay, l = sqrtf(dx * dx + dy * dy), nx = -dy / l * t, ny = dx / l * t;
+  float p[4][2] = { { ax + nx, ay + ny }, { bx + nx, by + ny }, { bx - nx, by - ny }, { ax - nx, ay - ny } };
+  for (int k = 0; k < 4; ++k) p[k][0] *= sx;
+  if (sx < 0.0f) {                       // giro al contrario: il poligono resta nel verso giusto
+    float q[4][2];
+    for (int k = 0; k < 4; ++k) { q[k][0] = p[3 - k][0]; q[k][1] = p[3 - k][1]; }
+    prism(q, 4, z0, z1, xf_identity(), col);
+  } else {
+    prism(p, 4, z0, z1, xf_identity(), col);
+  }
+}
+
+void coin_poly(const float (*p)[2], int n, float z0, float z1, uint32_t col) { prism(p, n, z0, z1, xf_identity(), col); }
+
+void build_powers(void) {
+  const float R = 0.26f, T = 0.09f;
+  for (int k = 0; k < 4; ++k) {
+    const uint32_t c = PW_RGB[k], dark = rgb_mix(c, 0x101018, 0.45f);
+    const uint32_t ink = k == 2 ? 0x5A3410 : 0xFFFFFF;    // disegno bianco, sull'oro marrone scuro
+    begin();
+    cyl(v3(0, 0, -0.5f * T), v3(0, 0, 1), R, R, T, dark, 16);
+    cyl(v3(0, 0, -0.5f * T - 0.006f), v3(0, 0, 1), R * 0.8f, R * 0.8f, T + 0.012f, c, 16);
+    outline(0.025f);
+    const float zf = 0.5f * T + 0.004f, ze = zf + 0.02f;
+    for (int face = 0; face < 2; ++face) {
+      const float sx = face ? -1.0f : 1.0f, z0 = face ? -ze : zf, z1 = face ? -zf : ze;
+      switch (k) {
+        case 0:                            // VELOCITA': >>
+          for (int j = 0; j < 2; ++j) {
+            const float x = -0.075f + 0.09f * (float)j;
+            coin_bar(x - 0.035f, 0.1f, x + 0.04f, 0.0f, 0.026f, z0, z1, sx, ink);
+            coin_bar(x + 0.04f, 0.0f, x - 0.035f, -0.1f, 0.026f, z0, z1, sx, ink);
+          }
+          break;
+        case 1: {                          // FURIA: fiamma (bianca, il cuore giallo)
+          static const float F[8][2] = { { 0.0f, 0.14f }, { 0.065f, 0.03f }, { 0.085f, -0.04f }, { 0.055f, -0.105f },
+                                         { 0.0f, -0.125f }, { -0.055f, -0.105f }, { -0.085f, -0.04f }, { -0.065f, 0.03f } };
+          static const float G[6][2] = { { 0.0f, 0.04f }, { 0.04f, -0.04f }, { 0.03f, -0.085f }, { -0.03f, -0.085f }, { -0.04f, -0.04f },
+                                         { 0.0f, 0.04f } };
+          coin_poly(F, 8, z0, z1, ink);
+          coin_poly(G, 5, face ? z0 - 0.008f : z0 + 0.008f, face ? z1 - 0.008f : z1 + 0.008f, 0xFFE45C);
+          break;
+        }
+        case 2: {                          // INVINCIBILE: scudo
+          static const float S[7][2] = { { -0.085f, 0.115f }, { 0.085f, 0.115f }, { 0.085f, 0.0f }, { 0.05f, -0.08f }, { 0.0f, -0.125f },
+                                         { -0.05f, -0.08f }, { -0.085f, 0.0f } };
+          coin_poly(S, 7, z0, z1, ink);
+          break;
+        }
+        default:                           // CARICA: fulmine
+          coin_bar(0.05f, 0.13f, -0.025f, 0.005f, 0.026f, z0, z1, sx, ink);
+          coin_bar(-0.035f, 0.005f, 0.035f, 0.005f, 0.024f, z0, z1, sx, ink);
+          coin_bar(0.025f, 0.005f, -0.05f, -0.13f, 0.026f, z0, z1, sx, ink);
+          break;
+      }
+    }
+    skip_outline();
+    M.pw_coin[k] = end();
+    M.pw_ring[k] = flat_ring(0.62f, 0.74f, 20, c);
+  }
+}
+
 void pod_hull(void) {
   const Vec3 c = v3(0, 0.42f, 0), r = v3(0.43f, 0.36f, 0.43f);
   shell(c, r, 12, 6, v3(0, 1, 0), 0.55f, CP_WHITE, false);
@@ -1529,6 +1597,7 @@ void models_build(void) {
   build_boss();
   build_shots();
   build_items();
+  build_powers();
   build_capsule();
   build_capsule_open();
   build_explorer();
@@ -1559,6 +1628,8 @@ void models_free(void) {
     mesh_free(&M.ring_big[i]);
     mesh_free(&M.aim_dash[i]);
     mesh_free(&M.aim_ring[i]);
+    mesh_free(&M.pw_coin[i]);
+    mesh_free(&M.pw_ring[i]);
   }
   for (int i = 0; i < NPCOL; ++i) {
     mesh_free(&M.cube[i]);

@@ -478,7 +478,7 @@ bool level_parse(Level* L, const char* text, char* err, int errlen) {
         nboss++;
         L->boss_pos = cell_center(L, cx, cz);
       }
-      if (ch == '+' || ch == 'b' || ch == 'm' || ch == 'X' || ch == 'Q') {
+      if (ch == '+' || ch == 'b' || ch == 'm' || ch == 'X' || ch == 'Q' || ch == 'x') {
         pend[npend].ch = ch;
         pend[npend].cx = (int16_t)cx;
         pend[npend].cz = (int16_t)cz;
@@ -697,9 +697,14 @@ bool level_parse(Level* L, const char* text, char* err, int errlen) {
   if (!check_leaks(L, grid, grid_line, start_c[0], err, errlen)) return false;
 
   // --- oggetti, comparse ---
+  // Due giri: prima talismani, bombe e comparse dei mostri, poi i bonus nelle casse 'x' (0.5.4), che
+  // prendono i posti che restano (una cassa fuori dalle zone, o una di troppo, resta vuota).
+  for (int pass = 0; pass < 2; ++pass)
   for (int i = 0; i < npend; ++i) {
     const Pending& pd = pend[i];
     const int k = L->zone[pd.cz][pd.cx];
+    if ((pd.ch == 'x') != (pass == 1)) continue;
+    if (pd.ch == 'x' && (k < 0 || L->nitems >= LV_MAX_ITEMS)) continue;
     if (k < 0) {
       fail(err, errlen, "riga %d, colonna %d: '%c' fuori dalle zone raggiungibili", grid_line[pd.cz], pd.cx + 1, pd.ch);
       return false;
@@ -718,11 +723,11 @@ bool level_parse(Level* L, const char* text, char* err, int errlen) {
       return false;
     }
     MapItem& it = L->items[L->nitems++];
-    it.kind = pd.ch == 'b' ? IT_BOMB : IT_TALISMAN;
+    it.kind = pd.ch == 'b' ? IT_BOMB : (pd.ch == 'x' ? IT_POWER : IT_TALISMAN);
     it.zone = (uint8_t)k;
     it.cx = pd.cx;
     it.cz = pd.cz;
-    it.crate = pd.ch == 'X' ? L->dyn_at[pd.cz][pd.cx] : (int16_t)-1;
+    it.crate = pd.ch == 'X' || pd.ch == 'x' ? L->dyn_at[pd.cz][pd.cx] : (int16_t)-1;
     it.y = pd.ch == 'Q' ? PLAT_H : 0.0f;
   }
 

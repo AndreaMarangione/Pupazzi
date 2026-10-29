@@ -319,6 +319,7 @@ void begin_map(bool again) {
     }
     p.charge = 0.0f;
     p.bombs = 0;
+    for (int k = 0; k < NPW_TIMED; ++k) p.pw_t[k] = 0;   // bonus delle casse: si ricomincia senza
     p.hp_max = CHARS[p.ch].hp;
     p.joining = false;
     p.lives = START_LIVES;
@@ -951,7 +952,13 @@ uint64_t game_state_hash(void) {
     // Vite (0.5): quante ne restano, a terra, senza vite.
     const int8_t lv[4] = { (int8_t)p.lives, (int8_t)p.active, (int8_t)p.alive, (int8_t)p.out };
     mix(lv, sizeof(lv));
+    mix(p.pw_t, sizeof(p.pw_t));    // bonus delle casse (0.5.4)
   }
+  for (int it = 0; it < g.L.nitems; ++it)
+    if (g.L.items[it].kind == IT_POWER && g.item_on[it]) {
+      const uint8_t pw[2] = { (uint8_t)it, g.item_pw[it] };
+      mix(pw, sizeof(pw));
+    }
   // Giro del pianeta, mappa e zona in corso, mappa ricominciata da capo, vite di chi e' uscito.
   const int st[6] = { g.loop, g.map_idx, g.zone, g.phase, g.map_wipes, (int)g.wipe_map };
   mix(st, sizeof(st));

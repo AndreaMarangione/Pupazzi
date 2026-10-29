@@ -469,6 +469,10 @@ static void player_down(int i, bool pit);
 void hurt_player(int i, float dmg, Vec3 from, float knock) {
   Player& p = g.pl[i];
   if (!p.active || !p.alive || p.invuln > 0 || p.leap_n > 0) return;
+  if (p.pw_t[PW_INVINCIBLE] > 0) {     // INVINCIBILE (bonus delle casse): il colpo rimbalza, niente danni ne' spinte
+    if (((g.tick + (unsigned)i) & 7u) == 0u) burst(player_chest(p), 5, PC_GOLD, 2.5f);   // scintille, non a ogni colpo
+    return;
+  }
   if (card_shield_hit(i)) return;      // SCUDO: questo colpo si ferma del tutto
   p.hp -= dmg;
   p.hurt = 10;
@@ -516,6 +520,7 @@ static void player_down(int i, bool pit) {
   p.vy = 0.0f;
   p.down = 0;
   p.blizzard_t = p.burst_left = p.tramp_t = 0;
+  for (int k = 0; k < NPW_TIMED; ++k) p.pw_t[k] = 0;   // i bonus finiscono con la caduta
   p.deaths++;
   g.deaths++;
   burst(v3(p.pos.x, p.pos.y + 0.7f, p.pos.z), 16, i, 4.0f);
@@ -680,6 +685,9 @@ void player_update(int i, const Pad& raw) {
     return;
   }
   if (p.invuln > 0) p.invuln--;
+  // Bonus delle casse (0.5.4): il tempo passa solo in partita (in pausa e con le carte e' fermo).
+  for (int k = 0; k < NPW_TIMED; ++k)
+    if (p.pw_t[k] > 0 && --p.pw_t[k] == 0) snd_at(SND_POWER_END, p.pos);
   if (p.hurt > 0) p.hurt--;
   if (p.recoil > 0) p.recoil--;
   if (p.aim_hold > 0) p.aim_hold--;

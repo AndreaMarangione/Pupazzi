@@ -15,6 +15,8 @@ enum SoundId {
   // 0.5.1, il gladiatore cammina e attacca: passo (anche, piu' fitto, la corsa della carica), spada alzata
   // (avviso del fendente), fendente, preparazione della carica con lo scudo, carica che finisce contro un muro
   SND_BOSS_STEP, SND_BOSS_SWEEP_WARN, SND_BOSS_SWEEP, SND_BOSS_RUSH, SND_BOSS_IMPACT,
+  // 0.5.4, bonus delle casse: VELOCITA', FURIA, INVINCIBILE, CARICA presi; un bonus che finisce
+  SND_POWER_SPEED, SND_POWER_FURY, SND_POWER_INVINCIBLE, SND_POWER_CHARGE, SND_POWER_END,
   NSOUNDS
 };
 // Brani: titolo e menu, uno per ogni mappa della Terra (stile della mappa), il boss del Colosseo, la vittoria.

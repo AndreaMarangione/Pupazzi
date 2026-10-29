@@ -312,7 +312,9 @@ static const char* const SOUND_NAMES[NSOUNDS] = {
   "cassa_colpita", "cassa_rotta", "capsula", "esploratore_salvato", "aiuto", "cancello", "zona_finita", "ondata", "stella",
   "tutti_giu", "menu_sposta", "menu_ok", "menu_indietro", "carte", "carta_scelta", "pausa", "freccia_a_terra", "cenote",
   "passo_gladiatore", "spada_alzata", "fendente", "carica_scudo", "scudo_contro_muro",
+  "bonus_velocita", "bonus_furia", "bonus_invincibile", "bonus_carica", "bonus_finito",
 };
+static_assert(sizeof(SOUND_NAMES) / sizeof(SOUND_NAMES[0]) == NSOUNDS, "un nome per ogni suono");
 static const char* const MUSIC_NAMES[NMUSIC] = { "nessuno", "titolo", "piramidi", "chichenitza", "muraglia", "colosseo", "vittoria" };
 
 // --- sintesi di uno strato -----------------------------------------------------------------------
@@ -1432,6 +1434,37 @@ static void define_sounds(void) {
   lay(W_PULSE).at(0.07f).width(0.5f).env(0.001f, 0.0f, 0.012f, 2).hz(1900.0f).lp(4000.0f, 4000.0f).gain(0.4f);
   lay(W_NOISE).at(0.07f).env(0.001f, 0.0f, 0.01f, 2).bp(3000.0f, 3000.0f, 1.5f).gain(0.5f);
 
+  // Bonus delle casse (0.5.4): ognuno il suo colore anche nel suono.
+  defsnd(S[SND_POWER_SPEED], "bonus_velocita", -11.0f, PR_HIGH, 2, 0.0f, 0.1f);   // fruscio che sale e arpeggio veloce
+  lay(W_NOISE).env(0.02f, 0.05f, 0.18f, 2).bp(800.0f, 5000.0f, 2.0f, 0.22f).gain(0.6f);
+  {
+    const float f[4] = { 659.25f, 830.61f, 987.77f, 1318.51f };
+    for (int k = 0; k < 4; ++k) lay(W_FM).at(0.04f * (float)k).env(0.002f, 0.01f, 0.12f, 3).hz(f[k]).fm(2.0f, 1.2f, 0.0f).gain(0.7f);
+  }
+
+  defsnd(S[SND_POWER_FURY], "bonus_furia", -10.0f, PR_HIGH, 2, 0.0f, 0.1f);       // ringhio basso e accordo secco
+  lay(W_SAW).env(0.005f, 0.08f, 0.25f, 2).hz(110.0f, 82.4f, 0.3f).lp(300.0f, 1800.0f, 2.0f, 0.15f).vib(18.0f, 0.4f).gain(0.8f);
+  lay(W_SAW).at(0.06f).env(0.003f, 0.06f, 0.25f, 2).hz(220.0f).lp(2400.0f, 900.0f, 1.2f, 0.3f).gain(0.5f);
+  lay(W_SAW).at(0.06f).env(0.003f, 0.06f, 0.25f, 2).hz(329.63f).lp(2400.0f, 900.0f, 1.2f, 0.3f).gain(0.4f);
+  lay(W_NOISE).env(0.001f, 0.02f, 0.1f, 2).bp(1200.0f, 600.0f, 1.0f).gain(0.5f);
+
+  defsnd(S[SND_POWER_INVINCIBLE], "bonus_invincibile", -11.0f, PR_HIGH, 2, 0.0f, 0.1f);   // campanelle che brillano
+  {
+    const float f[3] = { 783.99f, 987.77f, 1174.66f };
+    for (int k = 0; k < 3; ++k)
+      lay(W_FM).at(0.05f * (float)k).env(0.003f, 0.05f, 0.45f, 3).hz(f[k]).fm(2.0f, 1.3f, 0.2f).vib(6.0f, 0.15f, 0.1f).gain(0.6f);
+  }
+  lay(W_GRAIN).hz(3000.0f, 6000.0f).grain(35.0f, 0.03f).env(0.02f, 0.3f, 0.2f, 2).gain(0.15f);
+
+  defsnd(S[SND_POWER_CHARGE], "bonus_carica", -11.0f, PR_HIGH, 2, 0.0f, 0.1f);    // scarica elettrica che sale
+  lay(W_PULSE).width(0.3f).env(0.005f, 0.15f, 0.12f, 2).hz(220.0f, 1760.0f, 0.25f, P_IN).lp(1200.0f, 6000.0f, 1.5f, 0.25f).gain(0.5f);
+  lay(W_SINE).at(0.25f).env(0.002f, 0.02f, 0.2f, 3).hz(1760.0f).vib(9.0f, 0.3f).gain(0.5f);
+  lay(W_NOISE).env(0.002f, 0.2f, 0.08f, 2).bp(3000.0f, 7000.0f, 3.0f, 0.25f).gain(0.3f);
+
+  defsnd(S[SND_POWER_END], "bonus_finito", -15.0f, PR_MID, 2, 0.0f, 0.1f);        // due note che scendono
+  lay(W_FM).env(0.002f, 0.01f, 0.1f, 3).hz(880.0f).fm(2.0f, 0.8f, 0.0f).gain(0.6f);
+  lay(W_FM).at(0.09f).env(0.002f, 0.01f, 0.14f, 3).hz(659.25f).fm(2.0f, 0.8f, 0.0f).gain(0.6f);
+
   defsnd(S[SND_HURT], "colpito", -11.0f, PR_HIGH, 2, 0.03f, 0.06f);
   lay(W_PULSE).width(0.35f).env(0.002f, 0.02f, 0.12f, 2).hz(400.0f, 190.0f, 0.12f, P_OUT).lp(2200.0f, 900.0f, 1.5f);
   lay(W_SINE).env(0.002f, 0.02f, 0.12f, 2).hz(200.0f, 95.0f, 0.12f, P_OUT).gain(0.5f);
@@ -2153,6 +2186,11 @@ static const CalEntry CAL_TAB[NSOUNDS] = {
   { 0xD35FF708u, 0.8441568f },   // fendente
   { 0x1B4B11BCu, 1.351436f },   // carica_scudo
   { 0x78654C85u, 2.212696f },   // scudo_contro_muro
+  { 0xA06D3FDBu, 1.091958f },   // bonus_velocita
+  { 0xE32B9208u, 2.41282f },   // bonus_furia
+  { 0x1EEC3B03u, 1.726549f },   // bonus_invincibile
+  { 0xB98E3747u, 1.131748f },   // bonus_carica
+  { 0x1A4F8159u, 0.6028065f },   // bonus_finito
 };
 
 // Taratura: norm porta il picco di ogni suono al valore voluto (peak_db, effetti a 8, al centro).

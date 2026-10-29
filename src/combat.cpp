@@ -1,9 +1,13 @@
-// Colpi, danni, esplosioni, bombe, talismani, casse che si rompono ed effetti (particelle,
-// numeri dei danni, segni a terra, scossone dello schermo).
+// Colpi, danni, esplosioni, bombe, talismani, casse che si rompono (con i bonus dalla 0.5.4) ed
+// effetti (particelle, numeri dei danni, segni a terra, scossone dello schermo).
 #include "game_int.h"
 #include "plat.h"
 #include <stdio.h>
 #include <string.h>
+
+const char* const PW_NAME[NPOWERS] = { N_("VELOCITÀ!"), N_("FURIA!"), N_("INVINCIBILE!"), N_("CARICA!") };
+static const char* const PW_LOG[NPOWERS] = { "velocita'", "furia", "invincibile", "carica" };
+static const int PW_SND[NPOWERS] = { SND_POWER_SPEED, SND_POWER_FURY, SND_POWER_INVINCIBLE, SND_POWER_CHARGE };
 
 namespace {
 
@@ -546,9 +550,15 @@ void effects_update(void) {
 
 // --- danni ------------------------------------------------------------------------
 
+// FURIA (bonus delle casse): i danni di quel giocatore sono doppi, qualunque cosa li faccia.
+static float fury(float dmg, int owner) {
+  return owner >= 0 && owner < MAX_PLAYERS && g.pl[owner].pw_t[PW_FURY] > 0 ? dmg * PW_FURY_K : dmg;
+}
+
 void damage_monster(int k, float dmg, int owner, Vec3 dir, float knock, bool charges) {
   Monster& m = g.mo[k];
   if (!m.alive) return;
+  dmg = fury(dmg, owner);
   m.hp -= dmg;
   const int hurt = dmg >= 4.0f ? 8 : 2;      // danni piccoli e continui (bufera): appena un guizzo
   if (m.hurt < hurt) m.hurt = hurt;
@@ -579,6 +589,7 @@ void damage_monster(int k, float dmg, int owner, Vec3 dir, float knock, bool cha
 void damage_boss(float dmg, int owner, bool charges) {
   Boss& b = g.boss;
   if (!b.alive || g.phase == PH_WIPE) return;   // tutti a terra: si ricomincia, i colpi in volo non contano
+  dmg = fury(dmg, owner);
   if (b.roar > 0) dmg *= 0.25f;      // mentre ruggisce tra una fase e l'altra prende poco
   else if (b.act == BA_STUN) dmg *= BOSS_STUN_DMG;   // stordito dopo una carica contro un ostacolo: prende di piu'
   b.hp -= dmg;
@@ -737,6 +748,11 @@ void items_update(void) {
         burst(v3(c.x, mi.y + 0.7f, c.z), 14, PC_GREEN, 3.0f);
         snd_at(SND_PICK_TALISMAN, c);
         plat_log("giocatore %d prende un talismano (vita %d)", j + 1, (int)p.hp);
+      } else if (mi.kind == IT_POWER) {
+        if (g.item_t[it] < 20) continue;             // prima salta fuori dalla cassa
+        if (!power_take(j, g.item_pw[it])) continue;  // CARICA con lo speciale gia' pronto: resta a chi serve
+        g.item_on[it] = false;
+        burst(v3(c.x, mi.y + 0.7f, c.z), 14, PC_WHITE, 3.0f);
       } else {
         if (p.bombs >= pl_bombs_cap(p)) continue;     // BOMBAROLO: fino a 4
         g.item_on[it] = false;
@@ -770,14 +786,41 @@ void crate_damage(int d, float dmg, Vec3 from) {
     explorer_rescue(c);
     return;
   }
-  plat_log("cassa rotta (riga %d, colonna %d)", dc.cz + 1, dc.cx + 1);
   burst(v3(c.x, 0.5f, c.z), 14, PC_WOOD, 4.0f);
   for (int k = 0; k < 4; ++k) puff(v3(c.x, 0.4f, c.z), PK_PUFF, PC_EARTH, rng_vec(1.0f, 1.2f, 0.0f, 1.0f), 1.2f, 26);
+  int pw = -1;
   for (int it = 0; it < g.L.nitems; ++it)
     if (g.L.items[it].crate == d) {
       g.item_on[it] = true;
       g.item_t[it] = 0;
+      if (g.L.items[it].kind == IT_POWER) {
+        // Quale bonus: VELOCITA' 30%, FURIA 25%, CARICA 25%, INVINCIBILE 20%.
+        const uint32_t r = rng_next() % 100u;
+        pw = r < 30u ? PW_SPEED : (r < 55u ? PW_FURY : (r < 80u ? PW_CHARGE : PW_INVINCIBLE));
+        g.item_pw[it] = (uint8_t)pw;
+        burst(v3(c.x, 0.8f, c.z), 10, PC_GOLD, 3.0f);
+      }
     }
+  if (pw >= 0) plat_log("cassa rotta (riga %d, colonna %d): bonus %s", dc.cz + 1, dc.cx + 1, PW_LOG[pw]);
+  else plat_log("cassa rotta (riga %d, colonna %d)", dc.cz + 1, dc.cx + 1);
+}
+
+// Il giocatore j prende il bonus pw: VELOCITA', FURIA e INVINCIBILE ripartono da pieni, CARICA
+// riempie lo speciale. false se non gli serve (CARICA con lo speciale gia' pronto).
+bool power_take(int j, int pw) {
+  Player& p = g.pl[j];
+  if (pw < 0 || pw >= NPOWERS) return false;
+  if (pw == PW_CHARGE) {
+    const float cost = pl_special_cost(p);
+    if (p.charge >= cost) return false;
+    p.charge = cost;
+  } else {
+    p.pw_t[pw] = PW_FRAMES[pw];
+  }
+  snd_at(PW_SND[pw], p.pos);
+  add_float_text(v3(p.pos.x, p.pos.y + PL_H + 1.0f, p.pos.z), PW_RGB[pw], PW_NAME[pw]);
+  plat_log("giocatore %d prende il bonus %s", j + 1, PW_LOG[pw]);
+  return true;
 }
 
 // --- colpi --------------------------------------------------------------------------

@@ -87,6 +87,8 @@ bool nearest_item(const Player& p, int kind, float maxd, Vec3* out) {
   bool found = false;
   for (int it = 0; it < g.L.nitems; ++it) {
     if (!g.item_on[it] || g.L.items[it].kind != kind) continue;
+    // Bonus delle casse: CARICA solo a chi non ha gia' lo speciale pronto (gli altri non la prendono).
+    if (kind == IT_POWER && g.item_pw[it] == PW_CHARGE && p.charge >= pl_special_cost(p)) continue;
     const MapItem& mi = g.L.items[it];
     Vec3 c = cell_center(&g.L, mi.cx, mi.cz);
     c.y = mi.y;
@@ -252,6 +254,9 @@ void bot_one(int i, Pad& pad) {
       have_goal = true;
       jumpy = it.y > 0.1f && dist2d(it, p.pos) < 3.5f;
     } else if (p.bombs < pl_bombs_cap(p) && nearest_item(p, IT_BOMB, 5.0f, &it) && (!have || td > 4.0f)) {
+      goal = it;
+      have_goal = true;
+    } else if (nearest_item(p, IT_POWER, 7.0f, &it) && (!have || td > 3.5f)) {   // bonus delle casse (0.5.4)
       goal = it;
       have_goal = true;
     } else if (g.boss.alive && dist2d(g.boss.pos, p.pos) < 16.0f) {

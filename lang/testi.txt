@@ -2782,3 +2782,37 @@ pt rede lenta...
 zh 网络较慢...
 ja 通信が遅い...
 hi नेटवर्क धीमा...
+
+# In partita (0.5.4): bonus delle casse, scritta che sale dal giocatore che lo prende (B13; nel
+# codice al massimo 15 byte: il testo italiano)
+it VELOCITÀ!
+en SPEED!
+es ¡VELOCIDAD!
+pt VELOCIDADE!
+zh 加速！
+ja スピード！
+hi रफ़्तार!
+
+it FURIA!
+en FURY!
+es ¡FURIA!
+pt FÚRIA!
+zh 狂怒！
+ja いかり！
+hi गुस्सा!
+
+it INVINCIBILE!
+en INVINCIBLE!
+es ¡INVENCIBLE!
+pt INVENCÍVEL!
+zh 无敌！
+ja むてき！
+hi अजेय!
+
+it CARICA!
+en CHARGED!
+es ¡CARGADO!
+pt CARREGADO!
+zh 充能！
+ja チャージ！
+hi चार्ज!
