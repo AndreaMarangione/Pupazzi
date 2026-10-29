@@ -793,7 +793,8 @@ RETRO_API void retro_init(void) {
   A.trace = env_int("PUPAZZI_TRACE", 0) != 0;   // stato della partita a ogni fotogramma nel registro (prove)
   A.trace_m = env_int("PUPAZZI_TRACE", 0) >= 2;  // ... e tutti i campi dei mostri
   const char* rete = getenv("PUPAZZI_RETE");
-  A.net_auto = rete && *rete;
+  const char* dopo = getenv("PUPAZZI_RETE_DOPO");
+  A.net_auto = rete && *rete && !(dopo && atoi(dopo) > 0);   // con PUPAZZI_RETE_DOPO prima si gioca da soli
   quick_start();
 }
 

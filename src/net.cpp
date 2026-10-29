@@ -160,6 +160,7 @@ struct State {
   int auto_mode;                    // 0 niente, 1 crea, 2 unisciti
   int auto_wait;                    // crea: quante altre console aspettare
   bool force;                       // unisciti: anche a una partita che non va (prova dei rifiuti)
+  int auto_delay;                   // fotogrammi prima di crea/unisciti (prima si gioca da soli)
   int loss, delay, jitter;          // per cento, ms, ms
   double drop_ms;                   // una console che non risponde da tanto esce
   uint32_t rnd;
@@ -890,9 +891,14 @@ void join_send(void) {
   send_to(S.host, w);
 }
 
+// k: posto nella lista dei menu (le partite trovate, in ordine, senza i posti vuoti).
 void join(int k) {
-  if (S.role != R_SEARCH || k < 0 || k >= NET_MAX_GAMES || !S.found[k].used) return;
-  const Found& f = S.found[k];
+  if (S.role != R_SEARCH || k < 0) return;
+  int idx = -1;
+  for (int i = 0, n = 0; i < NET_MAX_GAMES && idx < 0; ++i)
+    if (S.found[i].used && n++ == k) idx = i;
+  if (idx < 0) return;
+  const Found& f = S.found[idx];
   S.view.game = f.game;
   if (f.game.state != NG_OPEN && !S.force) {
     static const int ERR[] = { NE_NONE, NE_FULL, NE_STARTED, NE_VERSION, NE_MAPS };
@@ -1097,9 +1103,13 @@ void client_tick(void) {
       }
       for (int k = 0; k < NET_MAX_GAMES; ++k)
         if (S.found[k].used && S.now - S.found[k].seen > GAME_EXPIRE_MS) S.found[k].used = false;
-      if (S.auto_mode == 2 && S.now - S.join_first > JOIN_GIVEUP_MS)     // dopo un rifiuto si riprova fra un po'
-        for (int k = 0; k < NET_MAX_GAMES && S.role == R_SEARCH; ++k)
-          if (S.found[k].used && (S.found[k].game.state == NG_OPEN || S.force)) join(k);
+      if (S.auto_mode == 2 && S.now - S.join_first > JOIN_GIVEUP_MS) {   // dopo un rifiuto si riprova fra un po'
+        for (int k = 0, n = 0; k < NET_MAX_GAMES && S.role == R_SEARCH; ++k) {
+          if (!S.found[k].used) continue;
+          if (S.found[k].game.state == NG_OPEN || S.force) join(n);
+          n++;
+        }
+      }
       break;
     }
     case R_JOINING:
@@ -1306,6 +1316,9 @@ void parse_env(void) {
     S.auto_mode = 2;
     S.force = v[8] == '!';
   }
+  v = getenv("PUPAZZI_RETE_DOPO");
+  S.auto_delay = S.auto_mode && v && *v ? atoi(v) : 0;
+  if (S.auto_delay < 0) S.auto_delay = 0;
   if (S.loss || S.delay || S.jitter || S.base != NET_PORT || strcmp(S.version, PUPAZZI_VERSION) || S.drop_ms != 10000.0)
     plat_log("rete (prove): porta %d, versione %s, messaggi persi %d%%, ritardo %d+%d ms, attesa %.0f ms", S.base, S.version, S.loss, S.delay,
              S.jitter, S.drop_ms);
@@ -1314,6 +1327,17 @@ void parse_env(void) {
 }  // namespace
 
 // --- interfaccia ---------------------------------------------------------------------------------
+
+// Prove (PUPAZZI_RETE): crea la partita o cerca, subito o dopo PUPAZZI_RETE_DOPO fotogrammi.
+static void auto_start(void) {
+  if (S.auto_mode == 1) {
+    if (save_slot() < 0 && !save_slot_load(0)) save_slot_new(0);
+    if (host_open()) game_net_lobby();
+  } else if (S.auto_mode == 2) {
+    search_start();
+    if (S.role == R_SEARCH) game_net_lobby();
+  }
+}
 
 void net_init(void) {
   net_shutdown();
@@ -1325,13 +1349,7 @@ void net_init(void) {
   S.rnd = fresh_id();
   parse_env();
   S.content = maps_content_hash();
-  if (S.auto_mode == 1) {
-    if (save_slot() < 0 && !save_slot_load(0)) save_slot_new(0);
-    if (host_open()) game_net_lobby();
-  } else if (S.auto_mode == 2) {
-    search_start();
-    if (S.role == R_SEARCH) game_net_lobby();
-  }
+  if (S.auto_delay == 0) auto_start();
 }
 
 void net_shutdown(void) {
@@ -1362,6 +1380,7 @@ void net_shutdown(void) {
 void net_frame_begin(void) {
   if (!g_inited) return;
   S.now = plat_now_ms();
+  if (S.auto_delay > 0 && --S.auto_delay == 0) auto_start();
   flush_delayed(false);
   receive();
   if (is_host()) host_tick();

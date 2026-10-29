@@ -7,7 +7,7 @@
 #   sh tools/test_net.sh            tutte le prove (qualche minuto)
 #   sh tools/test_net.sh perdite    solo quella (tre_console perdite scollegamento caduta
 #                                   chi_crea_esce rifiuto fine_al_titolo quattro_console progressi
-#                                   mappa_intera)
+#                                   mappa_intera menu storia_prima)
 #   TEMPO=60 sh tools/test_net.sh   fotogrammi al secondo di ogni copia (120: il doppio del vero)
 set -u
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
@@ -230,6 +230,38 @@ if want mappa_intera; then
     if cmp -s "$D/$x/partita1.sav" "$D/$x/prima.sav"; then ok "il salvataggio della console $x resta com'era"
     else bad "il salvataggio della console $x e' cambiato"; fi
   done
+fi
+
+# 11) Dai menu, con i tasti: chi crea (titolo, GIOCO IN RETE, CREA, posto libero, nome, A per
+# cominciare) e chi si unisce (titolo, GIOCO IN RETE, UNISCITI, A sulla partita trovata).
+if want menu; then
+  say "11) dai menu, con i tasti"
+  D=$OUT/menu; P=PUPAZZI_RETE_PORTA=56510
+  start "$D/a" 700 $P -- --in "0:DOWN@30-31,0:DOWN@40-41,0:A@50-51,0:A@70-71,0:A@90-91,0:START@110-111,0:A@420-421"
+  sleep 0.3
+  start "$D/b" 700 $P -- --in "0:DOWN@30-31,0:DOWN@40-41,0:A@50-51,0:DOWN@70-71,0:A@80-81,0:A@220-221"
+  wait_all
+  has "$D/a" "partita 1 nuova" "chi crea fa una partita nuova nel posto 1"
+  has "$D/a" "partita creata (porta" "e crea la partita in rete"
+  has "$D/b" "mi unisco alla partita" "l'altra la trova e si unisce"
+  has "$D/a" "si comincia con 2 console" "A fa cominciare"
+  has "$D/b" "sono il giocatore 2" "l'altra console e' il giocatore 2"
+  same "$D/a" "$D/b" 150
+fi
+
+# 12) Prima ognuno gioca da solo una mappa diversa (mostri, colpi, carte, numeri a caso...), poi
+# la partita in rete: deve cominciare uguale lo stesso.
+if want storia_prima; then
+  say "12) prima da soli, poi in rete"
+  D=$OUT/storia_prima; P=PUPAZZI_RETE_PORTA=56520
+  start "$D/a" 3000 $P $BOT PUPAZZI_MAPPA=1 PUPAZZI_RETE=crea:1 PUPAZZI_RETE_DOPO=900
+  sleep 0.3
+  start "$D/b" 3000 $P $BOT PUPAZZI_MAPPA=2 PUPAZZI_RETE=unisciti PUPAZZI_RETE_DOPO=1300
+  wait_all
+  has "$D/a" "=== mappa 1: Le Piramidi" "chi crea prima gioca la mappa 1 da solo"
+  has "$D/b" "=== mappa 2:" "l'altra la mappa 2"
+  has "$D/a" "si comincia con 2 console" "poi la partita in rete"
+  same "$D/a" "$D/b" 1300
 fi
 
 if [ "$FAILS" -eq 0 ]; then say "tutto bene"; exit 0; fi

@@ -28,6 +28,8 @@
 //                              altre console (1 se manca)
 //   PUPAZZI_RETE=unisciti      cerca e si unisce alla prima partita che trova (unisciti!: anche a
 //                              una che non va, per provare i rifiuti)
+//   PUPAZZI_RETE_DOPO=n        crea o unisciti dopo n fotogrammi (prima si gioca da soli: con
+//                              PUPAZZI_MAPPA e PUPAZZI_BOT la partita veloce)
 //   PUPAZZI_RETE_PORTA=n       prima porta al posto di 55410
 //   PUPAZZI_RETE_PERDITA=p     butta il p per cento dei messaggi in uscita
 //   PUPAZZI_RETE_RITARDO=a[+b] ritarda i messaggi in uscita di a ms, piu' fino a b ms a caso
