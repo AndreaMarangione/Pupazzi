@@ -20,7 +20,7 @@ struct FrameDesc {
   Vec3 light;                    // direzione unitaria dalla superficie verso la luce
   uint32_t sky_top, sky_bot;     // sfumatura del cielo
   const Hud* hud; int hud_scale;
-  bool aa = false;               // antialias 4x (solo renderer GPU, se la GPU lo sa fare)
+  int aa = 0;                    // campioni dell'antialias: 0 (niente), 4 o 8 (solo renderer GPU, fin dove la GPU arriva)
 };
 
 struct RenderStats {

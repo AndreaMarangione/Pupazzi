@@ -1218,12 +1218,22 @@ void play_menus_update(void) {
         }
       }
       // Antialias (bordi lisci, per tutti): sinistra/destra o A lo accendono e lo spengono.
-      if (g.pause_sel == PS_AA && g.aa_avail && (left || right)) {
-        g.aa_on = !g.aa_on;
-        save_data()->antialias = g.aa_on;
+      // Antialias (per tutti, dalla 0.5.4): NO, 4X, 8X fin dove arriva la GPU; sinistra/destra o A.
+      if (g.pause_sel == PS_AA && g.aa_max > 0 && (left || right)) {
+        int vals[3], nv = 0;
+        vals[nv++] = 0;
+        vals[nv++] = g.aa_max >= 4 ? 4 : g.aa_max;
+        if (g.aa_max >= 8) vals[nv++] = 8;
+        const int now = game_aa_wanted();
+        int k = 0;
+        while (k < nv - 1 && vals[k] != now) k++;
+        k = left ? (k + nv - 1) % nv : (k + 1) % nv;
+        g.aa_level = vals[k];
+        save_data()->antialias = (uint8_t)vals[k];
         snd_ui(SND_UI_MOVE);
         settings_changed();
-        plat_log("antialias %s (giocatore %d)", g.aa_on ? "acceso" : "spento", o + 1);
+        if (vals[k] > 0) plat_log("antialias %dx (giocatore %d)", vals[k], o + 1);
+        else plat_log("antialias spento (giocatore %d)", o + 1);
       }
       // Volumi (per tutti, da 0 a 10): sinistra/destra; A fa il giro.
       if ((g.pause_sel == PS_MUSIC || g.pause_sel == PS_SFX) && (left || right)) {
@@ -1441,11 +1451,21 @@ void play_menus_hud(Hud* h) {
           break;
         }
         case PS_AA:
-          if (!g.aa_avail) {
+          if (g.aa_max <= 0) {
             ui::text(h, rx, cy, HF_S13, O(sel ? ui::ON : ui::DIS), tr("ASSENTE"), 0.8f, 1);
           } else {
-            ui::toggle(h, rx - 34.0f, cy, g.aa_on);
-            ui::text(h, rx - 42.0f, cy, HF_S13, vc, g.aa_on ? tr("SÌ") : tr("NO"), 0.8f, 1);
+            char v[16];
+            const int now = game_aa_wanted();
+            if (now > 0) snprintf(v, sizeof(v), "%dX", now);
+            else snprintf(v, sizeof(v), "%s", tr("NO"));
+            if (sel) {
+              const float vw = hud_text_w(HF_S13, v, 0.8f);
+              ui::chev(h, rx - 8.0f, cy - 6.0f, true, ui::ON);
+              ui::text(h, rx - 16.0f, cy, HF_S13, vc, v, 0.8f, 1);
+              ui::chev(h, rx - 24.0f - vw - 8.0f, cy - 6.0f, false, ui::ON);
+            } else {
+              ui::text(h, rx, cy, HF_S13, vc, v, 0.8f, 1);
+            }
           }
           break;
         case PS_MUSIC:

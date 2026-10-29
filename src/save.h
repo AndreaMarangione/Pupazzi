@@ -21,7 +21,8 @@
 // pupazzi.sav (le righe che cominciano con # si ignorano, l'ordine non conta):
 //   versione=2             formato di chi l'ha scritto per ultimo (1: fino alla 0.5.2, tutto in un file)
 //   mira.1=1 .. mira.4=1   mira di ogni posto giocatore: 0 extra morbida, 1 morbida, 2 media, 3 rapida
-//   antialias=1            0 o 1
+//   antialias=1            0 spento, 1 il migliore che la GPU regge, 4 o 8 campioni (dalla 0.5.4; prima
+//                          0 o 1: le versioni di prima leggono ogni numero diverso da 0 come acceso)
 //   volume_musica=6        da 0 a 10 (fino alla 0.4 predefinito 7)
 //   volume_effetti=8       da 0 a 10
 //   lingua=it              it, en, es, pt, zh, ja, hi (dalla 0.5.3)
@@ -82,7 +83,7 @@ struct SaveData {
   int version;                      // formato del file letto per ultimo (0: nessun file)
   // Impostazioni (pupazzi.sav).
   uint8_t aim[SAVE_PLAYERS];        // da 0 a 3 (predefinita 1, morbida)
-  bool antialias;                   // predefinito acceso
+  uint8_t antialias;                // 0, 1 (il migliore, predefinito), 4 o 8 campioni
   uint8_t music_vol, sfx_vol;       // da 0 a 10 (predefiniti 6 e 8)
   uint8_t lang;                     // LANG_* (lang.h), predefinita l'italiano
   // Partita (partitaN.sav).

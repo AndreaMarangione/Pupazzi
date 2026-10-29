@@ -58,6 +58,7 @@ static int16_t g_audio[AUDIO_FRAMES * 2];
 
 static struct {
   int w, h, ncpu;
+  bool aa_adapt;               // PUPAZZI_AA_ADATTA=0: niente passaggio da solo da 8 a 4 campioni (prove)
   bool hud_off, hud_fixed;    // PUPAZZI_HUD=0: niente HUD; =fisso: riquadro delle prestazioni senza tempi (immagini confrontabili)
   bool want_gl, use_gl, gl_ready;
   int gl_wait;
@@ -577,6 +578,23 @@ static void handle_controls(void) {
   if (A.combo && !sel && !start0) A.combo = false;   // i due tasti della combinazione non valgono come pressioni singole
 }
 
+// 0.5.4: con l'antialias "il migliore" a 8 campioni, se in partita il gioco non sta nei 60
+// fotogrammi al secondo (meno di 55 in 3 misure di fila, mezzo secondo l'una) si scende a 4 per il
+// resto della sessione e lo si scrive nel registro; dalla pausa si puo' sempre scegliere 8X.
+static void aa_adapt(void) {
+  static int slow;
+  if (!A.aa_adapt || !A.use_gl || !A.gl_ready || game_aa_level() != 1 || game_aa_wanted() < 8 || !game_playing()) {
+    slow = 0;
+    return;
+  }
+  slow = A.fps > 0.0f && A.fps < 55.0f ? slow + 1 : 0;
+  if (slow >= 3) {
+    game_aa_cap(4);
+    plat_log("antialias: con 8 campioni %.1f fotogrammi al secondo, si passa a 4 (dalla pausa si sceglie di nuovo 8X)", (double)A.fps);
+    slow = 0;
+  }
+}
+
 // --- riquadro delle prestazioni (SELECT) -------------------------------------
 
 // Una riga in basso a sinistra, sotto le finestre di chi entra in partita (che finiscono a 432); dalla
@@ -588,10 +606,17 @@ static void perf_overlay(Hud* h) {
     const SysCpu c = sys_cpu_sample();
     if (c.valid || !cpu.valid) cpu = c;
   }
-  char buf[160];
+  if (A.hud_fixed) {                 // immagini confrontabili (PUPAZZI_HUD=fisso): numeri fissi
+    memset(&cpu, 0, sizeof(cpu));
+    cpu.valid = true;
+    cpu.ncore = 4;
+  }
+  char buf[160], rend[16];
+  const int aa = A.use_gl ? game_aa_wanted() : 0;
+  if (aa > 0) snprintf(rend, sizeof(rend), "GPU+%dX", aa);
+  else snprintf(rend, sizeof(rend), "%s", A.use_gl ? "GPU" : "CPU");
   snprintf(buf, sizeof(buf), "%.1f fps · %.1f ms (max %.1f) · %s %.1f ms · tri %d/%d", (double)A.fps, (double)A.frame_avg,
-           (double)A.frame_max, A.use_gl ? (game_aa_wanted() ? "GPU+AA" : "GPU") : "CPU", (double)A.e_core, A.st.tris_drawn,
-           A.st.tris_in);
+           (double)A.frame_max, rend, (double)A.e_core, A.st.tris_drawn, A.st.tris_in);
   float w = hud_text_w(HF_S13, buf) + 24.0f;
   hud_box(h, 24, 440, w, 24, 6, hud_a(0x18081E, 0.85f));
   hud_text(h, 36, hud_mid(HF_S13, 452), HF_S13, 0xFFFFFFFFu, buf);
@@ -610,14 +635,14 @@ static void context_reset(void) {
   plat_log("context_reset: il frontend ha creato il contesto GL");
   A.gl_ready = glr_init((glr_get_proc_t)hw.get_proc_address);
   if (!A.gl_ready) plat_log("GL: preparazione fallita, lo schermo restera' nero");
-  game_set_aa_available(A.gl_ready && glr_aa_available());
+  game_set_aa_available(A.gl_ready ? glr_aa_max() : 0);
 }
 
 static void context_destroy(void) {
   plat_log("context_destroy");
   glr_context_lost();
   A.gl_ready = false;
-  game_set_aa_available(false);
+  game_set_aa_available(0);
 }
 
 static bool try_hw_render(void) {
@@ -723,7 +748,7 @@ RETRO_API void retro_init(void) {
   if (FILE* f = fopen(g_aa_try.path, "r")) {
     fclose(f);
     remove(g_aa_try.path);
-    game_set_aa_on(false);
+    game_set_aa_level(0);
     g_aa_try.crashed = true;
     plat_log("antialias spento all'avvio: la volta scorsa il gioco si e' chiuso mentre lo provava (si riaccende dalla pausa)");
   }
@@ -736,6 +761,7 @@ RETRO_API void retro_init(void) {
   const char* hud = getenv("PUPAZZI_HUD");
   A.hud_off = hud && *hud == '0';
   A.hud_fixed = hud && !strcmp(hud, "fisso");
+  A.aa_adapt = env_int("PUPAZZI_AA_ADATTA", 1) != 0;
   A.hdmi_force = env_int("PUPAZZI_HDMI", -1);
   if (A.hdmi_force > 1) A.hdmi_force = 1;
   hdmi_poll(true);
@@ -798,7 +824,7 @@ static void open_save(void) {
   plat_log("salvataggio: %s (%s)", save_path(), save_status());
   if (g_aa_try.crashed) {
     // L'antialias ha fatto chiudere il gioco: resta spento anche le prossime volte (si riaccende dalla pausa).
-    save_data()->antialias = false;
+    save_data()->antialias = 0;
     save_write();
   }
   // PUPAZZI_LINGUA=it|en|es|pt|zh|ja|hi: la lingua per questa volta (prove; in gioco si sceglie
@@ -931,6 +957,7 @@ RETRO_API void retro_run(void) {
       A.fps = 1000.0f / A.frame_avg;
       A.win_n = 0;
       A.win_sum = A.win_max = 0.0;
+      aa_adapt();
     }
   }
 
@@ -966,9 +993,9 @@ RETRO_API void retro_run(void) {
   if (A.use_gl) {
     if (A.gl_ready) {
       fd.aa = game_aa_wanted();
-      if (!g_aa_try.passed && fd.aa != (g_aa_try.frames >= 0)) aa_try_mark(fd.aa);
+      if (!g_aa_try.passed && (fd.aa > 0) != (g_aa_try.frames >= 0)) aa_try_mark(fd.aa > 0);
       glr_render(&fd, (unsigned)hw.get_current_framebuffer(), &st, false);
-      game_set_aa_available(glr_aa_available());   // se la GPU ha rifiutato l'antialias, la pausa lo sa
+      game_set_aa_available(glr_aa_max());   // se la GPU ha rifiutato l'antialias (o gli 8 campioni), la pausa lo sa
       if (g_aa_try.frames >= 0 && ++g_aa_try.frames >= AA_TRY_FRAMES) {
         aa_try_mark(false);
         g_aa_try.passed = true;
@@ -1013,9 +1040,11 @@ RETRO_API void retro_run(void) {
     int nl = 0;
     for (int p = 0; p < MAX_PLAYERS; ++p)
       nl += snprintf(lives + nl, sizeof(lives) - (size_t)nl, gi.lives[p] >= 0 ? "%s%d" : "%s-", p ? " " : "", gi.lives[p] < 99 ? gi.lives[p] : 99);
+    char aa_s[12] = "";
+    if (A.use_gl && game_aa_wanted() > 0) snprintf(aa_s, sizeof(aa_s), " aa%d", game_aa_wanted());
     plat_log("stato: f=%u fps %.1f, frame %.1f (max %.1f) | core %.2f = sim %.2f + disegno %.2f | audio %.2f (voci %d, scartate %u) | RA %.2f | tri %d/%d%s | %s, mappa %d (giro %d) zona %d mostri %d giocatori %d/%d vite %s%s",
              A.frame, (double)A.fps, (double)A.frame_avg, (double)A.frame_max, (double)A.e_core, (double)A.e_sim, (double)(A.e_geo + A.e_ras),
-             (double)A.e_audio, as.voices_peak, as.dropped, (double)A.e_video, st.tris_drawn, st.tris_in, A.use_gl && game_aa_wanted() ? " aa" : "",
+             (double)A.e_audio, as.voices_peak, as.dropped, (double)A.e_video, st.tris_drawn, st.tris_in, aa_s,
              SCREEN[gi.screen < NSCREEN && gi.screen >= 0 ? gi.screen : 0], gi.map, gi.loop, gi.zone, gi.enemies, gi.alive, gi.players, lives,
              game_paused() ? " (pausa)" : "");
   }

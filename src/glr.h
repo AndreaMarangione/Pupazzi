@@ -13,4 +13,5 @@ void glr_shutdown(void);                  // libera la memoria di lavoro (allo s
 void glr_render(const FrameDesc* f, unsigned fbo, RenderStats* st, bool finish);
 const char* glr_info(void);               // "RENDERER | VERSION"
 bool glr_aa_available(void);              // la GPU sa fare l'antialias (FrameDesc::aa lo chiede)
+int glr_aa_max(void);                     // (0.5.4) campioni al massimo: 0 (niente), 2, 4 o 8
 int glr_depth_bits(void);

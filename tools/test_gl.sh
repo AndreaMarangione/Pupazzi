@@ -7,8 +7,9 @@ H=build/native/host
 C=build/native/pupazzi_libretro.so
 T=$(mktemp -d) || exit 1
 trap 'rm -rf "$T"' EXIT
-# Partita giocata da due giocatori automatici: nemici, colpi, particelle e HUD in scena.
-export PUPAZZI_BOT=2 PUPAZZI_PERF=1
+# Partita giocata da due giocatori automatici: nemici, colpi, particelle e HUD in scena. Niente
+# passaggio da solo da 8 a 4 campioni (dipende da quanto e' veloce la macchina: immagini diverse).
+export PUPAZZI_BOT=2 PUPAZZI_PERF=1 PUPAZZI_AA_ADATTA=0
 N=420
 fail=0
 
@@ -44,6 +45,18 @@ case "$o1" in
 esac
 if [ -n "$h0" ] && [ "$h0" = "$h1" ]; then echo "antialias, percorso a tessere con un campione: stessa immagine ($h0)"
 else echo "ERRORE: percorso a tessere con un campione diverso ($h1 invece di $h0)"; fail=1; fi
+# 0.5.4: fino a 8 campioni (prova8) e 8 rifiutati dalla GPU (prova8no: si passa a 4), sempre con un
+# campione vero: stessa immagine.
+for m in prova8:8x prova8no:4x; do
+  o2=$(PUPAZZI_PERF=0 PUPAZZI_AA=${m%%:*} PUPAZZI_OUT="$T" PUPAZZI_RENDERER=gpu $H $C --gl --frames $N 2>&1)
+  h2=$(echo "$o2" | sed -n 's/.*hash=\([0-9a-f]*\).*/\1/p' | tail -n 1)
+  case "$o2" in *"antialias ${m##*:} pronto"*) ;; *) echo "ERRORE: con PUPAZZI_AA=${m%%:*} non c'e' \"antialias ${m##*:} pronto\""; fail=1 ;; esac
+  if [ "${m%%:*}" = prova8no ]; then
+    case "$o2" in *"antialias 8x rifiutato"*) ;; *) echo "ERRORE: con PUPAZZI_AA=prova8no gli 8 campioni non sono stati rifiutati"; fail=1 ;; esac
+  fi
+  if [ -n "$h0" ] && [ "$h0" = "$h2" ]; then echo "antialias ${m%%:*}: ${m##*:}, stessa immagine ($h2)"
+  else echo "ERRORE: antialias ${m%%:*}, immagine diversa ($h2 invece di $h0)"; fail=1; fi
+done
 
 # Software e GPU senza antialias: la stessa scena, a meno di pochi pixel sui bordi.
 mkdir -p "$T/sw" "$T/gl" "$T/aa"
@@ -102,7 +115,7 @@ fi
 # Con l'antialias (se la GPU lo sa fare) cambiano solo i bordi: qualcosa, ma non troppo.
 o=$(PUPAZZI_OUT="$T" PUPAZZI_HUD=0 PUPAZZI_RENDERER=gpu $H $C --gl --frames $N --dump "$T/aa" --at 30,250,419 2>&1)
 case "$o" in
-  *"antialias 4x pronto"*|*"antialias 2x pronto"*)
+  *"antialias 8x pronto"*|*"antialias 4x pronto"*|*"antialias 2x pronto"*)
     for f in f00030.ppm f00250.ppm f00419.ppm; do
       n=$(cmp -l "$T/gl/$f" "$T/aa/$f" 2>/dev/null | wc -l)
       echo "antialias, $f: $n byte diversi dall'immagine senza"

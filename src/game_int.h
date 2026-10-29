@@ -343,7 +343,8 @@ struct Game {
   bool paused;
   bool pause_help;            // nella pausa e' aperto il riquadro dei comandi
   uint8_t aim_level[MAX_PLAYERS];   // mira scelta da ogni giocatore nella pausa (AIM_XSOFT...)
-  bool aa_avail, aa_on;             // antialias: il renderer lo sa fare / scelto nella pausa (solo grafica)
+  int aa_max, aa_level, aa_cap;     // antialias (solo grafica): campioni al massimo del renderer (0: niente) /
+                                    // scelta della pausa (0, 1 il migliore, 4, 8) / tetto della sessione (8 o 4)
   // Campagna. loop: giro del pianeta della mappa in corso, da 0 (preso dal salvataggio quando la
   // mappa comincia; i mostri hanno piu' vita, danni e velocita' a ogni giro).
   int map_idx, loop;

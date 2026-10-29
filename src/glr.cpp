@@ -170,7 +170,8 @@ struct GLOpt {
 };
 
 enum { AA_NONE = 0, AA_EXT, AA_ES3 };
-struct AAState { int mode, samples, w, h; GLuint fbo, tex, color_rb, depth_rb; GLenum depth_fmt; bool discard; };
+// max: campioni al massimo (da GL_MAX_SAMPLES, fino a 8); samples: quelli del bersaglio di adesso.
+struct AAState { int mode, max, samples, w, h; GLuint fbo, tex, color_rb, depth_rb; GLenum depth_fmt; bool discard; };
 
 struct WV { float x, y, z; uint8_t r, g, b, a; };          // vertice del mondo, 16 byte
 struct HV { float x, y, u, v; uint8_t r, g, b, a; };       // vertice 2D (cielo, copia dell'antialias), 20 byte
@@ -700,11 +701,17 @@ void aa_free(bool gl_alive) {
 }
 
 // Prova del percorso EXT dove la GPU non lo ha (PUPAZZI_AA=prova): le stesse chiamate, ma con un
-// solo campione. L'immagine deve venire identica a quella senza antialias.
-void fake_fbtex_ms(GLenum target, GLenum att, GLenum textarget, GLuint tex, GLint level, GLsizei) {
+// solo campione. L'immagine deve venire identica a quella senza antialias. PUPAZZI_AA=prova8: come
+// se la GPU arrivasse a 8; =prova8no: come se dicesse 8 ma poi lo rifiutasse (si passa a 4).
+bool g_fake_reject8;
+void fake_fbtex_ms(GLenum target, GLenum att, GLenum textarget, GLuint tex, GLint level, GLsizei samples) {
+  if (g_fake_reject8 && samples > 4) return;                 // niente colore: il bersaglio non e' completo
   gl.FramebufferTexture2D(target, att, textarget, tex, level);
 }
-void fake_rb_ms(GLenum target, GLsizei, GLenum fmt, GLsizei w, GLsizei h) { gl.RenderbufferStorage(target, fmt, w, h); }
+void fake_rb_ms(GLenum target, GLsizei samples, GLenum fmt, GLsizei w, GLsizei h) {
+  if (g_fake_reject8 && samples > 4) return;                 // renderbuffer senza memoria: incompleto
+  gl.RenderbufferStorage(target, fmt, w, h);
+}
 
 // Sceglie il modo dell'antialias. PUPAZZI_AA=0 lo spegne; =ext o =es3 forzano un modo, =prova
 // prova il percorso EXT con un solo campione (prove sul PC).
@@ -737,12 +744,14 @@ void aa_init(glr_get_proc_t get_proc, const char* ext, const char* version) {
   GLint max_samples = 0;
   if (ext_ok || es3_ok) gl.GetIntegerv(GL_MAX_SAMPLES, &max_samples);
   while (gl.GetError() != 0) {}
-  if (want && !strcmp(want, "prova")) {
+  g_fake_reject8 = false;
+  if (want && !strncmp(want, "prova", 5)) {
     glo.FramebufferTexture2DMultisampleEXT = fake_fbtex_ms;
     glo.RenderbufferStorageMultisampleEXT = fake_rb_ms;
     ext_ok = true;
-    max_samples = 4;
-    plat_log("GL: prova del percorso dell'antialias EXT con un solo campione (PUPAZZI_AA=prova)");
+    max_samples = strncmp(want, "prova8", 6) ? 4 : 8;
+    g_fake_reject8 = !strcmp(want, "prova8no");
+    plat_log("GL: prova del percorso dell'antialias EXT con un solo campione (PUPAZZI_AA=%s)", want);
   }
   if ((!ext_ok && !es3_ok) || max_samples < 2) {
     plat_log("GL: antialias non disponibile (EXT_multisampled_render_to_texture %s, OpenGL ES %d.%d, campioni %d)",
@@ -750,20 +759,25 @@ void aa_init(glr_get_proc_t get_proc, const char* ext, const char* version) {
     return;
   }
   g_aa.mode = ext_ok ? AA_EXT : AA_ES3;
-  g_aa.samples = max_samples >= 4 ? 4 : (int)max_samples;
+  // Dalla 0.5.4 fino a 8 campioni (il gioco chiede 4 o 8, vedi game_aa_wanted).
+  g_aa.max = max_samples >= 8 ? 8 : (max_samples >= 4 ? 4 : (int)max_samples);
   g_aa.depth_fmt = (major >= 3 || has_ext(ext, "GL_OES_depth24")) ? GL_DEPTH_COMPONENT24 : GL_DEPTH_COMPONENT16;
   g_aa.discard = g_aa.mode == AA_EXT && glo.DiscardFramebufferEXT && has_ext(ext, "GL_EXT_discard_framebuffer");
-  plat_log("GL: antialias %dx disponibile (%s, profondita' %d bit)", g_aa.samples,
+  plat_log("GL: antialias fino a %dx disponibile (%s, profondita' %d bit)", g_aa.max,
            g_aa.mode == AA_EXT ? "EXT_multisampled_render_to_texture" : "OpenGL ES 3, renderbuffer e blit",
            g_aa.depth_fmt == GL_DEPTH_COMPONENT24 ? 24 : 16);
 }
 
-// Bersaglio con piu' campioni per pixel della misura dell'immagine; se la GPU lo rifiuta,
-// l'antialias si spegne per tutta la sessione e lo si scrive nel registro.
-bool aa_ready(int w, int h) {
+// Bersaglio con want campioni per pixel (al massimo g_aa.max) della misura dell'immagine; se la GPU
+// lo rifiuta con 8 si riprova con 4, con 4 l'antialias si spegne per tutta la sessione; lo si scrive
+// nel registro.
+bool aa_ready(int w, int h, int want) {
   if (g_aa.mode == AA_NONE) return false;
-  if (g_aa.fbo && g_aa.w == w && g_aa.h == h) return true;
+  const int s = want > g_aa.max ? g_aa.max : want;
+  if (s < 2) return false;
+  if (g_aa.fbo && g_aa.w == w && g_aa.h == h && g_aa.samples == s) return true;
   aa_free(true);
+  g_aa.samples = s;
   while (gl.GetError() != 0) {}
   gl.GenFramebuffers(1, &g_aa.fbo);
   gl.BindFramebuffer(GL_FRAMEBUFFER, g_aa.fbo);
@@ -795,10 +809,15 @@ bool aa_ready(int w, int h) {
   const GLenum status = gl.CheckFramebufferStatus(GL_FRAMEBUFFER);
   const GLenum err = gl.GetError();
   if (status != GL_FRAMEBUFFER_COMPLETE || err) {
-    plat_log("GL: antialias rifiutato dalla GPU (stato 0x%04x, errore 0x%04x): si disegna senza", (unsigned)status, (unsigned)err);
     aa_free(true);
-    g_aa.mode = AA_NONE;
     while (gl.GetError() != 0) {}
+    if (s > 4) {
+      plat_log("GL: antialias %dx rifiutato dalla GPU (stato 0x%04x, errore 0x%04x): si prova con 4", s, (unsigned)status, (unsigned)err);
+      g_aa.max = 4;
+      return aa_ready(w, h, 4);
+    }
+    plat_log("GL: antialias rifiutato dalla GPU (stato 0x%04x, errore 0x%04x): si disegna senza", (unsigned)status, (unsigned)err);
+    g_aa.mode = AA_NONE;
     return false;
   }
   g_aa.w = w;
@@ -810,6 +829,7 @@ bool aa_ready(int w, int h) {
 }  // namespace
 
 bool glr_aa_available(void) { return g_ok && g_aa.mode != AA_NONE; }
+int glr_aa_max(void) { return glr_aa_available() ? g_aa.max : 0; }
 
 bool glr_init(glr_get_proc_t get_proc) {
   memset(&gl, 0, sizeof(gl));
@@ -943,7 +963,7 @@ void glr_render(const FrameDesc* f, unsigned fbo, RenderStats* st, bool finish) 
     g_depth_bits = bits;
     plat_log("GL: buffer di profondita' a %d bit", (int)bits);
   }
-  const bool aa = f->aa && aa_ready(w, h);
+  const bool aa = f->aa > 0 && aa_ready(w, h, f->aa);
   gl.BindFramebuffer(GL_FRAMEBUFFER, aa ? g_aa.fbo : fbo);
   gl.Viewport(0, 0, w, h);
   // Lo stato ereditato dal frontend (o da un core precedente) non e' garantito: si rimette a

@@ -59,7 +59,7 @@ char g_slot_paths[SAVE_SLOTS][300];
 
 void defaults_settings(SaveData* d) {
   for (int i = 0; i < SAVE_PLAYERS; ++i) d->aim[i] = 1;
-  d->antialias = true;
+  d->antialias = 1;
   d->music_vol = 6;   // 0.5: musiche nuove piu' leggere, sotto gli effetti
   d->sfx_vol = 8;
   d->lang = 0;
@@ -273,7 +273,15 @@ void read_line(Reader* r, char* s, bool broken) {
     iv = &d.version;
     hi = 1000000;
   } else if (r->f->kind == K_SETTINGS) {
-    if (!strcmp(k, "antialias")) fv = &d.antialias;
+    if (!strcmp(k, "antialias")) {
+      if (!num) {
+        r->bad++;
+        return;
+      }
+      d.antialias = (uint8_t)(n <= 0 ? 0 : (n == 1 ? 1 : (n < 6 ? 4 : 8)));
+      r->ok++;
+      return;
+    }
     else if (!strcmp(k, "volume_musica")) { bv = &d.music_vol; hi = 10; }
     else if (!strcmp(k, "volume_effetti")) { bv = &d.sfx_vol; hi = 10; }
     else if (!strncmp(k, "mira.", 5) && k[5] >= '1' && k[5] < '1' + SAVE_PLAYERS && !k[6]) { bv = &d.aim[k[5] - '1']; hi = 3; }
@@ -357,7 +365,8 @@ int serialize(const File* f, SaveData& d, char* buf, int cap) {
     put(&o, "%s", SETTINGS_HEADER);
     put(&o, "versione=%d\n", SAVE_VERSION);
     for (int i = 0; i < SAVE_PLAYERS; ++i) put(&o, "mira.%d=%d\n", i + 1, d.aim[i]);
-    put(&o, "antialias=%d\n", d.antialias ? 1 : 0);
+    if (d.antialias != 0 && d.antialias != 1 && d.antialias != 4 && d.antialias != 8) d.antialias = 1;
+    put(&o, "antialias=%d\n", d.antialias);
     put(&o, "volume_musica=%d\n", d.music_vol);
     put(&o, "volume_effetti=%d\n", d.sfx_vol);
     put(&o, "lingua=%s\n", LANG_ID[d.lang]);

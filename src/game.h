@@ -36,6 +36,7 @@ void game_quick_start(int map, int players, const char* chars);
 void game_update(const Pad pads[MAX_PLAYERS]);      // un passo di 1/60 di secondo
 void game_start_tap(int player);                    // START premuto e lasciato subito
 bool game_paused(void);
+bool game_playing(void);                            // (0.5.4) in partita (non nei menu, non in pausa, niente carte)
 bool game_wants_quit(void);                         // scelto "Esci" dal titolo
 // Telecamera, oggetti da disegnare e HUD del gioco (hud puo' essere NULL).
 void game_build_frame(FrameDesc* fd, int w, int h, Hud* hud);
@@ -45,9 +46,11 @@ uint32_t game_player_rgb(int i);
 void game_set_aim_level(int player, int level);
 const char* game_aim_name(int player);
 // Antialias: il renderer dice se lo sa fare, il gioco se e' scelto (voce della pausa).
-void game_set_aa_available(bool avail);
-void game_set_aa_on(bool on);                       // come la voce della pausa (all'avvio e' acceso)
-bool game_aa_wanted(void);
+void game_set_aa_available(int max_samples);        // 0: il renderer non lo sa fare; altrimenti fino a quanti campioni
+void game_set_aa_level(int level);                  // come la voce della pausa: 0 spento, 1 il migliore, 4, 8
+int game_aa_level(void);
+void game_aa_cap(int samples);                      // (0.5.4) in questa sessione al massimo tanti campioni (8x troppo pesante)
+int game_aa_wanted(void);                           // campioni da usare adesso: 0, 4 o 8
 // Schermo: con l'HDMI (TV) la visuale va da 22 a 30 m, sullo schermo della console da 15 a 30. Il
 // core lo legge dal sistema (all'avvio e' come con l'HDMI). Cambia solo l'inquadratura, non la partita.
 void game_set_hdmi(bool on);

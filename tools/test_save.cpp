@@ -721,7 +721,34 @@ int main() {
     check(!exists(file_in(Z2, "partita1.sav")), "eliminata la partita: i progressi vecchi non tornano");
   }
 
-  printf("17) nome delle partite\n");
+  printf("17) antialias: 0, 1 (il migliore), 4 o 8\n");
+  {
+    const char* W = dir_of("w", true);
+    static const char* const IN[9] = { "0", "1", "2", "4", "5", "6", "8", "99", "-3" };
+    static const int OUT[9] = { 0, 1, 4, 4, 4, 8, 8, 8, 0 };
+    bool ok = true;
+    for (int k = 0; k < 9; ++k) {
+      char t[64];
+      snprintf(t, sizeof(t), "antialias=%s\n", IN[k]);
+      put_text(file_in(W, "pupazzi.sav"), t);
+      save_open(W);
+      ok &= save_data()->antialias == OUT[k];
+    }
+    check(ok, "0 -> 0, 1 -> 1, da 2 a 5 -> 4, da 6 in su -> 8, negativi -> 0");
+    put_text(file_in(W, "pupazzi.sav"), "antialias=si\n");
+    check(save_open(W) == SAVE_ILLEGGIBILE && save_data()->antialias == 1, "antialias=si: riga non valida, resta il migliore");
+    save_open(W);
+    save_data()->antialias = 8;
+    save_write();
+    get_file(file_in(W, "pupazzi.sav"), buf, sizeof(buf));
+    ok = count_of(buf, "\nantialias=8\n") == 1;
+    save_data()->antialias = 3;          // il gioco non lo fa: si scrive il migliore
+    save_write();
+    get_file(file_in(W, "pupazzi.sav"), buf, sizeof(buf));
+    check(ok && count_of(buf, "\nantialias=1\n") == 1, "scritto 8; un valore che non va diventa 1");
+  }
+
+  printf("18) nome delle partite\n");
   {
     const char* N = dir_of("n", true);
     save_open(N);

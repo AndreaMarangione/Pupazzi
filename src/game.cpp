@@ -744,7 +744,8 @@ void game_init(void) {
   if (g_inited) game_shutdown();
   memset(&g, 0, sizeof(g));
   for (int i = 0; i < MAX_PLAYERS; ++i) g.aim_level[i] = AIM_DEFAULT;   // resta per tutta la sessione
-  g.aa_on = true;                                                       // antialias acceso se il renderer lo sa fare
+  g.aa_level = 1;                                                       // antialias: il migliore che il renderer sa fare
+  g.aa_cap = 8;
   models_build();
   maps_init();
   g_inited = true;
@@ -867,15 +868,23 @@ void game_set_hdmi(bool on) {
   plat_log("schermo: %s, visuale da %.0f a %.0f m", on ? "HDMI (TV)" : "della console", (double)(on ? CAM_DIST_MIN : CAM_DIST_MIN_LCD),
            (double)CAM_DIST_MAX);
 }
-void game_set_aa_available(bool avail) { g.aa_avail = avail; }
-void game_set_aa_on(bool on) { g.aa_on = on; }
-bool game_aa_wanted(void) { return g.aa_avail && g.aa_on; }
+bool game_playing(void) { return g.screen == SC_PLAY && !g.paused && !g.cards_open; }
+void game_set_aa_available(int max_samples) { g.aa_max = max_samples > 0 ? max_samples : 0; }
+void game_set_aa_level(int level) { g.aa_level = level; }
+int game_aa_level(void) { return g.aa_level; }
+void game_aa_cap(int samples) { g.aa_cap = samples; }
+int game_aa_wanted(void) {
+  if (g.aa_max <= 0 || g.aa_level <= 0) return 0;
+  int want = g.aa_level == 1 ? g.aa_cap : g.aa_level;     // il migliore: fin dove arriva, salvo il tetto
+  if (want > g.aa_max) want = g.aa_max;
+  return want;
+}
 void game_save_loaded(void) {
   // Impostazioni salvate: mira di ogni posto, antialias, volumi, lingua.
   const SaveData* sd = save_data();
   for (int i = 0; i < MAX_PLAYERS && i < SAVE_PLAYERS; ++i)
     if (sd->aim[i] < NAIMLEVELS) g.aim_level[i] = sd->aim[i];
-  g.aa_on = sd->antialias;
+  g.aa_level = sd->antialias;
   audio_set_volume(sd->music_vol, sd->sfx_vol);
   lang_set(sd->lang);
   g_settings_dirty = false;
