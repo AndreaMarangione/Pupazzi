@@ -2342,3 +2342,443 @@ pt jogo
 zh 游戏
 ja ゲーム
 hi गेम
+
+# 0.5.4: riquadro delle prestazioni in rete: "RETE · 12 ms · scorta 2/2 · 0" (S13)
+it RETE
+en LAN
+es RED
+pt REDE
+zh 网络
+ja 通信
+hi नेटवर्क
+
+it scorta
+en buffer
+es reserva
+pt reserva
+zh 缓冲
+ja バッファ
+hi बफ़र
+
+
+# === Gioco in rete (0.5.4) =====================================================================
+# Voce della prima schermata (S16, circa 188 pixel) e titolo della pagina della rete.
+@T32
+it GIOCO IN RETE
+en LAN PLAY
+es JUEGO EN RED
+pt JOGO EM REDE
+zh 局域网联机
+ja ローカル通信
+hi लैन गेम
+
+# sotto il titolo (S15, al massimo 576 pixel)
+it ognuno sul suo schermo, nella stessa Wi-Fi
+en everyone on their own screen, on the same Wi-Fi
+es cada uno en su pantalla, en la misma Wi-Fi
+pt cada um no seu ecrã, na mesma Wi-Fi
+zh 各用各的屏幕，连同一个 Wi-Fi
+ja 同じWi-Fiで、それぞれの画面で遊ぶ
+hi हर कोई अपनी स्क्रीन पर, उसी Wi-Fi में
+
+# le due voci (B16, al massimo 304 pixel) e sotto cosa fanno (S13)
+it CREA UNA PARTITA
+en HOST A GAME
+es CREAR UNA PARTIDA
+pt CRIAR UM JOGO
+zh 创建游戏
+ja ゲームを作る
+hi गेम बनाएँ
+
+it UNISCITI A UNA PARTITA
+en JOIN A GAME
+es UNIRSE A UNA PARTIDA
+pt JUNTAR-SE A UM JOGO
+zh 加入游戏
+ja ゲームに参加
+hi गेम में जुड़ें
+
+it le altre console la trovano da sole
+en the other consoles find it by themselves
+es las otras consolas la encuentran solas
+pt as outras consolas encontram-no sozinhas
+zh 其他游戏机会自动找到它
+ja ほかのゲーム機が自動で見つける
+hi बाकी कंसोल इसे खुद ढूँढ लेंगे
+
+it cerca le partite delle altre console
+en look for games on other consoles
+es busca partidas en otras consolas
+pt procura jogos nas outras consolas
+zh 搜索其他游戏机上的游戏
+ja ほかのゲーム機のゲームを探す
+hi दूसरे कंसोल पर गेम खोजो
+
+# sotto le voci, con il disegno della rete (S13): indirizzo di questa console, o nessuna rete
+it questa console: %s
+en this console: %s
+es esta consola: %s
+pt esta consola: %s
+zh 本机：%s
+ja このゲーム機：%s
+hi यह कंसोल: %s
+
+it nessuna rete: collega la console alla Wi-Fi
+en no network: connect the console to Wi-Fi
+es sin red: conecta la consola a la Wi-Fi
+pt sem rede: liga a consola à Wi-Fi
+zh 没有网络：请把游戏机连上 Wi-Fi
+ja ネットワークなし：ゲーム機をWi-Fiにつないでね
+hi नेटवर्क नहीं: कंसोल को Wi-Fi से जोड़ो
+
+# salvataggio con cui creare la partita: titolo e riga sotto (S14, al massimo 576 pixel)
+@T32
+it CON QUALE SALVATAGGIO?
+en WHICH SAVE?
+es ¿CON QUÉ PARTIDA?
+pt COM QUE JOGO?
+zh 用哪个存档？
+ja どのデータで遊ぶ？
+hi कौन-सा सेव?
+
+it la partita in rete si salva qui, su questa console
+en the LAN game is saved here, on this console
+es la partida en red se guarda aquí, en esta consola
+pt o jogo em rede é guardado aqui, nesta consola
+zh 联机游戏的进度保存在这台游戏机上
+ja 通信プレイの記録はこのゲーム機に保存されます
+hi लैन गेम यहीं, इसी कंसोल पर सेव होगा
+
+# Sala d'attesa: titolo, i 4 posti (B16; accanto TU, a destra in S13 com'e' il posto), sotto una
+# riga (S14) e i tasti.
+@T32
+it PARTITA IN RETE
+en LAN GAME
+es PARTIDA EN RED
+pt JOGO EM REDE
+zh 联机游戏
+ja 通信プレイ
+hi लैन गेम
+
+it GIOCATORE %d
+en PLAYER %d
+es JUGADOR %d
+pt JOGADOR %d
+zh 玩家 %d
+ja プレイヤー %d
+hi खिलाड़ी %d
+
+# etichetta del posto di questa console (B11)
+it TU
+en YOU
+es TÚ
+pt TU
+zh 你
+ja あなた
+hi तुम
+
+it ha creato la partita
+en created the game
+es creó la partida
+pt criou o jogo
+zh 创建了游戏
+ja ゲームを作った人
+hi गेम बनाया
+
+it collegato
+en connected
+es conectado
+pt ligado
+zh 已连接
+ja 接続中
+hi जुड़ा हुआ
+
+it sulle altre console: GIOCO IN RETE, poi UNISCITI
+en on the other consoles: LAN PLAY, then JOIN A GAME
+es en las otras consolas: JUEGO EN RED, luego UNIRSE A UNA PARTIDA
+pt nas outras consolas: JOGO EM REDE, depois JUNTAR-SE A UM JOGO
+zh 在其他游戏机上：局域网联机，然后加入游戏
+ja ほかのゲーム機で：ローカル通信→ゲームに参加
+hi बाकी कंसोल पर: लैन गेम, फिर गेम में जुड़ें
+
+it aspetta: la fa cominciare chi l'ha creata
+en wait: whoever created it will start it
+es espera: la empieza quien la creó
+pt espera: quem o criou é que o começa
+zh 请稍候：由创建者开始游戏
+ja 待っていてね：作った人が始めるよ
+hi रुको: जिसने गेम बनाया वही शुरू करेगा
+
+it mi unisco alla partita...
+en joining the game...
+es uniéndome a la partida...
+pt a juntar-me ao jogo...
+zh 正在加入游戏...
+ja ゲームに参加中...
+hi गेम में जुड़ रहे हैं...
+
+it inizia
+en start
+es empezar
+pt começar
+zh 开始
+ja スタート
+hi शुरू करें
+
+it annulla
+en cancel
+es cancelar
+pt cancelar
+zh 取消
+ja キャンセル
+hi रद्द करें
+
+it aspetta almeno un'altra console
+en wait for at least one more console
+es espera al menos otra consola
+pt espera por pelo menos mais uma consola
+zh 至少还需要一台游戏机
+ja もう1台以上のゲーム機を待ってね
+hi कम से कम एक और कंसोल का इंतज़ार करो
+
+# Partite trovate: titolo, sotto "cerco nella stessa Wi-Fi..." (S15), una riga per partita (nome in
+# B16, sotto pianeta e giro), a destra perche' non si puo' entrare (B11).
+@T32
+it PARTITE IN RETE
+en LAN GAMES
+es PARTIDAS EN RED
+pt JOGOS EM REDE
+zh 可加入的游戏
+ja 参加できるゲーム
+hi लैन गेम्स
+
+it cerco nella stessa Wi-Fi
+en searching on the same Wi-Fi
+es buscando en la misma Wi-Fi
+pt a procurar na mesma Wi-Fi
+zh 正在同一 Wi-Fi 中搜索
+ja 同じWi-Fiで探しています
+hi उसी Wi-Fi में खोज रहे हैं
+
+it NESSUNA PARTITA PER ORA
+en NO GAMES YET
+es AÚN NO HAY PARTIDAS
+pt AINDA NÃO HÁ JOGOS
+zh 暂时没有游戏
+ja まだゲームがない
+hi अभी कोई गेम नहीं
+
+it su un'altra console: GIOCO IN RETE, poi CREA UNA PARTITA
+en on another console: LAN PLAY, then HOST A GAME
+es en otra consola: JUEGO EN RED, luego CREAR UNA PARTIDA
+pt noutra consola: JOGO EM REDE, depois CRIAR UM JOGO
+zh 在另一台游戏机上：局域网联机，然后创建游戏
+ja ほかのゲーム機で：ローカル通信→ゲームを作る
+hi दूसरे कंसोल पर: लैन गेम, फिर गेम बनाएँ
+
+it PIENA
+en FULL
+es LLENA
+pt CHEIO
+zh 已满
+ja 満員
+hi भरा हुआ
+
+it GIÀ COMINCIATA
+en STARTED
+es YA EMPEZADA
+pt JÁ COMEÇOU
+zh 已开始
+ja 開始済み
+hi शुरू हो चुका
+
+it MAPPE DIVERSE
+en DIFFERENT MAPS
+es MAPAS DISTINTOS
+pt MAPAS DIFERENTES
+zh 地图不同
+ja マップが違う
+hi अलग मैप
+
+it unisciti
+en join
+es unirse
+pt juntar-se
+zh 加入
+ja 参加
+hi जुड़ें
+
+# Avvisi (S14, al massimo 440 pixel, fino a tre righe)
+it versione diversa: su quella console c'è la %s
+en different version: that console has %s
+es versión distinta: esa consola tiene la %s
+pt versão diferente: essa consola tem a %s
+zh 版本不同：那台游戏机是 %s
+ja バージョンが違う：あちらは%s
+hi वर्ज़न अलग है: उस कंसोल पर %s है
+
+it mappe diverse sulle due console: non si può giocare insieme
+en different maps on the two consoles: you can't play together
+es mapas distintos en las dos consolas: no se puede jugar juntos
+pt mapas diferentes nas duas consolas: não dá para jogar juntos
+zh 两台游戏机的地图不同：无法一起玩
+ja 2台のマップが違うので一緒に遊べない
+hi दोनों कंसोल के मैप अलग हैं: साथ नहीं खेल सकते
+
+it la partita è piena
+en the game is full
+es la partida está llena
+pt o jogo está cheio
+zh 游戏人数已满
+ja ゲームは満員です
+hi गेम भर चुका है
+
+it la partita è già cominciata
+en the game has already started
+es la partida ya empezó
+pt o jogo já começou
+zh 游戏已经开始了
+ja ゲームはもう始まっている
+hi गेम पहले ही शुरू हो चुका है
+
+it la partita non risponde
+en the game isn't answering
+es la partida no responde
+pt o jogo não responde
+zh 游戏没有响应
+ja ゲームから応答がない
+hi गेम जवाब नहीं दे रहा
+
+it la console che ha creato la partita è uscita
+en the console that created the game has left
+es la consola que creó la partida salió
+pt a consola que criou o jogo saiu
+zh 创建游戏的游戏机已退出
+ja ゲームを作ったゲーム機が抜けた
+hi गेम बनाने वाला कंसोल निकल गया
+
+it collegamento perso con la console che ha creato la partita
+en lost the connection to the console that created the game
+es se perdió la conexión con la consola que creó la partida
+pt perdeu-se a ligação à consola que criou o jogo
+zh 与创建游戏的游戏机断开了连接
+ja ゲームを作ったゲーム機との通信が切れた
+hi गेम बनाने वाले कंसोल से कनेक्शन टूट गया
+
+it la console che ha creato la partita non ti sentiva più
+en the console that created the game couldn't hear you anymore
+es la consola que creó la partida ya no te recibía
+pt a consola que criou o jogo deixou de te receber
+zh 创建游戏的游戏机收不到你的信号了
+ja ゲームを作ったゲーム機に届かなくなった
+hi गेम बनाने वाला कंसोल तुम्हें अब सुन नहीं पा रहा था
+
+it partita in rete interrotta: le console non facevano più la stessa partita
+en LAN game stopped: the consoles were no longer playing the same game
+es partida en red interrumpida: las consolas ya no jugaban la misma partida
+pt jogo em rede interrompido: as consolas já não jogavam o mesmo jogo
+zh 联机游戏中断：各游戏机的游戏不再一致
+ja 通信プレイ中断：ゲーム機どうしのゲームがずれた
+hi लैन गेम रुका: कंसोल अब एक जैसा गेम नहीं खेल रहे थे
+
+it partita in rete interrotta: questa console era rimasta troppo indietro
+en LAN game stopped: this console fell too far behind
+es partida en red interrumpida: esta consola se quedó muy atrás
+pt jogo em rede interrompido: esta consola ficou demasiado para trás
+zh 联机游戏中断：这台游戏机落后太多
+ja 通信プレイ中断：このゲーム機が遅れすぎた
+hi लैन गेम रुका: यह कंसोल बहुत पीछे रह गया
+
+it non riesco a usare la rete su questa console
+en can't use the network on this console
+es no puedo usar la red en esta consola
+pt não consigo usar a rede nesta consola
+zh 这台游戏机无法使用网络
+ja このゲーム機では通信が使えない
+hi इस कंसोल पर नेटवर्क नहीं चल रहा
+
+it le altre console sono uscite: continui da solo
+en the other consoles left: you carry on alone
+es las otras consolas salieron: sigues solo
+pt as outras consolas saíram: continuas sozinho
+zh 其他游戏机都退出了：你继续单人游戏
+ja ほかのゲーム機が抜けた：ひとりで続けよう
+hi बाकी कंसोल निकल गए: तुम अकेले आगे खेलो
+
+it partita in rete finita
+en LAN game over
+es partida en red terminada
+pt jogo em rede terminado
+zh 联机游戏已结束
+ja 通信プレイが終わった
+hi लैन गेम खत्म
+
+# Come si gioca? in rete: B (piede, S14) e la finestra sopra (B16, poi S13, al massimo 336 pixel)
+it esci dalla rete
+en leave the LAN game
+es salir de la red
+pt sair da rede
+zh 退出联机
+ja 通信をやめる
+hi नेटवर्क से निकलें
+
+it FINIRE LA PARTITA IN RETE?
+en END THE LAN GAME?
+es ¿TERMINAR LA PARTIDA EN RED?
+pt TERMINAR O JOGO EM REDE?
+zh 结束联机游戏？
+ja 通信プレイを終了する？
+hi लैन गेम खत्म करें?
+
+it tutte le console tornano al titolo
+en all consoles go back to the title screen
+es todas las consolas vuelven al título
+pt todas as consolas voltam ao título
+zh 所有游戏机都会回到标题画面
+ja すべてのゲーム機がタイトルに戻る
+hi सभी कंसोल टाइटल पर लौट जाएँगे
+
+# Chi gioca? in rete: posto senza console (S13, al massimo 120 pixel)
+it nessuna console
+en no console
+es sin consola
+pt sem consola
+zh 无游戏机
+ja ゲーム機なし
+hi कोई कंसोल नहीं
+
+# In partita, in rete: chi si scollega (messaggio grande e riga sotto), rimasti da soli, la rete
+# che non arriva (S13).
+@T32
+it GIOCATORE %d È USCITO
+en PLAYER %d LEFT
+es EL JUGADOR %d SE FUE
+pt O JOGADOR %d SAIU
+zh 玩家 %d 已离开
+ja プレイヤー %d が抜けた
+hi खिलाड़ी %d चला गया
+
+it la sua console si è scollegata
+en their console disconnected
+es su consola se desconectó
+pt a consola dele desligou-se
+zh 对方的游戏机断开了连接
+ja ゲーム機の通信が切れた
+hi उसका कंसोल डिस्कनेक्ट हो गया
+
+@T32
+it SEI RIMASTO SOLO
+en YOU'RE ON YOUR OWN
+es TE QUEDASTE SOLO
+pt FICASTE SOZINHO
+zh 只剩你了
+ja ひとりになった
+hi तुम अकेले रह गए
+
+it rete lenta...
+en slow network...
+es red lenta...
+pt rede lenta...
+zh 网络较慢...
+ja 通信が遅い...
+hi नेटवर्क धीमा...

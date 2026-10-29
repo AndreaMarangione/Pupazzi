@@ -107,17 +107,21 @@ enum ShotKind {
 };
 
 enum { PH_FIGHT = 0, PH_ENTER, PH_CLEAR, PH_MAP_DONE, PH_WIPE };
-enum { SC_TITLE = 0, SC_MODE, SC_MAPS, SC_CHARS, SC_PLAY, SC_STATS, SC_SLOTS, SC_LANG, SC_NAME, NSCREENS };
-// Prima schermata (0.5.3): nuova partita, carica, gestisci i salvataggi, lingua, esci.
-enum { TI_NEW = 0, TI_LOAD, TI_MANAGE, TI_LANG, TI_QUIT, TITLE_ITEMS };
+// SC_NET: GIOCO IN RETE (crea o unisciti); SC_LOBBY: sala d'attesa (0.5.4, solo su questa console:
+// la partita in rete comincia dopo, da COME SI GIOCA?).
+enum { SC_TITLE = 0, SC_MODE, SC_MAPS, SC_CHARS, SC_PLAY, SC_STATS, SC_SLOTS, SC_LANG, SC_NAME, SC_NET, SC_LOBBY, NSCREENS };
+// Prima schermata (0.5.3): nuova partita, carica, gioco in rete (0.5.4), gestisci i salvataggi, lingua, esci.
+enum { TI_NEW = 0, TI_LOAD, TI_NET, TI_MANAGE, TI_LANG, TI_QUIT, TITLE_ITEMS };
 // Schermata dei salvataggi: per caricarne uno, per gestirli (duplica, elimina) o, con la nuova partita
-// e i posti pieni, per scegliere quale sovrascrivere. Finestre sopra: azioni, conferma.
-enum { SL_LOAD = 0, SL_MANAGE, SL_OVERWRITE };
+// e i posti pieni, per scegliere quale sovrascrivere; in rete (0.5.4) con quale creare la partita.
+// Finestre sopra: azioni, conferma.
+enum { SL_LOAD = 0, SL_MANAGE, SL_OVERWRITE, SL_NET };
 enum { SP_NONE = 0, SP_ACTIONS, SP_DELETE, SP_OVERWRITE };
 // Voci della finestra delle azioni (0.5.4: anche RINOMINA).
 enum { SA_COPY = 0, SA_RENAME, SA_DELETE, SA_COUNT };
-// Tastiera per il nome della partita (0.5.4): partita nuova (prima di crearla) o nome nuovo.
-enum { NM_NEW = 0, NM_RENAME };
+// Tastiera per il nome della partita (0.5.4): partita nuova (prima di crearla), nome nuovo, partita
+// nuova da creare in rete.
+enum { NM_NEW = 0, NM_RENAME, NM_NET };
 // Voci della pausa: riprendi, comandi (0.5.2: apre il riquadro con i tasti), mira, antialias, musica,
 // effetti, lascia la partita, torna al menu.
 enum { PS_RESUME = 0, PS_CONTROLS, PS_AIM, PS_AA, PS_MUSIC, PS_SFX, PS_LEAVE, PS_MENU, PAUSE_ITEMS };
@@ -341,6 +345,12 @@ struct Game {
   char name_buf[SAVE_NAME_LEN];
   int pause_owner, pause_sel;
   bool paused;
+  // Gioco in rete (0.5.4): partita in rete (uguale su tutte le console), posti con una console
+  // collegata, finestra "finire la partita in rete?"; partita trovata col cursore (sala d'attesa).
+  bool net;
+  uint8_t net_consoles;
+  bool net_pop;
+  int lobby_sel;
   bool pause_help;            // nella pausa e' aperto il riquadro dei comandi
   uint8_t aim_level[MAX_PLAYERS];   // mira scelta da ogni giocatore nella pausa (AIM_XSOFT...)
   int aa_max, aa_level, aa_cap;     // antialias (solo grafica): campioni al massimo del renderer (0: niente) /
@@ -545,7 +555,17 @@ bool boss_force_act(int act);           // prove: comincia subito l'azione act v
 void flow_build(uint16_t* field, const Vec3* goals, int ngoals, int zone);   // zone < 0: tutta la mappa
 bool flow_dir(const uint16_t* field, float x, float z, float* dx, float* dz);
 bool walk_clear(Vec3 a, Vec3 b, float r, bool flying);
+// --- gioco in rete (game.cpp; vedi net.h) ---
+const NetView& net_view(void);   // cosa c'e' in rete (dal core, solo per le pagine della rete)
+void net_req(int req, int arg);  // richiesta al core (NR_*): la prende dopo game_update
+int net_local(void);             // giocatore di questa console in una partita in rete, -1 fuori
+// In rete conta solo chi ha una console collegata (per gli avvisi "premete un tasto").
+static inline bool net_console(int i) { return !g.net || ((g.net_consoles >> i) & 1u) != 0u; }
+int net_wait_frames(void);       // da quanti fotogrammi questa console aspetta la rete (solo HUD)
+uint8_t net_silent(void);        // console che non rispondono da un po' (solo HUD)
 // --- menu.cpp ---
+void menu_info(const char* s);   // avviso nei menu al posto del piede (2 secondi)
+const char* net_error_text(int e, char* buf, int n);   // cosa dire per un errore della rete (NE_*)
 void menu_update(void);
 void play_menus_update(void);  // pausa e finestre per entrare, durante la partita
 void menu_build_hud(Hud* h, const Camera& cam);

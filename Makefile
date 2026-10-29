@@ -4,6 +4,7 @@
 #   make test       prove automatiche senza console
 #   make test-gl    prove del renderer GPU su un OpenGL ES software (Mesa)
 #   make test-audio prove del sonoro (effetti e brani in build/wav)
+#   make test-net   prove del gioco in rete (0.5.4): piu' copie del gioco su questa macchina
 #   make console    core per la console: ARM a 32 bit (RetroArch di serie) e ARM a 64 bit
 #   make pc         core per PC Linux a 64 bit che non dipende dalla glibc di questa macchina
 #   make dist       tutto cio' che serve a deploy.sh: dist/APPS (console) e dist/pc
@@ -13,7 +14,7 @@
 SRC := src/core.cpp src/game.cpp src/game_draw.cpp src/player.cpp src/combat.cpp src/monsters.cpp \
        src/flow.cpp src/menu.cpp src/bot.cpp src/cards.cpp src/level.cpp src/level_mesh.cpp src/maps.cpp src/models.cpp \
        src/swr.cpp src/glr.cpp src/hud.cpp src/ui.cpp src/lang.cpp src/mesh.cpp src/plat.cpp src/save.cpp src/audio.cpp \
-       src/sysinfo.cpp
+       src/sysinfo.cpp src/net.cpp
 HDR := $(wildcard src/*.h)
 # Mappe della campagna, in ordine: incorporate nel core e copiate nella cartella mappe/ della console.
 MAPS := maps/terra1.txt maps/terra2.txt maps/terra3.txt maps/terra_boss.txt
@@ -45,7 +46,7 @@ CHECK_ARM32 = @if command -v readelf >/dev/null 2>&1; then \
 	    readelf --dyn-syms -W $@ | grep -q " UND $$f@" || { echo "ERRORE: $@ non importa $$f da glibc"; rm -f $@; exit 1; }; \
 	  done; fi
 
-.PHONY: all native tools console arm32 arm64 pc dist test test-gl test-audio clean
+.PHONY: all native tools console arm32 arm64 pc dist test test-gl test-audio test-net clean
 all: native tools
 native: build/native/pupazzi_libretro.so
 tools: build/native/host build/native/test_raster build/native/test_aim build/native/test_save build/native/test_rules build/native/test_maps build/native/test_boss \
@@ -86,7 +87,7 @@ build/native/test_raster: tools/test_raster.cpp src/swr.cpp src/mesh.cpp src/hud
 	$(CXX) $(filter-out -fPIC -fvisibility=hidden,$(CXXFLAGS)) -o $@ tools/test_raster.cpp src/swr.cpp src/mesh.cpp src/hud.cpp src/plat.cpp -lm -lpthread
 
 # Prove della mira: il gioco senza frontend (niente core.cpp e niente renderer).
-GAME_SRC := $(filter-out src/core.cpp src/swr.cpp src/glr.cpp,$(SRC))
+GAME_SRC := $(filter-out src/core.cpp src/swr.cpp src/glr.cpp src/net.cpp,$(SRC))
 build/native/test_aim: tools/test_aim.cpp $(GAME_SRC) $(GEN) $(HDR)
 	@mkdir -p build/native
 	$(CXX) $(filter-out -fPIC -fvisibility=hidden,$(CXXFLAGS)) -Isrc -o $@ tools/test_aim.cpp $(GAME_SRC) $(GEN) -lm -lpthread
@@ -147,6 +148,12 @@ test-audio: build/native/test_audio
 
 test-gl: native tools
 	sh tools/test_gl.sh
+
+# Gioco in rete: 2, 3 e 4 copie del gioco che giocano insieme con messaggi UDP sulla stessa macchina
+# (messaggi persi e in ritardo, console che escono o si spengono, versione diversa...): le partite
+# devono restare uguali fotogramma per fotogramma. Qualche minuto.
+test-net: native tools
+	sh tools/test_net.sh
 
 # Cartella pronta per la console (va copiata dentro Roms/APPS) e core per il PC.
 dist: console pc

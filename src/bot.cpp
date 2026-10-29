@@ -207,16 +207,9 @@ void boss_orbit(const Player& p, Bot& b, int i, float range, float* mx, float* m
   }
 }
 
-}  // namespace
-
-void bot_reset(void) { memset(B, 0, sizeof(B)); }
-void bot_set_lag(int frames) { g_lag = frames > 0 ? frames : 0; }
-
-void game_bot_pads(Pad pads[MAX_PLAYERS], int n) {
-  if (n > MAX_PLAYERS) n = MAX_PLAYERS;
-  g.bots = n;
-  for (int i = 0; i < n; ++i) {
-    Pad& pad = pads[i];
+// I comandi del giocatore automatico i in questo fotogramma.
+void bot_one(int i, Pad& pad) {
+  {
     memset(&pad, 0, sizeof(pad));
     Bot& b = B[i];
     if (g.screen != SC_PLAY) {
@@ -225,18 +218,18 @@ void game_bot_pads(Pad pads[MAX_PLAYERS], int n) {
         b.menu_t = 0;
         pad.btn = 1u << PAD_A;
       }
-      continue;
+      return;
     }
     if (g.cards_open) {               // scelta delle carte: il gioco e' fermo
       bot_cards(i, pad);
-      continue;
+      return;
     }
     const Player& p = g.pl[i];
     if (!p.active) {
       if (g.tick > 30u + 20u * (unsigned)i) pad.btn = (g.tick & 8u) ? (uint16_t)(1u << PAD_A) : 0;   // entra in partita
-      continue;
+      return;
     }
-    if (!p.alive || g.paused || p.leap_n > 0) continue;
+    if (!p.alive || g.paused || p.leap_n > 0) return;
     const CharDef& cd = CHARS[p.ch];
 
     Vec3 tp = p.pos, it;
@@ -422,4 +415,19 @@ void game_bot_pads(Pad pads[MAX_PLAYERS], int n) {
     if (bomb && !b.a_prev) pad.btn |= 1u << PAD_L2;
     b.a_prev = bomb && !b.a_prev;
   }
+}
+
+}  // namespace
+
+void bot_reset(void) { memset(B, 0, sizeof(B)); }
+void bot_set_lag(int frames) { g_lag = frames > 0 ? frames : 0; }
+
+void game_bot_pads(Pad pads[MAX_PLAYERS], int n) {
+  if (n > MAX_PLAYERS) n = MAX_PLAYERS;
+  g.bots = n;
+  for (int i = 0; i < n; ++i) bot_one(i, pads[i]);
+}
+
+void game_bot_pad(int player, Pad* out) {
+  if (player >= 0 && player < MAX_PLAYERS) bot_one(player, *out);
 }

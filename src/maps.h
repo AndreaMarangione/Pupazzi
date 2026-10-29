@@ -16,3 +16,5 @@ int maps_world(int i);
 // incorporata. note riceve un avviso da mostrare nei menu (vuoto se va tutto bene).
 bool maps_load(int i, Level* L, char* note, int notelen);
 const char* maps_note(int i);         // avviso dell'ultima lettura della mappa i
+// Impronta delle mappe in uso (nomi e testi): due console giocano in rete solo con le stesse (0.5.4).
+uint64_t maps_content_hash(void);

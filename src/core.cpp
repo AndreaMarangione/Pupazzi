@@ -1,6 +1,6 @@
 // Pupazzi - core libretro: interfaccia con il frontend (RetroArch), comandi generali (pausa,
-// uscita, riquadro delle prestazioni), comandi dalle altre console (Remote RetroPad), registro e
-// stato di uscita per lo script di avvio.
+// uscita, riquadro delle prestazioni), comandi dalle altre console (Remote RetroPad), gioco in rete
+// con ognuno il suo schermo (net.h), registro e stato di uscita per lo script di avvio.
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -24,6 +24,7 @@
 #include "save.h"
 #include "lang.h"
 #include "sysinfo.h"
+#include "net.h"
 
 #ifndef PUPAZZI_BUILD
 #define PUPAZZI_BUILD "locale"
@@ -63,7 +64,9 @@ static struct {
   bool want_gl, use_gl, gl_ready;
   int gl_wait;
   bool bitmasks;
-  int bots;                   // PUPAZZI_BOT=n: i primi n giocatori li guida il computer (prove)
+  int bots;                   // PUPAZZI_BOT=n: i primi n giocatori li guida il computer (prove); in rete quello di questa console
+  bool net_auto;              // PUPAZZI_RETE: partita in rete automatica (prove), niente partita veloce
+  bool net_tap;               // in rete: START breve del pad di questa console, da mandare con i suoi comandi
   unsigned max_frames;        // PUPAZZI_FRAMES=n: chiusura automatica dopo n fotogrammi (prove)
   bool perf, trace, trace_m;
   bool stick_seen[MAX_PLAYERS][2];
@@ -567,7 +570,9 @@ static void handle_controls(void) {
     }
     const bool tap = A.start_hold[p] > 0 && A.start_hold[p] <= TAP_FRAMES && !(p == 0 && A.combo);
     A.start_hold[p] = 0;
-    if (tap) game_start_tap(p);
+    // In rete lo START breve del pad di questa console viaggia con i suoi comandi (vale su tutte).
+    if (tap && net_session()) A.net_tap |= p == 0;
+    else if (tap) game_start_tap(p);
   }
   if (sel) {
     if (A.sel_hold < 10000) A.sel_hold++;
@@ -620,6 +625,21 @@ static void perf_overlay(Hud* h) {
   float w = hud_text_w(HF_S13, buf) + 24.0f;
   hud_box(h, 24, 440, w, 24, 6, hud_a(0x18081E, 0.85f));
   hud_text(h, 36, hud_mid(HF_S13, 452), HF_S13, 0xFFFFFFFFu, buf);
+  // In rete (0.5.4): tempo di andata e ritorno, scorta, volte che e' mancata (chi si e' unito).
+  NetStats ns;
+  net_stats(&ns);
+  if (ns.on) {
+    if (A.hud_fixed) {
+      ns.rtt_ms = 0;
+      ns.buffer = ns.target = 0;
+      ns.stalls = 0;
+    }
+    if (ns.host) snprintf(buf, sizeof(buf), "%s · %d ms · %d console", tr("RETE"), ns.rtt_ms, ns.players);
+    else snprintf(buf, sizeof(buf), "%s · %d ms · %s %d/%d · %u", tr("RETE"), ns.rtt_ms, tr("scorta"), ns.buffer, ns.target, ns.stalls);
+    w = hud_text_w(HF_S13, buf) + 24.0f;
+    hud_box(h, 24, cpu.valid ? 384 : 412, w, 24, 6, hud_a(0x18081E, 0.85f));
+    hud_text(h, 36, hud_mid(HF_S13, cpu.valid ? 396.0f : 424.0f), HF_S13, 0xFFFFFFFFu, buf);
+  }
   if (!cpu.valid) return;
   int n = snprintf(buf, sizeof(buf), "CPU %d%% ·", cpu.total);
   for (int i = 0; i < cpu.ncore && n < (int)sizeof(buf) - 8; ++i) n += snprintf(buf + n, sizeof(buf) - (size_t)n, " %d", cpu.core[i]);
@@ -713,7 +733,7 @@ static int env_int(const char* name, int def) {
 // PUPAZZI_MAPPA (1 = la prima), con PUPAZZI_GIOCATORI giocatori e i personaggi PUPAZZI_PERSONAGGI.
 static void quick_start(void) {
   const int map = env_int("PUPAZZI_MAPPA", 0);
-  if (!A.bots && map <= 0) return;
+  if (A.net_auto || (!A.bots && map <= 0)) return;
   const int players = A.bots ? A.bots : env_int("PUPAZZI_GIOCATORI", 1);
   game_quick_start(map > 0 ? map - 1 : 0, players, getenv("PUPAZZI_PERSONAGGI"));
 }
@@ -772,11 +792,14 @@ RETRO_API void retro_init(void) {
   A.perf = env_int("PUPAZZI_PERF", 0) != 0;
   A.trace = env_int("PUPAZZI_TRACE", 0) != 0;   // stato della partita a ogni fotogramma nel registro (prove)
   A.trace_m = env_int("PUPAZZI_TRACE", 0) >= 2;  // ... e tutti i campi dei mostri
+  const char* rete = getenv("PUPAZZI_RETE");
+  A.net_auto = rete && *rete;
   quick_start();
 }
 
 RETRO_API void retro_deinit(void) {
   if (g_aa_try.frames >= 0) aa_try_mark(false);   // uscita normale: l'antialias non ha fatto danni
+  net_shutdown();    // in rete: saluta le altre console (e, se si era unita, rimette i salvataggi di questa)
   remote_close();    // se il frontend non ha chiamato retro_unload_game
   log_stick_stats();
   GameInfo gi;
@@ -917,6 +940,7 @@ RETRO_API bool retro_load_game(const struct retro_game_info* info) {
   send_descriptors();
   remote_close();    // retro_load_game di nuovo senza retro_unload_game: le porte di prima
   remote_open();
+  net_init();
   return true;
 }
 
@@ -925,9 +949,13 @@ RETRO_API bool retro_load_game_special(unsigned type, const struct retro_game_in
   return false;
 }
 
-RETRO_API void retro_unload_game(void) { remote_close(); }
+RETRO_API void retro_unload_game(void) {
+  net_shutdown();
+  remote_close();
+}
 RETRO_API void retro_reset(void) {
   plat_log("reset: si torna al titolo");
+  net_shutdown();
   audio_reset();
   game_reset();
   quick_start();
@@ -964,7 +992,7 @@ RETRO_API void retro_run(void) {
   read_input();
   if (lang_get() != g_desc_lang) send_descriptors();
   if (A.frame % 60 == 59 && A.hdmi_force < 0 && A.hdmi_src != 0) hdmi_poll(false);   // ogni secondo: si puo' staccare in partita
-  if (A.bots) game_bot_pads(A.pads, A.bots);
+  if (A.bots && !A.net_auto && !net_session()) game_bot_pads(A.pads, A.bots);
   handle_controls();
   if (A.use_gl && !A.gl_ready && ++A.gl_wait == 600) {
     plat_log("ERRORE: dopo 600 fotogrammi il contesto GL non e' ancora pronto");
@@ -972,12 +1000,42 @@ RETRO_API void retro_run(void) {
   }
   if (A.max_frames && A.frame + 1 >= A.max_frames) request_shutdown("limite di fotogrammi raggiunto", "limite");
 
-  game_update(A.pads);
-  if (A.trace) plat_log("traccia %u %016llx", A.frame, (unsigned long long)game_state_hash());
-  if (A.trace_m) {
-    plat_log("fotogramma %u", A.frame);
-    game_trace_monsters([](const char* line) { plat_log("%s", line); });
+  net_frame_begin();
+  if (net_session()) {
+    // Partita in rete: i comandi di questa console partono, i fotogrammi si fanno quando ci sono i
+    // comandi di tutti (chi ha creato la partita: sempre uno; le altre: da nessuno a qualcuno in piu').
+    Pad mine = A.pads[0];
+    if (A.bots) game_bot_pad(game_net_local(), &mine);
+    net_local_pad(mine, A.net_tap);
+    A.net_tap = false;
+    Pad pads[MAX_PLAYERS];
+    bool taps[MAX_PLAYERS];
+    uint8_t consoles = 0, silent = 0;
+    while (net_step(pads, taps, &consoles, &silent)) {
+      game_net_frame(consoles, silent, taps);
+      game_update(pads);
+      const uint64_t hh = game_state_hash();
+      net_step_done(hh);
+      if (A.trace) plat_log("rete traccia %u %016llx", net_frame_no(), (unsigned long long)hh);
+      if (A.trace_m) {
+        plat_log("fotogramma rete %u", net_frame_no());
+        game_trace_monsters([](const char* line) { plat_log("%s", line); });
+      }
+      if (!net_session()) break;
+    }
+  } else {
+    A.net_tap = false;
+    game_update(A.pads);
+    if (A.trace) plat_log("traccia %u %016llx", A.frame, (unsigned long long)game_state_hash());
+    if (A.trace_m) {
+      plat_log("fotogramma %u", A.frame);
+      game_trace_monsters([](const char* line) { plat_log("%s", line); });
+    }
   }
+  int req_arg = 0;
+  const int req = game_net_request(&req_arg);
+  if (req != NR_NONE) net_request(req, req_arg);
+  net_frame_end();
   if (game_wants_quit()) request_shutdown("menu: Esci", "giocatore");
   FrameDesc fd;
   game_build_frame(&fd, A.w, A.h, A.hud_off ? NULL : &g_hud);
@@ -1029,8 +1087,9 @@ RETRO_API void retro_run(void) {
   if (A.frame % STAT_PERIOD == 0) {
     GameInfo gi;
     game_info(&gi);
-    static const char* const SCREEN[] = { "titolo", "modalita'", "mappe", "personaggi", "partita", "fine mappa", "storia",
-                                          "salvataggi", "lingua" };
+    static const char* const SCREEN[] = { "titolo", "modalita'", "mappe", "personaggi", "partita", "fine mappa", "salvataggi",
+                                          "lingua", "nome", "rete", "sala d'attesa" };
+    static_assert(sizeof(SCREEN) / sizeof(SCREEN[0]) == 11, "un nome per ogni schermata (SC_* in game_int.h)");
     const int NSCREEN = (int)(sizeof(SCREEN) / sizeof(SCREEN[0]));
     AudioStats as;
     audio_get_stats(&as);

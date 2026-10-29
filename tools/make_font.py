@@ -27,8 +27,9 @@
 # grandi del latino (cinese e giapponese da 14 pixel, l'hindi da 15), nelle facce grandi (@T32...)
 # solo i caratteri dei testi segnati cosi' in lang/testi.txt.
 #
-# Disegni: cuori, X, le facce dei 4 eroi in 3 strati, stelle, freccette, la Terra e i pianeti, a
-# ogni misura che serve; il gioco li colora disegnandoli uno sopra l'altro.
+# Disegni: cuori, X, le facce dei 4 eroi in 3 strati, stelle, freccette, la Terra e i pianeti, la
+# rete e le frecce verso i compagni (0.5.4), a ogni misura che serve; il gioco li colora
+# disegnandoli uno sopra l'altro.
 #
 # Nel file generato: per ogni carattere e disegno la posizione nell'atlante (largo 2048, alto
 # quanto serve, impacchettato qui), la misura, lo spostamento rispetto alla penna sulla linea di
@@ -300,6 +301,28 @@ def g_tri_d(d, P):
     d.polygon([P(0.05, 0.1), P(0.5, 0.9), P(0.95, 0.1)], fill=255)
 
 
+# Rete (0.5.4, riquadro 18 x 14): tre archi e il punto.
+def g_wifi(d, P):
+    for r in (11.5, 7.6, 3.8):
+        pts = []
+        for i in range(25):
+            a = (225.0 + 90.0 * i / 24.0) * pi / 180.0
+            pts.append(((9.0 + r * cos(a)) / 18.0, (13.0 + r * sin(a)) / 14.0))
+        stroke(d, P, pts, 2.0 / 14.0)
+    circle(d, P, 9.0 / 18.0, 12.2 / 14.0, 1.7 / 18.0)
+
+
+# Freccia verso un compagno fuori dallo schermo (0.5.4, riquadro 20): punta verso k * 45 gradi
+# (0 a destra, 2 in basso, 4 a sinistra, 6 in alto).
+def g_arrow(k):
+    def f(d, P):
+        a = k * pi / 4.0
+        c, s = cos(a), sin(a)
+        pts = [(0.46, 0.0), (-0.34, 0.37), (-0.14, 0.0), (-0.34, -0.37)]
+        d.polygon([P(0.5 + x * c - y * s, 0.5 + x * s + y * c) for x, y in pts], fill=255)
+    return f
+
+
 # La Terra (riquadro 26): mare, terre, anello sottile.
 def earth_sea(d, P):
     circle(d, P, 0.5, 0.5, 11.0 / 26.0)
@@ -369,7 +392,9 @@ ICONS = [("HEART", g_heart, 12, 12), ("HEART_EMPTY", g_heart_empty, 12, 12), ("C
          ("TRI_R", g_tri_r, 8, 10), ("TRI_U", g_tri_u, 10, 8), ("TRI_D", g_tri_d, 10, 8),
          ("EARTH_SEA", earth_sea, 26, 26), ("EARTH_LAND", earth_land, 26, 26), ("EARTH_RING", earth_ring, 26, 26),
          ("PL_BODY", pl_body, 15, 15), ("PL_CRATERS", pl_craters, 15, 15), ("PL_SPOT", pl_spot, 15, 15),
-         ("PL_STREAK", pl_streak, 15, 15), ("PL_BANDS", pl_bands, 15, 15), ("SAT_BODY", sat_body, 19, 15), ("SAT_RING", sat_ring, 19, 15)]
+         ("PL_STREAK", pl_streak, 15, 15), ("PL_BANDS", pl_bands, 15, 15), ("SAT_BODY", sat_body, 19, 15), ("SAT_RING", sat_ring, 19, 15),
+         ("WIFI", g_wifi, 18, 14)]
+ICONS += [("ARW%d" % k, g_arrow(k), 20, 20) for k in range(8)]
 for px in (20, 24, 30, 40):
     for k, fn in enumerate(FACE_LAYERS):
         ICONS.append(("FACE%d_%d" % (px, k), fn, px, px))

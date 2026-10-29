@@ -1289,6 +1289,8 @@ float player_icons(Hud* h) {
     if (!p.active) continue;
     const bool down = !p.alive && !p.out, out = p.out;
     const uint32_t c = out ? 0x6A6470 : (down ? mix_rgb(ui::PLAYER[i], 0x101418, 0.45f) : ui::PLAYER[i]);
+    // In rete (0.5.4) la scheda di questa console ha il bordo bianco.
+    if (i == net_local()) hud_frame(h, x - 2.0f, HY - 2.0f, CARD + 4.0f, CARD + 4.0f, 8.0f, 2.0f, 0xFFFFFFFFu);
     hud_box_grad(h, x, HY, CARD, CARD, 7.0f, O(c), O(mix_rgb(c, 0x101418, 0.4f)), 135.0f);
     hud_box(h, x, HY, CARD, CARD, 7.0f, ui::SOLID, 2.0f);
     ui::face(h, x + 5.0f, HY + 5.0f, 30, p.ch, out ? 2 : (down ? 1 : 0));
@@ -1300,6 +1302,13 @@ float player_icons(Hud* h) {
       const float k = clampf((float)p.respawn / (float)RESPAWN_FRAMES, 0.0f, 1.0f);
       hud_rect(h, x + 4.0f, HY + CARD - 10.0f, CARD - 8.0f, 6.0f, 0x101418);
       hud_rect(h, x + 5.0f, HY + CARD - 9.0f, (CARD - 10.0f) * k, 4.0f, 0xFF2E2E);
+    }
+    // In rete: la sua console non risponde da un po' (lampeggia la rete sulla faccia).
+    if ((net_silent() >> i) & 1u) {
+      if (blink(10)) {
+        hud_box(h, x + CARD - 21.0f, HY + 1.0f, 20.0f, 16.0f, 3.0f, A(0x101418, 0.85f));
+        hud_icon(h, HI_WIFI, x + CARD - 20.0f, HY + 2.0f, O(0xFF4A3A));
+      }
     }
     // Vite: cuori pieni per quelle rimaste, vuoti per quelle perse (3, o 4 con VITA EXTRA).
     int total = START_LIVES + (has_card(p, CA_VITA) ? 1 : 0);
@@ -1369,6 +1378,62 @@ void top_line(Hud* h, float x) {
   }
 }
 
+// In rete (0.5.4) ogni console inquadra il suo eroe: per ogni compagno fuori dallo schermo una
+// freccia nel suo colore sul bordo, verso di lui, con il suo numero.
+void mate_arrows(Hud* h, const Camera& cam) {
+  const int me = net_local();
+  if (me < 0) return;
+  const float X0 = 40.0f, X1 = 600.0f, Y0 = 96.0f, Y1 = 428.0f, CX = 320.0f, CY = 262.0f;
+  for (int i = 0; i < MAX_PLAYERS; ++i) {
+    const Player& p = g.pl[i];
+    if (i == me || !p.active || (p.out && p.down >= OUT_VANISH)) continue;
+    const Vec3 q = v3(p.pos.x, p.pos.y + 0.9f, p.pos.z);
+    const float* m = cam.vp.m;
+    const float cx = m[0] * q.x + m[4] * q.y + m[8] * q.z + m[12];
+    const float cy = m[1] * q.x + m[5] * q.y + m[9] * q.z + m[13];
+    const float cw = m[3] * q.x + m[7] * q.y + m[11] * q.z + m[15];
+    float dx, dy;
+    if (cw > 0.05f) {
+      const float sx = (cx / cw * 0.5f + 0.5f) * 640.0f, sy = (0.5f - cy / cw * 0.5f) * 480.0f;
+      if (sx >= 24.0f && sx <= 616.0f && sy >= 80.0f && sy <= 456.0f) continue;   // si vede
+      dx = sx - CX;
+      dy = sy - CY;
+    } else {                                   // dietro la telecamera: dalla parte opposta
+      dx = -cx;
+      dy = cy;
+    }
+    const float l = sqrtf(dx * dx + dy * dy);
+    if (l < 1e-3f) continue;
+    dx /= l;
+    dy /= l;
+    // Dove la semiretta dal centro esce dal riquadro.
+    float t = 1e30f;
+    if (dx > 1e-4f) t = fminf(t, (X1 - CX) / dx);
+    if (dx < -1e-4f) t = fminf(t, (X0 - CX) / dx);
+    if (dy > 1e-4f) t = fminf(t, (Y1 - CY) / dy);
+    if (dy < -1e-4f) t = fminf(t, (Y0 - CY) / dy);
+    const float ax = CX + dx * t, ay = CY + dy * t;
+    int k = (int)floorf(atan2f(dy, dx) / (3.14159265f / 4.0f) + 0.5f);
+    k = ((k % 8) + 8) % 8;
+    const uint32_t col = p.alive ? ui::PLAYER[i] : mix_rgb(ui::PLAYER[i], 0x101418, 0.45f);
+    hud_icon(h, HI_ARW0 + k, ax - 10.0f + 1.0f, ay - 10.0f + 1.0f, A(ui::SCRIM, 0.9f));
+    hud_icon(h, HI_ARW0 + k, ax - 10.0f, ay - 10.0f, O(col));
+    // Il numero del compagno, un po' piu' all'interno.
+    const float gw = ui::gp_w(i);
+    ui::gp(h, ax - dx * 26.0f - gw * 0.5f, ay - dy * 26.0f, i);
+  }
+}
+
+// In rete, sulle console che aspettano i fotogrammi di chi ha creato la partita: "rete lenta".
+void net_wait_badge(Hud* h) {
+  if (net_wait_frames() < 12) return;
+  const char* t = tr("rete lenta...");
+  const float w = 18.0f + 8.0f + hud_text_w(HF_S13, t, 0.5f) + 24.0f, x = 320.0f - w * 0.5f, cy = 480.0f - HY - 44.0f;
+  hud_box(h, x, cy - 13.0f, w, 26.0f, 6.0f, A(ui::SCRIM, 0.85f));
+  hud_icon(h, HI_WIFI, x + 12.0f, cy - 7.0f, O(blink(10) ? 0xFF4A3A : ui::L1));
+  ui::text(h, x + 38.0f, cy, HF_S13, O(ui::TX), t, 0.5f);
+}
+
 // Messaggio grande al centro, su una fascia scura che sfuma ai lati.
 void center_msg(Hud* h) {
   const float cy = 140.0f, has2 = g.msg2[0] ? 1.0f : 0.0f;
@@ -1431,7 +1496,7 @@ void build_play_hud(Hud* h, const Camera& cam) {
   if (g.msg_t > 0 && !g.paused && !g.cards_open) center_msg(h);
   bool waiting = false, joining = false;
   for (int i = 0; i < MAX_PLAYERS; ++i) {
-    waiting |= !g.pl[i].active && !g.pl[i].joining;
+    waiting |= !g.pl[i].active && !g.pl[i].joining && net_console(i);
     joining |= g.pl[i].joining;
   }
   if (!g.paused && !g.cards_open && !joining && waiting && g.zone == 0 && g.tick < 900 && g.map_idx == 0) {
@@ -1439,12 +1504,16 @@ void build_play_hud(Hud* h, const Camera& cam) {
     const float cy = 480.0f - HY - 11.0f;
     float ww = 4.0f + hud_text_w(HF_S13, msg, 1.0f);
     for (int i = 0; i < MAX_PLAYERS; ++i)
-      if (!g.pl[i].active) ww += 30.0f;
+      if (!g.pl[i].active && net_console(i)) ww += 30.0f;
     ui::scrim_bottom(h, 70.0f);
     float x = 320.0f - ww * 0.5f;
     for (int i = 0; i < MAX_PLAYERS; ++i)
-      if (!g.pl[i].active) x += ui::gp(h, x, cy, i) + 6.0f;
+      if (!g.pl[i].active && net_console(i)) x += ui::gp(h, x, cy, i) + 6.0f;
     stext(h, x + 4.0f, cy, HF_S13, ui::FTX, msg, 1.0f);
+  }
+  if (!g.paused && !g.cards_open) {
+    mate_arrows(h, cam);
+    net_wait_badge(h);
   }
   if (g.cards_open) cards_hud(h);      // scelta delle carte al posto di pausa e finestre per entrare
   else play_menus_hud(h);

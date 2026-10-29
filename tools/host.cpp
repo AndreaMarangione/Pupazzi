@@ -1,7 +1,7 @@
 // Frontend libretro minimo, senza finestra, per provare il core senza console.
 //
 //   host CORE.so [--frames N] [--dump DIR] [--at 10,60,...] [--in SCRIPT] [--var k=v]
-//                [--gl] [--depth16] [--no-proc] [--dirty N] [--hashes] [--quiet] [--wav FILE]
+//                [--gl] [--depth16] [--no-proc] [--dirty N] [--hashes] [--quiet] [--wav FILE] [--tempo HZ]
 //
 // SCRIPT: eventi separati da virgola, "porta:NOME@inizio-fine" per un tasto oppure
 // "porta:asse=valore@inizio-fine" per una levetta (assi lx ly rx ry, valore tra -1 e 1).
@@ -10,6 +10,8 @@
 // Con --gl (solo se compilato con -DHOST_GL) offre al core un contesto OpenGL ES 2 fuori
 // schermo e controlla che il core lasci pulito lo stato GL, come si aspetta RetroArch.
 // --dirty N sporca lo stato GL prima di ogni fotogramma (vedi gl_dirty): l'immagine non deve cambiare.
+// --tempo HZ: HZ fotogrammi al secondo come un frontend (le prove del gioco in rete con piu' copie,
+// che devono andare allo stesso passo); senza, il piu' veloce possibile.
 #include <dlfcn.h>
 #include <stdarg.h>
 #include <stdint.h>
@@ -456,6 +458,7 @@ int main(int argc, char** argv) {
   const char* dump = NULL;
   int at[64], nat = 0;
   bool hashes = false;
+  double tempo = 0.0;
   for (int i = 2; i < argc; ++i) {
     if (!strcmp(argv[i], "--frames") && i + 1 < argc) frames = atoi(argv[++i]);
     else if (!strcmp(argv[i], "--dump") && i + 1 < argc) dump = argv[++i];
@@ -481,6 +484,7 @@ int main(int argc, char** argv) {
     else if (!strcmp(argv[i], "--dirty") && i + 1 < argc) g_dirty = atoi(argv[++i]);
 #endif
     else if (!strcmp(argv[i], "--hashes")) hashes = true;
+    else if (!strcmp(argv[i], "--tempo") && i + 1 < argc) tempo = atof(argv[++i]);
     else if (!strcmp(argv[i], "--quiet")) g_quiet = true;
     else if (!strcmp(argv[i], "--wav") && i + 1 < argc) {
       g_wav = fopen(argv[++i], "wb");
@@ -544,7 +548,19 @@ int main(int argc, char** argv) {
   double sum = 0.0, worst = 0.0;
   uint64_t all = 1469598103934665603ull;
   int ran = 0;
+  const double t_start = now_ms();
   for (g_frame = 0; g_frame < frames && !g_shutdown; ++g_frame) {
+    if (tempo > 0.0) {
+      // Al passo di un frontend: il fotogramma n non prima di n / HZ secondi dall'inizio.
+      const double due = t_start + (double)g_frame * 1000.0 / tempo;
+      for (double t = now_ms(); t < due; t = now_ms()) {
+        struct timespec ts;
+        const double wait = due - t;
+        ts.tv_sec = (time_t)(wait / 1000.0);
+        ts.tv_nsec = (long)((wait - (double)ts.tv_sec * 1000.0) * 1e6);
+        nanosleep(&ts, NULL);
+      }
+    }
 #ifdef HOST_GL
     if (g_hw_set) {
       h_glBindFramebuffer(0x8D40, 0);          // RetroArch entra in retro_run con il framebuffer 0 legato

@@ -824,3 +824,19 @@ bool save_slot_delete(int i) {
   plat_log("salvataggio: partita %d eliminata", i + 1);
   return true;
 }
+
+void save_guest_begin(void) {
+  if (g_active >= 0) {
+    write_file(&g_game, data());       // quella attiva non perde nulla
+    plat_log("salvataggio: partita %d messa da parte (si gioca con i progressi di chi ha creato la partita in rete)", g_active + 1);
+  }
+  g_active = -1;
+  g_game.path[0] = 0;
+  defaults_game(&data());
+}
+
+void save_guest_end(void) {
+  g_active = -1;
+  g_game.path[0] = 0;
+  defaults_game(&data());
+}

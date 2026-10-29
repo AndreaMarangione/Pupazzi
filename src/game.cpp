@@ -12,11 +12,18 @@ Game g;
 const char* const WORLD_NAMES[NWORLDS] = { N_("TERRA"), N_("LUNA"), N_("MARTE"), N_("VENERE"), N_("MERCURIO"), N_("GIOVE"),
                                             N_("SATURNO"), N_("URANO"), N_("NETTUNO") };
 static_assert(SAVE_WORLDS == NWORLDS, "save.h e level.h devono avere gli stessi pianeti");
+static_assert(NET_NAME_LEN == SAVE_NAME_LEN, "game.h e save.h: stessa lunghezza dei nomi delle partite");
 
 namespace {
 
 bool g_inited, g_quit;
 bool g_settings_dirty;        // impostazioni della pausa da salvare
+// Gioco in rete (0.5.4): solo di questa console, non della partita (che e' uguale su tutte).
+NetView g_nv;                 // cosa c'e' in rete (pagine della rete)
+int g_nreq = NR_NONE, g_nreq_arg;
+int g_net_local = -1;         // giocatore di questa console
+int g_net_wait;               // fotogrammi che si aspetta la rete
+uint8_t g_net_silent;         // console che non rispondono
 const float PITCH_PLAY = 0.98f, PITCH_MENU = 0.5f;
 // In partita: da CAM_DIST_MIN (gruppo vicino) a CAM_DIST_MAX (gruppo largo); senza HDMI, sullo schermo
 // piccolo della console, si parte piu' vicino (0.5.3). Prima: 0.5.1-0.5.2 da 22 a 30 per tutti; 0.5 da 15
@@ -653,13 +660,17 @@ void update_camera(bool snap) {
       back = false;
     }
   } else {
-    // Si inquadra chi e' in piedi; se sono tutti a terra chi ha ancora vite, se no tutti.
+    // Si inquadra chi e' in piedi; se sono tutti a terra chi ha ancora vite, se no tutti. In rete
+    // (0.5.4) ogni console inquadra il suo eroe (anche a terra), finche' ha vite; poi gli altri.
     Vec3 pts[MAX_PLAYERS + 4];
     int np = 0;
     float y = 0.0f;
+    const int me = net_local();
+    const bool mine = me >= 0 && g.pl[me].active && !g.pl[me].out;
     for (int pass = 0; pass < 3 && np == 0; ++pass)
       for (int i = 0; i < MAX_PLAYERS; ++i) {
         const Player& p = g.pl[i];
+        if (mine && i != me) continue;
         if (!p.active || (pass == 0 && !p.alive) || (pass == 1 && p.out)) continue;
         pts[np++] = p.pos;
         y += p.pos.y;
@@ -1018,3 +1029,179 @@ void game_info(GameInfo* gi) {
   for (int i = 0; i < MAX_PLAYERS; ++i) gi->lives[i] = g.pl[i].active ? g.pl[i].lives : -1;
   snprintf(gi->map_name, sizeof(gi->map_name), "%s", g.L.name);
 }
+
+// --- gioco in rete (0.5.4) ------------------------------------------------------------------------
+
+const NetView& net_view(void) { return g_nv; }
+void net_req(int req, int arg) {
+  g_nreq = req;
+  g_nreq_arg = arg;
+}
+int net_local(void) { return g.net ? g_net_local : -1; }
+int net_wait_frames(void) { return g.net ? g_net_wait : 0; }
+uint8_t net_silent(void) { return g.net ? g_net_silent : 0; }
+
+void game_net_view(const NetView* v) { g_nv = *v; }
+
+int game_net_request(int* arg) {
+  const int r = g_nreq;
+  *arg = g_nreq_arg;
+  g_nreq = NR_NONE;
+  g_nreq_arg = 0;
+  return r;
+}
+
+void game_net_summary(NetGame* out) {
+  memset(out, 0, sizeof(*out));
+  const SaveData* sd = save_data();
+  memcpy(out->name, sd->name, NET_NAME_LEN);
+  out->name[NET_NAME_LEN - 1] = 0;
+  out->slot = save_slot() >= 0 ? save_slot() : 0;
+  int w = 0;      // il pianeta piu' lontano raggiunto (come nella pagina dei salvataggi)
+  for (int k = 1; k < NWORLDS; ++k)
+    if (world_maps(k) > 0 && (sd->maps_open[k] > 0 || sd->giro[k] > 1)) w = k;
+  out->world = w;
+  out->giro = sd->giro[w];
+  out->players = 1;
+  out->state = NG_OPEN;
+  snprintf(out->version, sizeof(out->version), "%s", PUPAZZI_VERSION);
+}
+
+void game_net_lobby(void) { go_screen(SC_LOBBY); }
+
+void game_net_prepare(NetStart* s) {
+  uint32_t seed = g.rng ^ (g.ui_tick * 0x9E3779B9u) ^ 0x5A17C0DEu;
+  seed ^= seed << 13; seed ^= seed >> 17; seed ^= seed << 5;
+  s->seed = seed ? seed : 1u;
+  s->map_sel = g.map_sel;
+  for (int i = 0; i < MAX_PLAYERS; ++i) s->aim[i] = (uint8_t)aim_level_of(i);
+}
+
+// La partita come appena accesa la console, uguale su tutte: tutto cio' che conta per la partita
+// riparte da zero e la mappa di partenza si rilegge da capo (oggetti, casse, cancelli, mostri,
+// colpi, particelle). Restano solo le cose di questa console (telecamera, antialias, lingua).
+static void net_reset_sim(void) {
+  for (int i = 0; i < MAX_PLAYERS; ++i) {
+    memset(&g.pl[i], 0, sizeof(Player));
+    g.joined[i] = g.ready[i] = false;
+    g.pick[i] = i % NCHARS;
+    g.lives_kept[i] = -1;
+    g.vita_kept[i] = g.stats_kept[i] = false;
+    g.kills_kept[i] = g.deaths_kept[i] = 0;
+    g.dmg_kept[i] = 0.0f;
+    g.start_tap[i] = false;
+  }
+  memset(g.in, 0, sizeof(g.in));
+  memset(g.offer, 0, sizeof(g.offer));
+  memset(g.last_vis, 0, sizeof(g.last_vis));
+  memset(g.spawn_left, 0, sizeof(g.spawn_left));
+  g.tick = g.ui_tick = 0;
+  g.screen_t = 0;
+  g.menu_sel = g.menu_owner = 0;
+  g.chars_t = g.map_load_t = 0;
+  g.slots_mode = g.slots_sel = g.slots_pop = g.slots_pop_sel = 0;
+  g.lang_sel = 0;
+  g.name_mode = g.name_slot = g.name_row = g.name_col = 0;
+  g.name_overwrite = false;
+  g.name_buf[0] = 0;
+  g.pause_owner = g.pause_sel = 0;
+  g.paused = g.pause_help = false;
+  g.loop = g.map_idx = g.map_sel = 0;
+  g.kills = g.deaths = g.wipes = g.maps_done = g.restarts = 0;
+  g.boss_seq = 0;
+  g.zone = g.phase = g.phase_t = 0;
+  g.wave = g.spawn_cd = g.spawn_wait = g.enemies_left = 0;
+  g.msg[0] = g.msg2[0] = 0;
+  g.msg_t = 0;
+  g.wipe_cleared = g.wipe_map = false;
+  g.mvp = 0;
+  g.cards_open = false;
+  g.cards_t = g.cards_age = g.cards_due = 0;
+  g.cards_seq = 0;
+  g.explorer_free = false;
+  g.expl_t = -1;
+  g.expl_pos = v3(0, 0, 0);
+  g.expl_yaw = 0.0f;
+  g.help_t = 0;
+  g.map_wipes = 0;
+  g.stars_got = g.stars_new = g.stars_had = 0;
+  g.giro_done = g.giro_up = false;
+  g.giro_stars = g.giro_was = 0;
+  g.shake = 0.0f;
+  g.bots = 0;
+  g.net_pop = false;
+  g.lobby_sel = 0;
+  g_quit = false;
+  bot_reset();
+  g.level_ok = false;
+  g.map_shown = -1;
+  load_map_preview(0);
+}
+
+void game_net_begin(const NetStart* s) {
+  net_reset_sim();
+  g.net = true;
+  g.net_consoles = s->consoles;
+  g_net_local = s->local >= 0 && s->local < MAX_PLAYERS ? s->local : 0;
+  g_net_wait = 0;
+  g_net_silent = 0;
+  for (int i = 0; i < MAX_PLAYERS; ++i) g.aim_level[i] = s->aim[i] < NAIMLEVELS ? s->aim[i] : (uint8_t)AIM_DEFAULT;
+  g.rng = s->seed ? s->seed : 0x9E3779B9u;
+  g.map_sel = s->map_sel >= 0 && s->map_sel < maps_count() ? s->map_sel : 0;
+  go_screen(SC_MODE);
+  plat_log("partita in rete: questa console e' il giocatore %d (console: %s%s%s%s)", g_net_local + 1, (s->consoles & 1) ? "1" : "",
+           (s->consoles & 2) ? " 2" : "", (s->consoles & 4) ? " 3" : "", (s->consoles & 8) ? " 4" : "");
+}
+
+void game_net_frame(uint8_t consoles, uint8_t silent, const bool taps[MAX_PLAYERS]) {
+  g_net_silent = silent;
+  if (!g.net) return;
+  const uint8_t gone = (uint8_t)(g.net_consoles & ~consoles);
+  g.net_consoles = (uint8_t)(g.net_consoles & consoles);
+  for (int i = 0; i < MAX_PLAYERS; ++i) {
+    if (!((gone >> i) & 1u)) continue;
+    // Chi si scollega esce come dalla pausa (LASCIA LA PARTITA): il suo posto si libera.
+    plat_log("rete: la console del giocatore %d non c'e' piu': il suo eroe esce (fotogramma %u)", i + 1, g.ui_tick);
+    if (g.pl[i].active) player_leave(i);
+    g.pl[i].joining = false;
+    g.joined[i] = g.ready[i] = false;
+    char big[160];
+    snprintf(big, sizeof(big), tr("GIOCATORE %d È USCITO"), i + 1);
+    if (g.screen == SC_PLAY) show_msg(big, tr("la sua console si è scollegata"), PLAYER_RGB[i], 2, 150);
+    else menu_info(big);
+  }
+  for (int i = 0; i < MAX_PLAYERS; ++i)
+    if (taps[i]) g.start_tap[i] = true;
+}
+
+bool game_net_over(void) { return g.net && g.screen == SC_TITLE; }
+
+void game_net_end(int reason, bool host) {
+  if (!g.net) return;
+  g.net = false;
+  g.net_consoles = 0;
+  g.net_pop = false;
+  g_net_local = -1;
+  g_net_wait = 0;
+  g_net_silent = 0;
+  // Di nuovo le mire salvate su questa console (in rete ogni posto aveva quella della sua console).
+  for (int i = 0; i < MAX_PLAYERS && i < SAVE_PLAYERS; ++i)
+    if (save_data()->aim[i] < NAIMLEVELS) g.aim_level[i] = save_data()->aim[i];
+  char buf[256];
+  if (!host) {
+    // Di nuovo i salvataggi di questa console, dal titolo.
+    save_guest_end();
+    game_reset();
+    menu_info(net_error_text(reason, buf, sizeof(buf)));
+    plat_log("partita in rete finita su questa console: si torna al titolo");
+    return;
+  }
+  if (reason == NE_ALONE) {
+    if (g.screen == SC_PLAY) show_msg(tr("SEI RIMASTO SOLO"), net_error_text(reason, buf, sizeof(buf)), 0xFFE14D, 2, 180);
+    else menu_info(net_error_text(reason, buf, sizeof(buf)));
+  }
+  plat_log("partita in rete finita: si continua su questa console");
+}
+
+int game_net_local(void) { return net_local(); }
+void game_net_wait(int frames) { g_net_wait = frames; }

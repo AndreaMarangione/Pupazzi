@@ -126,6 +126,7 @@ void respawn_player(int i) {
 
 // Nessuno si allontana dal gruppo oltre quanto la telecamera riesce a inquadrare.
 void span_clamp(int i, float* nx, float* nz) {
+  if (g.net) return;      // in rete (0.5.4) ognuno ha la sua telecamera: nessun limite (i cancelli tengono tutti nella zona)
   float mnx = 1e30f, mxx = -1e30f, mnz = 1e30f, mxz = -1e30f;
   int n = 0;
   for (int j = 0; j < MAX_PLAYERS; ++j) {

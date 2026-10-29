@@ -80,3 +80,18 @@ bool maps_load(int i, Level* L, char* note, int notelen) {
   plat_log("ERRORE: la mappa %s non si carica: %s", MAP_TEXTS[i].id, err);
   return false;
 }
+
+uint64_t maps_content_hash(void) {
+  // FNV-1a su nome e testo di ogni mappa, come si caricano (il file personalizzato se e' valido).
+  uint64_t h = 1469598103934665603ull;
+  auto mix = [&](const char* s, size_t n) {
+    for (size_t k = 0; k < n; ++k) h = (h ^ (uint8_t)s[k]) * 1099511628211ull;
+  };
+  for (int i = 0; i < maps_count(); ++i) {
+    const char* id = MAP_TEXTS[i].id;
+    const char* text = g_custom[i] ? g_custom[i] : MAP_TEXTS[i].text;
+    mix(id, strlen(id) + 1);
+    mix(text, strlen(text) + 1);
+  }
+  return h;
+}

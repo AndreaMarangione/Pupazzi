@@ -145,6 +145,13 @@ bool save_name_char(char c);
 bool save_slot_copy(int from, int to);
 // Toglie il file della partita i; se era quella attiva non c'e' piu' una partita attiva.
 bool save_slot_delete(int i);
+// Gioco in rete (0.5.4), sulle console che si uniscono a una partita creata da un'altra: la
+// partita attiva (se c'e') si scrive e si stacca, e i progressi in memoria ripartono da quelli
+// predefiniti; chi chiama ci mette quelli di chi ha creato la partita. Si gioca con quelli, ma non
+// si scrivono da nessuna parte (le impostazioni si', come sempre). save_guest_end: di nuovo
+// nessuna partita attiva e progressi predefiniti (si sceglie dal titolo).
+void save_guest_begin(void);
+void save_guest_end(void);
 // Com'e' andata l'ultima lettura di una partita, per il registro.
 const char* save_slot_status(void);
 // Codice della lingua l nel file ("it", "en"...; "" fuori dai limiti).
