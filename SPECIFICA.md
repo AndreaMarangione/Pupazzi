@@ -477,10 +477,19 @@ triangoli a 60 fps fissi; con la visuale larga della 0.3.2 se ne inquadrano circ
   una sola telecamera niente bivi). Finita la campagna si ricomincia dal primo mondo, più
   difficile. (Dal 17/10: 9 pianeti, e i giri sono di ogni pianeta, qui sotto.)
 - [deciso 29/10] **Cancelli a battente** che si chiudono bene, come quelli veri.
-  - [proposta] Due ante incernierate ai pilastri: a zona libera si aprono ruotando verso la zona dopo,
-    quando tutti sono dentro si richiudono dietro di loro fino a combaciare al centro, con un colpo e
-    un po' di polvere. Chi è ancora davanti a un'anta viene spinto via, nessuno resta incastrato.
-    Ante nello stile di ogni mappa.
+  - [fatto 0.5.4] Due ante incernierate ai pilastri, nello stile di ogni mappa (cedro con le fasce
+    dipinte e le bandelle di bronzo alle Piramidi, portone rosso con le borchie d'oro e il battiporta
+    alla Muraglia, palizzata di pali appuntiti a Chichén Itzá, cancellata con le punte a lancia nello
+    stile del Colosseo). A zona libera si aprono cigolando, girando di 90 gradi in 50 fotogrammi
+    (partono piano e si fermano piano); il passaggio si apre quando sono aperte. Quando tutti sono
+    nella zona dopo si richiudono dietro di loro: accelerano, combaciano al centro con un tonfo, una
+    nuvola di polvere e un piccolo scossone, rimbalzano di 6-7 gradi e si fermano.
+  - Si aprono verso la zona appena liberata (verso chi aspetta), non verso la zona dopo come nella
+    proposta: così chiudendosi girano nella zona ormai vuota e non spingono chi e' appena entrato
+    (le partenze della zona sono subito oltre il cancello). Mentre girano spingono via chi hanno
+    davanti, senza farlo entrare negli ostacoli; ferme e aperte non fermano nessuno (i giocatori
+    automatici non si incastrano negli angoli tra anta e muro). Nelle mappe personalizzate un'anta
+    che sbatterebbe contro un ostacolo davanti al cancello si ferma prima.
 - [deciso 18/10] **La mappa disegnata è tutta visitabile e giocabile**: niente parti irraggiungibili
   dentro la mappa (nella 0.5, alle Piramidi, saltando nel Nilo si camminava nella parte non usata e
   si passava nelle altre zone); l'acqua non si attraversa nemmeno saltando; il paesaggio attorno

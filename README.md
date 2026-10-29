@@ -123,8 +123,9 @@ volumi, lasciare la partita o tornare al menu delle mappe.
   pianeti comincia. Ogni pianeta ha i suoi mostri e un boss; in ogni mappa c'è una capsula
   nascosta con un esploratore da salvare.
 - **Mappe**: 3 zone in fila, ognuna grande quanto la visuale più larga (31×21 m). Quando una zona
-  è libera il cancello si apre; appena qualcuno entra nella zona dopo, il cancello si richiude
-  alle spalle del gruppo (chi è rimasto indietro viene portato dentro).
+  è libera il cancello a battente si apre verso chi aspetta (chi è davanti alle ante viene spinto
+  via); quando tutti sono nella zona dopo si richiude alle loro spalle sbattendo (chi è rimasto
+  indietro viene portato dentro).
 - **Vite**: 3 a testa per mappa (la carta VITA EXTRA ne dà una in più).
   - Da soli: ogni caduta toglie una vita e la zona ricomincia; alla terza caduta la mappa
     ricomincia da capo.

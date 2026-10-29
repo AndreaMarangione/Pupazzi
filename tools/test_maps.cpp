@@ -153,7 +153,7 @@ static void parse_rejects(const char* name, const char* grid, const char* want) 
 
 static void test_static(void) {
   printf("1) mappe di serie e mappe sbagliate\n");
-  char buf[256], why[160];
+  char buf[400], why[160];
   for (int i = 0; i < MAP_TEXT_COUNT; ++i) {
     char err[200];
     const bool ok = level_parse(&g_lv, MAP_TEXTS[i].text, err, sizeof(err));
@@ -205,6 +205,41 @@ static void test_static(void) {
                                 err, sizeof(err));
     snprintf(buf, sizeof(buf), "accettata: mappa con un angolo fuori chiuso dai muri (%s)", ok ? "ok" : err);
     check(ok, buf);
+  }
+  // Cancelli a battente (0.5.4): i battenti si aprono verso la zona che apre il cancello, anche nei
+  // cancelli da nord a sud e in quelli di una casella; un masso davanti ferma il battente che ci
+  // sbatterebbe contro (l'altro si apre del tutto).
+  {
+    char err[200];
+    const char* HEAD = "nome: prova\nmondo: terra\nzona 1: scorpioni 1\nzona 2: scorpioni 1\n---\n";
+    char text[1024];
+    snprintf(text, sizeof(text), "%s%s", HEAD, "##########\n#........#\n#........#\n#........#\n###GGGG###\n#...o....#\n#........#\n#..,12,..#\n##########\n");
+    bool ok = level_parse(&g_lv, text, err, sizeof(err));
+    const Gate& a = g_lv.gates[0];
+    bool clear = true;      // il battente fermo non tocca il masso
+    if (ok) {
+      Vec3 h, d;
+      float len;
+      level_gate_leaf(&g_lv, 0, 0, gate_theta(a, 0), &h, &d, &len);
+      for (float r = 0.0f; r <= len; r += 0.05f)
+        for (int w = -1; w <= 1; w += 2) {
+          const Vec3 q = h + d * r + v3(-d.z, 0.0f, d.x) * ((float)w * GATE_LEAF_HALF);
+          if (level_type_at(&g_lv, q.x, q.z) == C_ROCK) clear = false;
+        }
+    }
+    snprintf(buf, sizeof(buf), "masso davanti al cancello: il battente sinistro si ferma a %.0f gradi senza toccarlo, il destro si apre del tutto (%s)",
+             ok ? (double)(a.stop[0] * 90.0f) : 0.0, ok ? "ok" : err);
+    check(ok && a.horiz && a.mz > 0.0f && a.stop[0] > 0.0f && a.stop[0] < 0.5f && a.stop[1] == 1.0f && clear, buf);
+    snprintf(text, sizeof(text), "%s%s", HEAD, "##########\n#...#....#\n#...#....#\n#...G....#\n#...G....#\n#...#....#\n#.12#....#\n##########\n");
+    ok = level_parse(&g_lv, text, err, sizeof(err));
+    const Gate& b = g_lv.gates[0];
+    snprintf(buf, sizeof(buf), "cancello da nord a sud: i battenti si aprono verso ovest, del tutto (%s)", ok ? "ok" : err);
+    check(ok && !b.horiz && b.mx < 0.0f && b.mz == 0.0f && b.stop[0] == 1.0f && b.stop[1] == 1.0f, buf);
+    snprintf(text, sizeof(text), "%s%s", HEAD, "########\n#......#\n#......#\n###G####\n#......#\n#......#\n#.12...#\n########\n");
+    ok = level_parse(&g_lv, text, err, sizeof(err));
+    const Gate& c = g_lv.gates[0];
+    snprintf(buf, sizeof(buf), "cancello di una casella: da ovest a est, si apre verso sud (%s)", ok ? "ok" : err);
+    check(ok && c.horiz && c.mz > 0.0f && c.stop[0] == 1.0f && c.stop[1] == 1.0f, buf);
   }
 }
 

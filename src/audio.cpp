@@ -312,7 +312,7 @@ static const char* const SOUND_NAMES[NSOUNDS] = {
   "cassa_colpita", "cassa_rotta", "capsula", "esploratore_salvato", "aiuto", "cancello", "zona_finita", "ondata", "stella",
   "tutti_giu", "menu_sposta", "menu_ok", "menu_indietro", "carte", "carta_scelta", "pausa", "freccia_a_terra", "cenote",
   "passo_gladiatore", "spada_alzata", "fendente", "carica_scudo", "scudo_contro_muro",
-  "bonus_velocita", "bonus_furia", "bonus_invincibile", "bonus_carica", "bonus_finito",
+  "bonus_velocita", "bonus_furia", "bonus_invincibile", "bonus_carica", "bonus_finito", "cancello_chiuso",
 };
 static_assert(sizeof(SOUND_NAMES) / sizeof(SOUND_NAMES[0]) == NSOUNDS, "un nome per ogni suono");
 static const char* const MUSIC_NAMES[NMUSIC] = { "nessuno", "titolo", "piramidi", "chichenitza", "muraglia", "colosseo", "vittoria" };
@@ -1659,13 +1659,29 @@ static void define_sounds(void) {
   }
   lay(W_NOISE).at(0.27f).env(0.002f, 0.0f, 0.06f, 2).bp(1800.0f, 1800.0f, 1.5f).gain(0.25f);
 
+  // 0.5.4, cancello a battente che comincia a girare (si apre in 50 fotogrammi, si chiude in 41 e poi
+  // SND_GATE_SHUT): i cardini che cigolano (scatti dell'attrito che accelerano e rallentano), il legno
+  // che geme, lo strusciare
   defsnd(S[SND_GATE], "cancello", -11.0f, PR_HIGH, 2, 0.02f, 0.2f);
-  lay(W_SNOISE).hz(60.0f, 40.0f).env(0.1f, 0.5f, 0.3f, 2).gain(0.45f);
-  lay(W_NOISE).env(0.1f, 0.5f, 0.3f, 2).bp(320.0f, 180.0f, 1.5f).gain(1.8f);
-  lay(W_CRACK).hz(60.0f, 30.0f).env(0.1f, 0.5f, 0.3f, 2).bp(800.0f, 700.0f, 1.2f).gain(2.2f);
-  lay(W_SAW).env(0.1f, 0.5f, 0.3f, 2).hz(55.0f, 45.0f).lp(600.0f, 450.0f, 2.0f).vib(3.0f, 0.4f).gain(0.3f);
-  lay(W_SINE).at(0.78f).env(0.002f, 0.01f, 0.15f, 2).hz(90.0f, 50.0f, 0.1f, P_OUT).gain(0.5f);
-  lay(W_NOISE).at(0.78f).env(0.002f, 0.0f, 0.06f, 2).lp(900.0f, 400.0f).gain(0.8f);
+  lay(W_PULSE).width(0.12f).env(0.06f, 0.4f, 0.3f, 2).hz(92.0f, 138.0f, 0.55f, P_LOG).vib(7.0f, 1.1f).bp(1150.0f, 1450.0f, 4.0f).gain(1.1f);
+  lay(W_SAW).at(0.05f).env(0.08f, 0.3f, 0.3f, 2).hz(236.0f, 305.0f, 0.5f).vib(11.0f, 0.7f).bp(2100.0f, 2400.0f, 5.0f).gain(0.3f);
+  lay(W_SAW).env(0.1f, 0.4f, 0.3f, 2).hz(68.0f, 61.0f).lp(520.0f, 420.0f, 2.0f).vib(3.0f, 0.4f).gain(0.4f);
+  lay(W_NOISE).env(0.1f, 0.4f, 0.3f, 2).bp(700.0f, 520.0f, 1.2f).gain(0.5f);
+
+  // ...e che si chiude sbattendo: il tonfo pieno dei battenti (con il corpo nella banda che
+  // l'altoparlantino suona), lo schiocco del legno, il chiavistello di metallo che scatta, la
+  // polvere; dopo 0,38 s il battente che ricade dal piccolo rimbalzo (game.cpp, GATE_BOUNCE)
+  defsnd(S[SND_GATE_SHUT], "cancello_chiuso", -9.0f, PR_HIGH, 2, 0.03f, 0.2f);
+  S[SND_GATE_SHUT].duck = 0.85f;
+  lay(W_SINE).env(0.001f, 0.02f, 0.3f, 2).hz(170.0f, 58.0f, 0.12f, P_OUT).gain(0.9f);
+  lay(W_SINE).env(0.001f, 0.0f, 0.18f, 2).hz(330.0f, 240.0f, 0.08f, P_OUT).gain(0.5f);
+  lay(W_CRACK).hz(300.0f, 90.0f).env(0.002f, 0.03f, 0.2f, 2).bp(1400.0f, 900.0f, 1.2f).gain(1.6f);
+  lay(W_NOISE).env(0.001f, 0.01f, 0.15f, 2).lp(3000.0f, 500.0f, 0.8f, 0.15f).gain(1.1f);
+  lay(W_FM).at(0.012f).env(0.001f, 0.0f, 0.12f, 3).hz(1180.0f).fm(1.41f, 3.0f, 0.2f).gain(0.3f);
+  lay(W_GRAIN).at(0.02f).hz(400.0f, 1200.0f).grain(70.0f, 0.02f).env(0.005f, 0.05f, 0.2f, 2).gain(0.25f);
+  lay(W_SINE).at(0.38f).env(0.001f, 0.0f, 0.1f, 2).hz(230.0f, 125.0f, 0.06f, P_OUT).gain(0.35f);
+  lay(W_CRACK).at(0.38f).hz(200.0f, 100.0f).env(0.002f, 0.01f, 0.08f, 2).bp(1200.0f, 900.0f, 1.2f).gain(0.5f);
+  lay(W_NOISE).at(0.38f).env(0.001f, 0.0f, 0.05f, 2).lp(1500.0f, 400.0f).gain(0.4f);
 
   // caduta nel cenote di Chichen Itza (si perde una vita): l'aria che corre e si allontana (con il fischio della
   // caduta), un attimo di niente, poi laggiu' il tonfo nell'acqua ("plum", la bolla, lo spruzzo) e due echi tra le
@@ -2168,29 +2184,30 @@ static const CalEntry CAL_TAB[NSOUNDS] = {
   { 0x68F7DEE3u, 1.408267f },   // capsula
   { 0x803154AFu, 1.314319f },   // esploratore_salvato
   { 0xC1EAF2D5u, 1.321921f },   // aiuto
-  { 0x62B8F678u, 1.041175f },   // cancello
+  { 0x8AA9ADBDu, 1.205914f },   // cancello
   { 0xE37A4A0Fu, 2.187463f },   // zona_finita
   { 0xB0EE1A56u, 1.181561f },   // ondata
-  { 0xBB69EC78u, 1.060411f },   // stella
+  { 0xBB69EC78u, 1.053066f },   // stella
   { 0x4FF43264u, 1.654689f },   // tutti_giu
-  { 0x641E7B99u, 0.9734906f },   // menu_sposta
+  { 0x641E7B99u, 0.9857377f },   // menu_sposta
   { 0x5A7A0DC5u, 1.051399f },   // menu_ok
   { 0x600E338Du, 1.051399f },   // menu_indietro
-  { 0x71D14BDFu, 0.5935249f },   // carte
-  { 0x64256DD6u, 1.134711f },   // carta_scelta
+  { 0x71D14BDFu, 0.6216326f },   // carte
+  { 0x64256DD6u, 1.134715f },   // carta_scelta
   { 0x895783DBu, 0.7999992f },   // pausa
-  { 0x930B7071u, 1.445952f },   // freccia_a_terra
-  { 0x1EBAD247u, 2.119899f },   // cenote
-  { 0x53AF0F1Bu, 1.754611f },   // passo_gladiatore
-  { 0xD7C4E013u, 0.985891f },   // spada_alzata
-  { 0xD35FF708u, 0.8441568f },   // fendente
-  { 0x1B4B11BCu, 1.351436f },   // carica_scudo
-  { 0x78654C85u, 2.212696f },   // scudo_contro_muro
-  { 0xA06D3FDBu, 1.091958f },   // bonus_velocita
-  { 0xE32B9208u, 2.41282f },   // bonus_furia
-  { 0x1EEC3B03u, 1.726549f },   // bonus_invincibile
-  { 0xB98E3747u, 1.131748f },   // bonus_carica
+  { 0x930B7071u, 1.304864f },   // freccia_a_terra
+  { 0x1EBAD247u, 1.964726f },   // cenote
+  { 0x53AF0F1Bu, 1.701895f },   // passo_gladiatore
+  { 0xD7C4E013u, 1.022414f },   // spada_alzata
+  { 0xD35FF708u, 0.9007424f },   // fendente
+  { 0x1B4B11BCu, 1.291694f },   // carica_scudo
+  { 0x78654C85u, 2.251131f },   // scudo_contro_muro
+  { 0xA06D3FDBu, 1.103541f },   // bonus_velocita
+  { 0xE32B9208u, 2.413066f },   // bonus_furia
+  { 0x1EEC3B03u, 1.677627f },   // bonus_invincibile
+  { 0xB98E3747u, 1.114341f },   // bonus_carica
   { 0x1A4F8159u, 0.6028065f },   // bonus_finito
+  { 0xAB0BC025u, 1.800599f },   // cancello_chiuso
 };
 
 // Taratura: norm porta il picco di ogni suono al valore voluto (peak_db, effetti a 8, al centro).

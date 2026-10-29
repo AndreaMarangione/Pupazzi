@@ -888,8 +888,21 @@ void push_capsule(const DynCell& dc, int d, Vec3 c) {
 void push_world(void) {
   for (int i = 0; i < g.L.nchunks; ++i) push(&g.L.chunk[i], xf_identity(), 0, 0, ITEM_STATIC);
   for (int i = 0; i < g.L.nscenery; ++i) push(&g.L.scenery[i], xf_identity(), 0, 0, ITEM_STATIC);   // paesaggio lontano
+  // Cancelli a battente (0.5.4): ogni battente gira attorno al suo cardine, dalla posizione da chiuso.
   for (int i = 0; i < g.L.ngates; ++i)
-    if (g.L.gates[i].open < 1.0f) push(&g.L.gates[i].mesh, xf_translate(v3(0.0f, -1.95f * g.L.gates[i].open, 0.0f)));
+    for (int side = 0; side < 2; ++side) {
+      Vec3 h, d, c;
+      float len;
+      level_gate_leaf(&g.L, i, side, gate_theta(g.L.gates[i], side), &h, &d, &len, &c);
+      if (!near_view(h, 2.5f)) continue;
+      const float co = c.x * d.x + c.z * d.z, si = c.z * d.x - c.x * d.z;   // rotazione attorno a Y che porta c in d
+      Xform xf = xf_translate(h);
+      xf.r[0] = co;
+      xf.r[2] = si;
+      xf.r[6] = -si;
+      xf.r[8] = co;
+      push(&g.L.gates[i].leaf[side], xf);
+    }
   // Cespugli, erba alta, casse e trampolini con le mesh dello stile della mappa (level_mesh.cpp):
   // girati e un po' piu' grandi o piu' piccoli secondo la casella, cosi' non sembrano in fila.
   for (int d = 0; d < g.L.ndyn; ++d) {

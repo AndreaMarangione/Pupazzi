@@ -228,11 +228,7 @@ void update_spawning(void) {
     g.phase = PH_CLEAR;
     g.phase_t = 0;
     const int gi = g.L.zones[g.zone].exit_gate;
-    if (gi >= 0) {
-      g.gate_want[gi] = 1.0f;
-      const Gate& gt = g.L.gates[gi];
-      snd_at(SND_GATE, cell_center(&g.L, (gt.x0 + gt.x1) / 2, (gt.z0 + gt.z1) / 2));
-    }
+    if (gi >= 0) g.gate_want[gi] = 1.0f;          // si apre (e cigola: update_gates)
     show_msg(tr("ZONA LIBERA!"), tr("avanti: il cancello è aperto"), 0x7CF29A, 2, 180);
     snd_ui(SND_ZONE_CLEAR);
     plat_log("mappa %d, zona %d libera", g.map_idx + 1, g.zone + 1);
@@ -277,12 +273,145 @@ void compute_mvp(void) {
   }
 }
 
+// Cancelli a battente (0.5.4). Si aprono come una porta pesante tirata (accelerano, poi frenano e si
+// fermano aperti: 50 fotogrammi) e si chiudono sbattendo: accelerano fino in fondo (41 fotogrammi),
+// battono con un tonfo e un po' di polvere, rimbalzano di qualche grado e si fermano. Mentre girano
+// spingono via chi trovano davanti (si aprono verso chi li sta aspettando).
+namespace {
+const float GATE_OPEN_ACC = 0.0016f;
+const float GATE_SHUT_ACC = 0.0012f;
+const float GATE_BOUNCE = 0.28f;          // della velocita' del colpo
+const float GATE_REST = 0.004f;           // rimbalzi piu' lenti: fermo
+const float GATE_SLAM = 0.02f;            // da questa velocita' il colpo si sente (chiuso da tutto aperto: 0,049)
+const float GATE_TOP = 1.75f;             // chi e' piu' in alto (salto, trampolino) passa sopra ai battenti
+const int GATE_DUST[NSTYLES] = { PC_SAND, PC_EARTH, PC_STONE, PC_SAND };
+
+// Un battente nella sua posizione di adesso (girato di th) e da che parte gira (turn: +1 si apre).
+struct Leaf {
+  Vec3 h, d, n;                                          // cardine, verso la punta, verso cui gira aprendosi
+  float len, turn;
+};
+
+Leaf gate_leaf_now(int gi, int side, float th, float turn) {
+  Leaf lf;
+  Vec3 c;
+  level_gate_leaf(&g.L, gi, side, th, &lf.h, &lf.d, &lf.len, &c);
+  const Gate& gt = g.L.gates[gi];
+  lf.n = c * -d_sin(th) + v3(gt.mx, 0.0f, gt.mz) * d_cos(th);
+  lf.turn = turn;
+  return lf;
+}
+
+// Il giocatore toccato dal battente viene spinto fuori, dalla parte dove ha il centro (in punta: via
+// dalla punta). true se l'ha spostato.
+bool leaf_push(Player& p, const Leaf& lf) {
+  const float rr = PL_R + GATE_LEAF_HALF;
+  const Vec3 rel = v3(p.pos.x - lf.h.x, 0.0f, p.pos.z - lf.h.z);
+  const float along = dot(rel, lf.d), across = dot(rel, lf.n);
+  float nx, nz;
+  if (along >= 0.0f && along <= lf.len) {
+    if (fabsf(across) >= rr) return false;
+    const float to = (across > 0.0f || (across == 0.0f && lf.turn > 0.0f) ? rr : -rr) - across;
+    nx = p.pos.x + lf.n.x * to;
+    nz = p.pos.z + lf.n.z * to;
+  } else if (along > lf.len) {
+    const Vec3 tip = lf.h + lf.d * lf.len;
+    float dx = p.pos.x - tip.x, dz = p.pos.z - tip.z;
+    float dd = dx * dx + dz * dz;
+    if (dd >= rr * rr) return false;
+    if (dd < 1e-8f) {
+      dx = lf.n.x * lf.turn;
+      dz = lf.n.z * lf.turn;
+      dd = 1.0f;
+    }
+    const float l = sqrtf(dd);
+    nx = tip.x + dx / l * rr;
+    nz = tip.z + dz / l * rr;
+  } else {
+    return false;                                        // dietro il cardine: dentro il pilastro
+  }
+  level_push_out(&g.L, &nx, &nz, p.pos.y, PL_R, PL_STEP, BODY_WALK);
+  level_body_guard(&g.L, p.pos.x, p.pos.z, &nx, &nz, p.pos.y, PL_R, PL_STEP, BODY_WALK);
+  const bool moved = nx != p.pos.x || nz != p.pos.z;
+  p.pos.x = nx;
+  p.pos.z = nz;
+  return moved;
+}
+
+// Il cancello gi si e' mosso da open0: chi i battenti trovano davanti viene spinto via (piu' volte se
+// in mezzo lo spingono tutti e due, con le punte vicine).
+void gate_sweep(int gi, float open0) {
+  const Gate& gt = g.L.gates[gi];
+  const float turn = gt.open > open0 ? 1.0f : -1.0f;
+  Leaf lf[2];
+  for (int side = 0; side < 2; ++side) lf[side] = gate_leaf_now(gi, side, gate_theta(gt, side), turn);
+  for (int i = 0; i < MAX_PLAYERS; ++i) {
+    Player& p = g.pl[i];
+    if (!p.active || !p.alive || p.leap_n > 0 || p.pos.y > GATE_TOP) continue;
+    for (int pass = 0; pass < 8; ++pass) {
+      const bool a = leaf_push(p, lf[0]);
+      const bool b = leaf_push(p, lf[1]);
+      if (!a && !b) break;
+    }
+  }
+}
+
+Vec3 gate_mid(const Gate& gt) {
+  return (cell_center(&g.L, gt.x0, gt.z0) + cell_center(&g.L, gt.x1, gt.z1)) * 0.5f;
+}
+
+// Il colpo del cancello che si chiude: tonfo, una nuvola di polvere dalla parte dei battenti, un
+// piccolo scossone.
+void gate_slam(int gi) {
+  const Gate& gt = g.L.gates[gi];
+  const Vec3 mid = gate_mid(gt), m = v3(gt.mx, 0.0f, gt.mz);
+  const Vec3 eu = gt.horiz ? v3(1, 0, 0) : v3(0, 0, 1);
+  const float half = 0.5f * (float)(gt.horiz ? gt.x1 - gt.x0 + 1 : gt.z1 - gt.z0 + 1);
+  const int col = GATE_DUST[g.L.style >= 0 && g.L.style < NSTYLES ? g.L.style : 0];
+  for (int k = 0; k < 14; ++k) {
+    const float u = ((float)k - 6.5f) / 6.5f * half;
+    const Vec3 at = mid + eu * u + m * (0.35f + 0.25f * rng_f()) + v3(0.0f, 0.25f, 0.0f);
+    const Vec3 vel = m * (0.5f + 0.9f * rng_f()) + eu * (0.8f * (rng_f() - 0.5f)) + v3(0.0f, 0.35f + 0.35f * rng_f(), 0.0f);
+    puff(at, PK_PUFF, col, vel, 2.4f + 0.8f * rng_f(), 32 + (int)(rng_next() % 14u));
+  }
+  snd_at(SND_GATE_SHUT, mid);
+  add_shake(0.1f);
+}
+}  // namespace
+
 void update_gates(void) {
   for (int i = 0; i < g.L.ngates; ++i) {
-    float& o = g.L.gates[i].open;
-    const float w = g.gate_want[i];
-    if (o < w) o = fminf(w, o + 1.0f / 50.0f);
-    else if (o > w) o = fmaxf(w, o - 1.0f / 30.0f);
+    Gate& gt = g.L.gates[i];
+    const float w = g.gate_want[i], o0 = gt.open;
+    const bool rest = gt.vel == 0.0f;
+    if (w >= 0.1f) {
+      // Verso w (di solito aperto del tutto): accelera e frena in tempo per fermarsi li'. Piu' chiuso
+      // di cosi' (anche un cancello fermato a meta' rimbalzo da una zona rifatta) si chiude.
+      const float dist = w - gt.open, dir = dist > 0.0f ? 1.0f : -1.0f;
+      float sp = gt.vel * dir > 0.0f ? fabsf(gt.vel) : 0.0f;
+      sp = fminf(sp + GATE_OPEN_ACC, sqrtf(2.0f * GATE_OPEN_ACC * fabsf(dist)));
+      if (sp >= fabsf(dist)) {
+        gt.open = w;
+        gt.vel = 0.0f;
+      } else {
+        gt.vel = dir * sp;
+        gt.open += gt.vel;
+      }
+    } else if (gt.open > 0.0f || gt.vel != 0.0f) {
+      // Si chiude: accelera fino al colpo, rimbalza e ricade finche' si ferma.
+      gt.vel -= GATE_SHUT_ACC;
+      gt.open += gt.vel;
+      if (gt.open <= 0.0f) {
+        const float hit = -gt.vel;
+        gt.open = 0.0f;
+        gt.vel = hit * GATE_BOUNCE;
+        if (gt.vel < GATE_REST) gt.vel = 0.0f;
+        if (hit >= GATE_SLAM) gate_slam(i);
+      }
+    }
+    if (gt.open == o0) continue;
+    if (rest && gt.vel != 0.0f) snd_at(SND_GATE, gate_mid(gt));   // comincia a girare: cigola
+    gate_sweep(i, o0);
   }
 }
 
@@ -994,6 +1123,11 @@ uint64_t game_state_hash(void) {
       }
     const uint8_t open = g.cards_open;
     mix(&open, 1);
+  }
+  // Cancelli a battente (0.5.4): quanto sono aperti e come si muovono.
+  for (int i = 0; i < g.L.ngates; ++i) {
+    const float gf[2] = { g.L.gates[i].open, g.L.gates[i].vel };
+    mix(gf, sizeof(gf));
   }
   // Esploratore della capsula.
   const uint8_t pf = g.explorer_free;

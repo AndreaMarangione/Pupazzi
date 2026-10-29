@@ -17,6 +17,9 @@ enum SoundId {
   SND_BOSS_STEP, SND_BOSS_SWEEP_WARN, SND_BOSS_SWEEP, SND_BOSS_RUSH, SND_BOSS_IMPACT,
   // 0.5.4, bonus delle casse: VELOCITA', FURIA, INVINCIBILE, CARICA presi; un bonus che finisce
   SND_POWER_SPEED, SND_POWER_FURY, SND_POWER_INVINCIBLE, SND_POWER_CHARGE, SND_POWER_END,
+  // 0.5.4, cancelli a battente: SND_GATE e' il cancello che si apre (cigola), questo quello che si
+  // chiude sbattendo (con il piccolo rimbalzo)
+  SND_GATE_SHUT,
   NSOUNDS
 };
 // Brani: titolo e menu, uno per ogni mappa della Terra (stile della mappa), il boss del Colosseo, la vittoria.

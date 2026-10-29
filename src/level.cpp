@@ -870,8 +870,58 @@ bool level_parse(Level* L, const char* text, char* err, int errlen) {
       zd.nspawn = 1;
     }
   }
-  for (int gi = 0; gi < L->ngates; ++gi) L->gates[gi].open = 0.0f;
   if (L->style < 0) L->style = L->boss != BOSS_NONE ? STYLE_COLOSSEO : STYLE_PIRAMIDI;   // senza riga "stile:"
+  for (int gi = 0; gi < L->ngates; ++gi) {
+    Gate& gt = L->gates[gi];
+    gt.open = gt.vel = 0.0f;
+    // Da ovest a est o da nord a sud (un cancello di una casella sola: dove sono le zone).
+    gt.horiz = gt.z0 == gt.z1 && (gt.x1 > gt.x0 || (gt.z0 > 0 && L->zone[gt.z0 - 1][gt.x0] >= 0) ||
+                                  (gt.z1 + 1 < H && L->zone[gt.z1 + 1][gt.x0] >= 0));
+    // Da che parte si aprono i battenti: verso la zona che apre il cancello (le caselle lungo il
+    // cancello, da una parte e dall'altra: quella da cui si tocca piu' spesso from_zone).
+    int before = 0, after = 0;
+    if (gt.horiz) {
+      for (int x = gt.x0; x <= gt.x1; ++x) {
+        before += gt.z0 > 0 && L->zone[gt.z0 - 1][x] == gt.from_zone;
+        after += gt.z1 + 1 < H && L->zone[gt.z1 + 1][x] == gt.from_zone;
+      }
+      gt.mx = 0.0f;
+      gt.mz = after >= before ? 1.0f : -1.0f;
+    } else {
+      for (int z = gt.z0; z <= gt.z1; ++z) {
+        before += gt.x0 > 0 && L->zone[z][gt.x0 - 1] == gt.from_zone;
+        after += gt.x1 + 1 < W && L->zone[z][gt.x1 + 1] == gt.from_zone;
+      }
+      gt.mz = 0.0f;
+      gt.mx = after >= before ? 1.0f : -1.0f;
+    }
+    // Fin dove si apre ogni battente: si ferma prima di un muro, un albero, un masso, un muretto,
+    // un blocco o una cassa davanti al cancello (mappe personalizzate: in quelle di serie davanti
+    // ai cancelli c'e' posto).
+    for (int side = 0; side < 2; ++side) {
+      gt.stop[side] = 1.0f;
+      for (int k = 1; k <= 30; ++k) {
+        Vec3 h, d;
+        float len;
+        level_gate_leaf(L, gi, side, D_HALF_PI * (float)k / 30.0f, &h, &d, &len);
+        const Vec3 n = v3(-d.z, 0.0f, d.x);
+        bool hit = false;
+        for (float r = 0.05f; r <= len && !hit; r += 0.1f)
+          for (int w = -1; w <= 1 && !hit; w += 2) {
+            const Vec3 q = h + d * r + n * ((float)w * GATE_LEAF_HALF);
+            int cx, cz;
+            if (!level_cell(L, q.x, q.z, &cx, &cz)) { hit = true; break; }
+            const uint8_t c = L->cell[cz][cx];
+            if (c == C_GATE) hit = L->gate_at[cz][cx] != gi;
+            else hit = !free_ground(c) && c != C_WATER && c != C_PIT;
+          }
+        if (hit) {
+          gt.stop[side] = (float)(k - 1) / 30.0f;
+          break;
+        }
+      }
+    }
+  }
   return true;
 }
 
@@ -881,14 +931,46 @@ void level_free(Level* L) {
   for (int i = 0; i < L->nscenery; ++i) mesh_free(&L->scenery[i]);
   L->nscenery = 0;
   for (int i = 0; i < DM_COUNT; ++i) mesh_free(&L->dyn_mesh[i]);
-  for (int i = 0; i < L->ngates; ++i) mesh_free(&L->gates[i].mesh);
+  for (int i = 0; i < L->ngates; ++i) {
+    mesh_free(&L->gates[i].leaf[0]);
+    mesh_free(&L->gates[i].leaf[1]);
+  }
 }
 
 void level_reset_dynamic(Level* L, int z) {
   for (int i = 0; i < L->ndyn; ++i)
     if (z < 0 || L->dyn[i].zone == z) L->dyn[i].hp = dyn_hp_max(L->dyn[i]);   // anche la capsula
   for (int i = 0; i < L->ngates; ++i)
-    if (z < 0 || L->gates[i].from_zone >= z) L->gates[i].open = 0.0f;
+    if (z < 0 || L->gates[i].from_zone >= z) L->gates[i].open = L->gates[i].vel = 0.0f;
+}
+
+// Dal capo del passaggio al cardine: il battente, anche aperto, resta fuori dal pilastro accanto al
+// cancello (build_gate_frame in level_mesh.cpp). La torretta della Muraglia entra di piu' nel
+// passaggio, il pilastro del Colosseo di meno.
+static float gate_hinge_in(const Level* L) {
+  switch (L->style) {
+    case STYLE_CHICHENITZA: return 0.22f;
+    case STYLE_MURAGLIA: return 0.34f;
+    case STYLE_COLOSSEO: return 0.12f;
+    default: return 0.18f;
+  }
+}
+
+void level_gate_leaf(const Level* L, int gi, int side, float theta, Vec3* hinge, Vec3* dir, float* len, Vec3* closed) {
+  const Gate& gt = L->gates[gi];
+  const Vec3 a = cell_center(L, gt.x0, gt.z0), b = cell_center(L, gt.x1, gt.z1);
+  const bool horiz = gt.horiz;
+  // Lungo il cancello (da u0 a u1) e i due capi.
+  const Vec3 eu = horiz ? v3(1, 0, 0) : v3(0, 0, 1);
+  const float in = gate_hinge_in(L);
+  const Vec3 h0 = horiz ? v3(a.x - 0.5f + in, 0, a.z) : v3(a.x, 0, a.z - 0.5f + in);
+  const Vec3 h1 = horiz ? v3(b.x + 0.5f - in, 0, b.z) : v3(b.x, 0, b.z + 0.5f - in);
+  const Vec3 c = side ? eu * -1.0f : eu;          // da chiuso: dal cardine verso il centro
+  const Vec3 m = v3(gt.mx, 0.0f, gt.mz);
+  *hinge = side ? h1 : h0;
+  *dir = c * d_cos(theta) + m * d_sin(theta);
+  *len = 0.5f * (horiz ? h1.x - h0.x : h1.z - h0.z) - 0.012f;   // un filo d'aria in mezzo
+  if (closed) *closed = c;
 }
 
 // --- collisioni -------------------------------------------------------------

@@ -99,12 +99,21 @@ struct ZoneDef {
   Vec3 start[4];                       // dove si (ri)parte nella zona
 };
 
+// Cancelli a battente (0.5.4; prima scendevano sotto terra): due battenti con i cardini ai due capi
+// del cancello. Si aprono girando di 90 gradi verso la zona che li apre (from_zone: chi ci gioca li
+// vede aprirsi verso di se', e chi e' davanti ai battenti viene spinto via) e si richiudono dietro
+// ai giocatori quando sono tutti nella zona dopo, sbattendo (dalla parte di from_zone, ormai vuota).
 struct Gate {
   int x0, z0, x1, z1;                  // caselle del cancello
   int from_zone;                       // si apre quando questa zona e' libera
-  float open;                          // 0 chiuso .. 1 aperto (sceso sotto terra)
-  Mesh mesh;
+  bool horiz;                          // da ovest a est (le zone sono a nord e a sud)
+  float open;                          // 0 chiuso .. 1 aperto: battenti girati di gate_theta(open)
+  float vel;                           // quanto cambia open a ogni fotogramma (game.cpp, update_gates)
+  float mx, mz;                        // verso from_zone, perpendicolare al cancello: da li' si aprono i battenti
+  float stop[2];                       // fin dove si apre ogni battente (1: del tutto; meno se c'e' un ostacolo)
+  Mesh leaf[2];                        // battenti chiusi, con il cardine nell'origine (level_mesh.cpp)
 };
+#define GATE_LEAF_HALF 0.1f            // meta' dello spessore dei battenti (per le spinte)
 struct MapItem {
   uint8_t kind, zone;
   int16_t cx, cz;
@@ -148,6 +157,17 @@ void level_build_mesh(Level* L);
 void level_free(Level* L);
 // Rimette casse e cancelli come all'inizio della mappa (z < 0) o solo quelli della zona z.
 void level_reset_dynamic(Level* L, int z);
+// Battenti dei cancelli (0.5.4): quanto e' girato il battente side (radianti, da 0 chiuso a pi/2
+// aperto). Il movimento (parte piano, sbatte chiudendosi) lo fa update_gates su open.
+static inline float gate_theta(const Gate& gt, int side) {
+  float o = gt.open < gt.stop[side] ? gt.open : gt.stop[side];
+  if (o < 0.0f) o = 0.0f;
+  return D_HALF_PI * o;
+}
+// Il battente side (0: al capo u0, cioe' a ovest o a nord; 1: all'altro) del cancello gi girato di
+// theta: cardine (a terra), direzione dal cardine alla punta e lunghezza (dal cardine al centro del
+// cancello). closed: la direzione da chiuso (dal cardine verso il centro del cancello).
+void level_gate_leaf(const Level* L, int gi, int side, float theta, Vec3* hinge, Vec3* dir, float* len, Vec3* closed = 0);
 
 static inline Vec3 cell_center(const Level* L, int cx, int cz) {
   return v3((float)cx - (float)L->W * 0.5f + 0.5f, 0.0f, (float)cz - (float)L->H + 0.5f);

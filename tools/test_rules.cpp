@@ -793,6 +793,112 @@ int main(int argc, char** argv) {
     }
   }
 
+  printf("14c) cancelli a battente (0.5.4): si aprono verso chi aspetta e lo spingono, si chiudono sbattendo\n");
+  {
+    open_game(save_dir("cancelli"));
+    const float rr = PL_R + GATE_LEAF_HALF;
+    uint32_t rs = 12345u;
+    auto rnd = [&rs]() { rs = rs * 1664525u + 1013904223u; return (float)(rs >> 8) * (1.0f / 16777216.0f); };
+    for (int m = 0; m < maps_count(); ++m) {
+      fresh(m, 4, "0123");
+      if (g.L.ngates == 0) continue;
+      const char* name = maps_name(m);
+      // Verso la zona che apre il cancello, e del tutto: nelle mappe di serie davanti c'e' posto.
+      bool dir_ok = true;
+      for (int gi = 0; gi < g.L.ngates; ++gi) {
+        const Gate& gt = g.L.gates[gi];
+        const Vec3 c = (cell_center(&g.L, gt.x0, gt.z0) + cell_center(&g.L, gt.x1, gt.z1)) * 0.5f;
+        dir_ok = dir_ok && level_zone_at(&g.L, c.x + gt.mx, c.z + gt.mz) == gt.from_zone && gt.stop[0] == 1.0f &&
+                 gt.stop[1] == 1.0f && gt.open == 0.0f;
+      }
+      const int gi = g.L.zones[0].exit_gate;
+      const Gate& gt = g.L.gates[gi];
+      const Vec3 mid = (cell_center(&g.L, gt.x0, gt.z0) + cell_center(&g.L, gt.x1, gt.z1)) * 0.5f;
+      const Vec3 mm = v3(gt.mx, 0.0f, gt.mz), eu = gt.horiz ? v3(1, 0, 0) : v3(0, 0, 1);
+      // Si apre con 4 giocatori davanti, in tante prove: fermi, che vanno verso il cancello, che si
+      // allontanano.
+      int open_min = 1000, open_max = 0, bad_cells = 0, bad_body = 0, pushed = 0, tries = 0;
+      float worst = 1e9f;
+      for (int trial = 0; trial < 24; ++trial) {
+        fresh(m, 4, "0123");
+        for (int i = 0; i < 4; ++i) {
+          Player& p = g.pl[i];
+          p.pos = mid + mm * (0.85f + 2.0f * rnd()) + eu * (-3.0f + 6.0f * rnd());
+          level_push_out(&g.L, &p.pos.x, &p.pos.z, 0.0f, PL_R, PL_STEP, BODY_WALK);
+        }
+        Vec3 start[4];
+        for (int i = 0; i < 4; ++i) start[i] = g.pl[i].pos;
+        clear_zone();
+        int open_f = -1;
+        for (int f = 0; f < 80; ++f) {
+          for (int i = 0; i < 4; ++i) {
+            const float k = trial % 3 == 1 ? -0.8f : (trial % 3 == 2 ? 0.5f : 0.0f);
+            g_pads[i].lx = mm.x * k + ((i & 1) ? 0.25f : -0.25f) * (trial % 3 == 1 ? 1.0f : 0.0f);
+            g_pads[i].ly = mm.z * k;
+          }
+          const bool moving = gt.open < 1.0f;
+          step();
+          if (open_f < 0 && gt.open >= 1.0f) open_f = f + 1;
+          if ((level_walk_top(&g.L, gt.x0, gt.z0) < 1.0f) != (gt.open >= 0.95f)) bad_cells++;
+          for (int i = 0; i < 4; ++i) {
+            const Player& p = g.pl[i];
+            if (!level_body_ok(&g.L, p.pos.x, p.pos.z, p.pos.y, PL_R, PL_STEP, BODY_WALK)) bad_body++;
+            if (!moving) continue;
+            for (int side = 0; side < 2; ++side) {
+              Vec3 h, d;
+              float len;
+              level_gate_leaf(&g.L, gi, side, gate_theta(gt, side), &h, &d, &len);
+              const float t = clampf((p.pos.x - h.x) * d.x + (p.pos.z - h.z) * d.z, 0.0f, len);
+              const float dx = h.x + d.x * t - p.pos.x, dz = h.z + d.z * t - p.pos.z;
+              worst = fminf(worst, sqrtf(dx * dx + dz * dz));
+            }
+          }
+        }
+        memset(g_pads, 0, sizeof(g_pads));
+        if (trial % 3 == 0)
+          for (int i = 0; i < 4; ++i) pushed += dist2d(start[i], g.pl[i].pos) > 0.05f;
+        open_min = open_f < open_min ? open_f : open_min;
+        open_max = open_f > open_max ? open_f : open_max;
+        tries++;
+      }
+      snprintf(buf, sizeof(buf), "%s: si aprono verso la zona che li apre in %d-%d fotogrammi, il passaggio solo alla fine (%d errori)",
+               name, open_min, open_max, bad_cells);
+      check(dir_ok && open_min >= 45 && open_max <= 52 && bad_cells == 0, buf);
+      snprintf(buf, sizeof(buf), "%s: in %d prove chi e' davanti viene spinto via (%d spinti), mai dentro un battente che gira (al minimo %.2f m dal centro, ne servono %.2f) ne' in un ostacolo (%d)",
+               name, tries, pushed, (double)worst, (double)rr, bad_body);
+      check(worst >= rr - 0.005f && bad_body == 0 && pushed >= 8, buf);
+      // Tutti nella zona dopo: si chiude alle loro spalle, sbattendo una volta sola.
+      for (int i = 0; i < 4; ++i) g.pl[i].pos = g.L.zones[1].start[i];
+      int f = 0, close_f = -1, hit_f = -1, still_f = -1, puffs = 0, slams = 0;
+      float top = 0.0f, shake = 0.0f;
+      for (; f < 600 && still_f < 0; ++f) {
+        const float sh0 = g.shake;
+        step();
+        quiet();
+        if (close_f < 0 && gt.vel < 0.0f) close_f = f;
+        if (g.shake > sh0 + 1e-6f) slams++;
+        if (hit_f < 0 && close_f >= 0 && gt.open == 0.0f && gt.vel > 0.0f) {
+          hit_f = f;
+          shake = g.shake;
+          for (int k = 0; k < MAX_PARTICLES; ++k)
+            if (g.pa[k].alive && g.pa[k].kind == PK_PUFF && dist2d(g.pa[k].pos, mid) < 3.5f) puffs++;
+        }
+        if (hit_f >= 0) top = fmaxf(top, gt.open);
+        if (hit_f >= 0 && gt.open == 0.0f && gt.vel == 0.0f) still_f = f;
+      }
+      snprintf(buf, sizeof(buf), "%s: si chiude in %d fotogrammi, sbatte (polvere %d, scossone %.2f, %d colpo), rimbalza di %.1f gradi e si ferma dopo %d",
+               name, hit_f - close_f, puffs, (double)shake, slams, (double)(top * 90.0f), still_f - hit_f);
+      check(close_f >= 0 && hit_f - close_f >= 38 && hit_f - close_f <= 44 && puffs >= 10 && shake > 0.05f && slams == 1 && top > 0.03f &&
+                top < 0.1f && still_f - hit_f <= 30 && level_walk_top(&g.L, gt.x0, gt.z0) > 10.0f && g.zone == 1,
+            buf);
+      const uint64_t h0 = game_state_hash();
+      g.L.gates[gi].vel = 0.001f;
+      const uint64_t h1 = game_state_hash();
+      g.L.gates[gi].vel = 0.0f;
+      check(h0 != h1 && game_state_hash() == h0, "l'impronta della partita comprende i cancelli");
+    }
+  }
+
   if (g_shots) {
     printf("15) schermate dell'HUD\n");
     open_game(save_dir("immagini"));

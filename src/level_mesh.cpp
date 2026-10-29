@@ -2095,56 +2095,99 @@ void build_landscape(Level* L) {
 
 // --- cancelli ------------------------------------------------------------------------------------
 
-void build_gate_mesh(Level* L, int gi) {
+// Battenti (0.5.4: cancelli a battente, prima una saracinesca che scendeva sotto terra): ognuno con
+// il cardine nell'origine e da chiuso, lungo +X (il battente al capo u0) o -X (quello al capo u1)
+// per i cancelli da ovest a est, lungo Z per quelli da nord a sud. Li gira game_draw.cpp.
+void build_gate_leaf(Level* L, int gi, int side) {
   const Style& S = *B.S;
   Gate& gt = L->gates[gi];
+  Vec3 hinge, dir;
+  float len;
+  level_gate_leaf(L, gi, side, 0.0f, &hinge, &dir, &len);
+  const float sg = side ? -1.0f : 1.0f;
+  const bool horiz = gt.horiz;
   MeshBuilder mb;
   mb_init(&mb);
-  const Vec3 a = cell_center(L, gt.x0, gt.z0), b = cell_center(L, gt.x1, gt.z1);
-  const bool horiz = gt.z0 == gt.z1;
-  const float u0 = horiz ? a.x - 0.5f : a.z - 0.5f, u1 = horiz ? b.x + 0.5f : b.z + 0.5f;
-  const float c = horiz ? a.z : a.x;
-  auto box = [&](float s0, float s1, float y0, float y1, float d, uint32_t col, float bev, float t) {
-    const Vec3 mn = horiz ? v3(s0, y0, c - d) : v3(c - d, y0, s0);
-    const Vec3 mx = horiz ? v3(s1, y1, c + d) : v3(c + d, y1, s1);
-    obox(&mb, mn, mx, bev, col, S.outline, t);
+  // s: dal cardine verso il centro del cancello; w: mezzo spessore.
+  auto P = [&](float s, float y, float w) { return horiz ? v3(sg * s, y, w) : v3(w, y, sg * s); };
+  auto box = [&](float s0, float s1, float y0, float y1, float w, uint32_t col, float bev, float t) {
+    const Vec3 a = P(s0, y0, -w), b = P(s1, y1, w);
+    obox(&mb, v3(fminf(a.x, b.x), y0, fminf(a.z, b.z)), v3(fmaxf(a.x, b.x), y1, fmaxf(a.z, b.z)), bev, col, S.outline, t);
+  };
+  auto tip = [&](float s, float y, float hs_, float hw, float hgt, uint32_t col, float t) {
+    pyramid(&mb, P(s, y, 0.0f), horiz ? hs_ : hw, horiz ? hw : hs_, hgt, col, col, 0.0f, S.outline, t);
   };
   switch (B.style) {
     case STYLE_PIRAMIDI: {
-      // Saracinesca di pietra: lastre verticali con le fasce dipinte.
-      box(u0 + 0.12f, u1 - 0.12f, -0.1f, 1.62f, 0.13f, S.gate, 0.04f, 0.035f);
-      for (float s = u0 + 0.12f + 0.62f; s < u1 - 0.2f; s += 0.62f) box(s - 0.02f, s + 0.02f, 0.0f, 1.6f, 0.145f, S.gate_dark, 0.0f, 0.0f);
-      box(u0 + 0.1f, u1 - 0.1f, 1.25f, 1.42f, 0.15f, S.wall_band, 0.02f, 0.0f);
-      box(u0 + 0.1f, u1 - 0.1f, 0.25f, 0.38f, 0.15f, S.wall_band2, 0.02f, 0.0f);
+      // Battente di cedro con le assi, le fasce dipinte e le bandelle di bronzo dei cardini.
+      box(-0.1f, 0.1f, -0.05f, 1.72f, 0.11f, S.gate_dark, 0.03f, 0.035f);
+      box(-0.12f, 0.12f, 1.72f, 1.8f, 0.13f, 0xF2C94C, 0.02f, 0.03f);
+      box(0.06f, len, -0.05f, 1.62f, 0.09f, S.gate, 0.04f, 0.035f);
+      for (float s = 0.56f; s < len - 0.2f; s += 0.5f) box(s - 0.02f, s + 0.02f, 0.0f, 1.6f, 0.1f, S.gate_dark, 0.0f, 0.0f);
+      box(0.08f, len - 0.04f, 1.25f, 1.42f, 0.11f, S.wall_band, 0.02f, 0.0f);
+      box(0.08f, len - 0.04f, 0.25f, 0.38f, 0.11f, S.wall_band2, 0.02f, 0.0f);
+      const float strap = fminf(0.6f, len - 0.08f);
+      box(-0.12f, strap, 0.08f, 0.18f, 0.12f, 0xF2C94C, 0.01f, 0.0f);
+      box(-0.12f, strap, 1.48f, 1.58f, 0.12f, 0xF2C94C, 0.01f, 0.0f);
+      box(len - 0.05f, len, -0.05f, 1.63f, 0.1f, S.gate_dark, 0.01f, 0.0f);
       break;
     }
     case STYLE_CHICHENITZA: {
-      // Palizzata di pali con due fasce dipinte (rosso e blu maya) e le borchie di giada.
-      for (float s = u0 + 0.22f; s < u1 - 0.15f; s += 0.36f) box(s - 0.15f, s + 0.15f, -0.1f, 1.58f + 0.06f * hs((int)(s * 10), gi, 3), 0.1f, (int)(s * 3) & 1 ? S.gate : S.gate_dark, 0.05f, 0.03f);
-      box(u0 + 0.1f, u1 - 0.1f, 0.32f, 0.46f, 0.14f, S.wall_band2, 0.02f, 0.0f);
-      box(u0 + 0.1f, u1 - 0.1f, 1.08f, 1.22f, 0.14f, S.wall_band, 0.02f, 0.0f);
-      for (float s = u0 + 0.5f; s < u1 - 0.3f; s += 0.7f) box(s - 0.05f, s + 0.05f, 1.1f, 1.2f, 0.16f, S.deco1, 0.0f, 0.0f);
+      // Palizzata di pali appuntiti legati da due traverse dipinte (rosso e blu maya), con le
+      // borchie di giada; il palo del cardine e' un tronco.
+      {
+        const Part p = part(&mb);
+        pipe(&mb, P(0.0f, -0.1f, 0.0f), P(0.0f, 1.66f, 0.0f), 0.12f, 0.12f, 8, S.gate_dark);
+        pipe(&mb, P(0.0f, 1.66f, 0.0f), P(0.0f, 1.9f, 0.0f), 0.12f, 0.0f, 8, S.gate_dark);
+        outline(&mb, p, 0.03f, S.outline);
+      }
+      int k = 0;
+      for (float s = 0.3f; s < len - 0.1f; s += 0.33f, ++k) {
+        const float top = 1.48f + 0.08f * hs(k, gi * 2 + side, 3);
+        const uint32_t col = (k & 1) ? S.gate_dark : S.gate;
+        box(s - 0.14f, s + 0.14f, -0.1f, top, 0.1f, col, 0.05f, 0.03f);
+        tip(s, top, 0.14f, 0.1f, 0.18f, col, 0.03f);
+      }
+      box(-0.06f, len - 0.02f, 0.32f, 0.46f, 0.14f, S.wall_band2, 0.02f, 0.0f);
+      box(-0.06f, len - 0.02f, 1.08f, 1.22f, 0.14f, S.wall_band, 0.02f, 0.0f);
+      for (float s = 0.6f; s < len - 0.2f; s += 0.6f) box(s - 0.05f, s + 0.05f, 1.1f, 1.2f, 0.16f, S.deco1, 0.0f, 0.0f);
       break;
     }
     case STYLE_MURAGLIA: {
-      // Portone rosso con le borchie d'oro.
-      box(u0 + 0.1f, u1 - 0.1f, -0.1f, 1.65f, 0.12f, S.gate, 0.04f, 0.035f);
-      box((u0 + u1) * 0.5f - 0.025f, (u0 + u1) * 0.5f + 0.025f, 0.0f, 1.62f, 0.135f, S.gate_dark, 0.0f, 0.0f);
-      for (int row = 0; row < 3; ++row)
-        for (float s = u0 + 0.4f; s < u1 - 0.3f; s += 0.45f) {
-          const float y = 0.4f + 0.45f * (float)row;
-          box(s - 0.05f, s + 0.05f, y - 0.05f, y + 0.05f, 0.15f, S.deco1, 0.0f, 0.0f);
+      // Battente del portone rosso: file di borchie d'oro, il battiporta con l'anello vicino al
+      // bordo dove si chiude.
+      box(-0.09f, 0.09f, -0.1f, 1.72f, 0.12f, S.gate_dark, 0.03f, 0.035f);
+      box(0.05f, len, -0.1f, 1.65f, 0.1f, S.gate, 0.04f, 0.035f);
+      for (int row = 0; row < 4; ++row)
+        for (float s = 0.32f; s < len - 0.45f; s += 0.32f) {
+          const float y = 0.32f + 0.34f * (float)row;
+          box(s - 0.045f, s + 0.045f, y - 0.045f, y + 0.045f, 0.13f, S.deco1, 0.0f, 0.0f);
         }
+      if (len > 0.7f) {
+        box(len - 0.36f, len - 0.16f, 0.95f, 1.15f, 0.12f, S.deco1, 0.01f, 0.0f);
+        box(len - 0.35f, len - 0.17f, 0.68f, 0.71f, 0.125f, S.deco1, 0.0f, 0.0f);
+        box(len - 0.35f, len - 0.32f, 0.68f, 0.9f, 0.125f, S.deco1, 0.0f, 0.0f);
+        box(len - 0.2f, len - 0.17f, 0.68f, 0.9f, 0.125f, S.deco1, 0.0f, 0.0f);
+      }
+      box(len - 0.035f, len, -0.1f, 1.66f, 0.105f, S.gate_dark, 0.0f, 0.0f);
       break;
     }
     default: {
-      for (float s = u0 + 0.25f; s < u1 - 0.1f; s += 0.5f) box(s - 0.08f, s + 0.08f, 0.0f, 1.6f, 0.07f, S.gate_metal, 0.02f, 0.03f);
-      box(u0 + 0.05f, u1 - 0.05f, 0.30f, 0.44f, 0.1f, S.gate_dark, 0.02f, 0.03f);
-      box(u0 + 0.05f, u1 - 0.05f, 1.12f, 1.26f, 0.1f, S.gate_dark, 0.02f, 0.03f);
+      // Cancellata di ferro con le punte a lancia, due traverse scure.
+      box(-0.08f, 0.08f, 0.0f, 1.72f, 0.08f, S.gate_metal, 0.02f, 0.03f);
+      tip(0.0f, 1.72f, 0.08f, 0.08f, 0.2f, 0xF2C94C, 0.03f);
+      for (float s = 0.32f; s < len - 0.3f; s += 0.48f) {
+        box(s - 0.07f, s + 0.07f, 0.0f, 1.6f, 0.07f, S.gate_metal, 0.02f, 0.03f);
+        tip(s, 1.6f, 0.07f, 0.06f, 0.17f, S.gate_metal, 0.03f);
+      }
+      box(len - 0.14f, len, 0.0f, 1.6f, 0.07f, S.gate_metal, 0.02f, 0.03f);
+      tip(len - 0.07f, 1.6f, 0.07f, 0.06f, 0.17f, S.gate_metal, 0.03f);
+      box(-0.06f, len, 0.30f, 0.44f, 0.1f, S.gate_dark, 0.02f, 0.03f);
+      box(-0.06f, len, 1.12f, 1.26f, 0.1f, S.gate_dark, 0.02f, 0.03f);
       break;
     }
   }
-  gt.mesh = mb_finish(&mb);
+  gt.leaf[side] = mb_finish(&mb);
 }
 
 // Parti fisse attorno ai cancelli (obelischi, stipiti, torri): restano anche col cancello aperto.
@@ -2155,7 +2198,7 @@ void build_gate_frame(MeshBuilder* mb, int gi) {
   const Style& S = *B.S;
   const Gate& gt = L->gates[gi];
   const Vec3 a = cell_center(L, gt.x0, gt.z0), b = cell_center(L, gt.x1, gt.z1);
-  const bool horiz = gt.z0 == gt.z1;
+  const bool horiz = gt.horiz;
   const float u0 = horiz ? a.x - 0.5f : a.z - 0.5f, u1 = horiz ? b.x + 0.5f : b.z + 0.5f;
   const float c = horiz ? a.z : a.x;
   auto P = [&](float u, float y, float w) { return horiz ? v3(u, y, c + w) : v3(c + w, y, u); };
@@ -2462,7 +2505,10 @@ void level_build_mesh(Level* L) {
   for (int i = 0; i < L->nscenery; ++i) mesh_free(&L->scenery[i]);
   L->nscenery = 0;
   for (int i = 0; i < DM_COUNT; ++i) mesh_free(&L->dyn_mesh[i]);
-  for (int i = 0; i < L->ngates; ++i) mesh_free(&L->gates[i].mesh);
+  for (int i = 0; i < L->ngates; ++i) {
+    mesh_free(&L->gates[i].leaf[0]);
+    mesh_free(&L->gates[i].leaf[1]);
+  }
 
   B.L = L;
   B.style = L->style >= 0 && L->style < NSTYLES ? L->style : STYLE_PIRAMIDI;
@@ -2516,5 +2562,8 @@ void level_build_mesh(Level* L) {
   }
   build_far_ground(L);
   build_dyn_meshes(L);
-  for (int gi = 0; gi < L->ngates; ++gi) build_gate_mesh(L, gi);
+  for (int gi = 0; gi < L->ngates; ++gi) {
+    build_gate_leaf(L, gi, 0);
+    build_gate_leaf(L, gi, 1);
+  }
 }
