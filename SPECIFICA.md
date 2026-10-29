@@ -12,8 +12,9 @@ Ciò che è indicato come *prototipo* è il comportamento della versione 0.2.0, 
 console l'11/10/2026; *0.3*, *0.4* indicano come quella versione realizza una voce (valori da
 provare sulla console e da confermare).
 
-Ultimo aggiornamento: 20/10/2026 (dopo la prova della 0.5.2: salvataggi, lingue, gioco in rete con
-ognuno il suo schermo, visuale vicina senza HDMI; si comincia al via di Andrea).
+Ultimo aggiornamento: 29/10/2026 (lista della 0.5.4: nomi dei salvataggi, antialias migliore, CPU
+nel riquadro delle prestazioni, via la storia, banner delle carte, bonus nelle casse, batteria,
+cancelli a battente; il gioco in rete si farà molto più avanti).
 
 ## 1. Il gioco in breve
 
@@ -26,6 +27,8 @@ ognuno il suo schermo, visuale vicina senza HDMI; si comincia al via di Andrea).
   Luna, Marte e Venere per il giro dei pianeti; ogni pianeta ha i suoi mostri e un boss; battuto
   il boss, l'eroe di quel pianeta entra in squadra. Via fili e Burattinaio; il prigioniero di ogni
   mappa diventa un esploratore chiuso in una capsula nascosta (la sua stella resta).
+- [deciso 29/10] **Niente storia raccontata**: via la schermata della storia; dal menu si va dritti
+  alle mappe. Il tema resta quello qui sopra.
 - Sparatutto cooperativo in 3D con vista dall'alto, ispirato a Brawl Stars [deciso 11/10].
 - Da 1 a 4 giocatori, con due modalità [deciso 13/10]: **Insieme**, tutti nella stessa squadra
   contro i nemici del computer (la campagna), e **Contro**, 2 contro 2 (capitolo 2).
@@ -85,6 +88,8 @@ ognuno il suo schermo, visuale vicina senza HDMI; si comincia al via di Andrea).
     quelli arrivati a ogni fotogramma (RetroArch non le apre più): niente ritardo, e sulle altre
     console non cambia nulla. Resta il limite dei messaggi persi (raro in casa), coperto dai 30
     secondi qui sopra.
+- [deciso 29/10] Il gioco in rete con ognuno il suo schermo (qui sotto) si farà **molto più avanti**:
+  non è più la 0.5.4 (capitolo 14).
 - [deciso 20/10] **Gioco in rete, ognuno con il suo schermo**: oltre alla TV con le console-controller
   (che resta), ogni console fa girare il gioco e lo mostra sul suo schermo, **con la telecamera
   centrata sul proprio eroe**.
@@ -135,7 +140,7 @@ ognuno il suo schermo, visuale vicina senza HDMI; si comincia al via di Andrea).
 | levetta destra | mira |
 | START (pressione breve) | pausa |
 | SELECT+START tenuti | uscita |
-| SELECT (pressione breve) | riquadro delle prestazioni (strumento di prova) |
+| SELECT (pressione breve) | riquadro delle prestazioni (strumento di prova); dalla 0.5.4 anche il carico della CPU [deciso 29/10] |
 
 - [deciso 15/10] Salto su R2 e bomba su L2 (fino alla 0.3.1 erano B e A).
 - Nei menu A conferma e B torna indietro (capitolo 10); in partita A, B, X e Y restano liberi.
@@ -283,6 +288,11 @@ restare leggibile a 640×480.
   Bold per i testi, Poppins Bold per i titoli) al posto del carattere 8×8 ingrandito; barre sopra
   i personaggi più sottili e in proporzione alla visuale larga.
 - Provato il 15–16/10 (0.4): antialias sempre acceso a 60 fps fissi sulla Mali.
+- [deciso 29/10] **Antialias migliore** ("si deve vedere meglio"): 8 campioni invece di 4 dove la GPU
+  lo permette.
+  - [proposta] In pausa ANTIALIAS: NO, 4X, 8X (di partenza il migliore che la GPU regge); se con 8
+    campioni il gioco non sta nei 60 fotogrammi al secondo torna da solo a 4 e lo scrive nel
+    registro.
 - [deciso 19/10] **Interfaccia nuova**, il meno retrò possibile: grafica di oggi, semplicissima ma
   davvero figa, per tutte le schermate di ora e per le prossime. Tra 4 mockup fatti sulle immagini
   vere del gioco (Caramella, Vetro, Adesivo, Orbita) Andrea ha scelto **Orbita**; tra 4 varianti di
@@ -466,6 +476,11 @@ triangoli a 60 fps fissi; con la visuale larga della 0.3.2 se ne inquadrano circ
   boss, quindi 16 mappe. Ogni mappa è un livello di 3 zone in fila, collegate da cancelli (con
   una sola telecamera niente bivi). Finita la campagna si ricomincia dal primo mondo, più
   difficile. (Dal 17/10: 9 pianeti, e i giri sono di ogni pianeta, qui sotto.)
+- [deciso 29/10] **Cancelli a battente** che si chiudono bene, come quelli veri.
+  - [proposta] Due ante incernierate ai pilastri: a zona libera si aprono ruotando verso la zona dopo,
+    quando tutti sono dentro si richiudono dietro di loro fino a combaciare al centro, con un colpo e
+    un po' di polvere. Chi è ancora davanti a un'anta viene spinto via, nessuno resta incastrato.
+    Ante nello stile di ogni mappa.
 - [deciso 18/10] **La mappa disegnata è tutta visitabile e giocabile**: niente parti irraggiungibili
   dentro la mappa (nella 0.5, alle Piramidi, saltando nel Nilo si camminava nella parte non usata e
   si passava nelle altre zone); l'acqua non si attraversa nemmeno saltando; il paesaggio attorno
@@ -499,7 +514,8 @@ triangoli a 60 fps fissi; con la visuale larga della 0.3.2 se ne inquadrano circ
 - **Elementi comuni** [deciso 13/10]:
   - muro: blocca il passo e i colpi;
   - muretto basso: blocca il passo ma non i colpi, si scavalca saltando;
-  - cassa: ci si sale saltando; alcune si rompono a colpi e possono contenere un talismano;
+  - cassa: ci si sale saltando; alcune si rompono a colpi e possono contenere un talismano (dalla
+    0.5.4 le altre un bonus, capitolo 9);
   - cespuglio: chi ci sta dentro è nascosto ai nemici lontani;
   - acqua o buco: non si attraversa, i colpi passano;
   - trampolino: salto lungo;
@@ -547,6 +563,11 @@ triangoli a 60 fps fissi; con la visuale larga della 0.3.2 se ne inquadrano circ
   vita e di danno. I livelli restano salvati. In Contro i livelli non contano: tutti alla pari.
 - [deciso 13/10] **Bonus da raccogliere**, che durano una decina di secondi: scudo, colpi più forti,
   velocità. Escono dalle casse che si rompono e ogni tanto dai mostri eliminati.
+  - [deciso 29/10] Nelle casse che si rompono (adesso vuote) c'è un bonus, uno a caso tra quattro:
+    **velocità** (+40% per 10 s), **furia** (danni ×2 per 10 s), **scudo** (nessun danno per 6 s),
+    **carica** (speciale subito pieno). Si prende passandoci sopra; icona e tempo che resta nella
+    tessera del giocatore. Le casse col talismano restano col talismano; dai mostri per ora niente.
+  - [proposta] Lo scudo nel gioco si chiama INVINCIBILE: SCUDO è già il nome di una carta.
 - [deciso 13/10] Niente monete e niente negozio.
 - [deciso 15/10] Salire di livello sblocca carte nuove per quel pupazzo, cosi' i livelli non sono
   solo numeri (0.4.1).
@@ -558,6 +579,9 @@ triangoli a 60 fps fissi; con la visuale larga della 0.3.2 se ne inquadrano circ
 - [deciso 13/10] Percorso: titolo → Insieme o Contro → mondo e mappa (Insieme) o arena e squadre
   (Contro) → scelta dei personaggi, ognuno col suo pad → partita → fine mappa con le statistiche.
 - [deciso 13/10] Nei menu A conferma e B torna indietro.
+- [deciso 29/10] **Batteria della console** in alto a destra, nei menu e in partita.
+  - [proposta] Icona con la carica letta dalla console, fulmine quando è in carica, rossa e
+    lampeggiante sotto il 15%; in partita la scritta dei mostri si sposta a sinistra.
 - Pausa: capitolo 3; chi entra a partita iniziata: capitolo 2.
 - 0.3.2: pausa con RIPRENDI, MIRA (extra morbida, morbida, media, rapida: si cambia con ← → o A,
   vale per chi ha aperto la pausa), ANTIALIAS (sì o no, per tutti; ASSENTE se la GPU non lo
@@ -584,6 +608,14 @@ triangoli a 60 fps fissi; con la visuale larga della 0.3.2 se ne inquadrano circ
 - [deciso 20/10] **Prima schermata**: NUOVA PARTITA, CARICA SALVATAGGIO, GESTISCI SALVATAGGI (una
   schermata a parte per duplicare ed eliminare i salvataggi), LINGUA; resta ESCI. Salvataggi nel
   capitolo 12.
+- [deciso 29/10] **Nome dei salvataggi** modificabile: si scrive subito dopo NUOVA PARTITA e si cambia
+  con RINOMINA in GESTISCI SALVATAGGI.
+  - [proposta] Tastiera a schermo (lettere, numeri e qualche segno, al massimo 12 caratteri): croce
+    o levetta per muoversi, A scrive, B cancella, START conferma. Nome di partenza "PARTITA N". Il
+    nome si vede in CARICA e GESTISCI, sopra pianeta e giro.
+- [deciso 29/10] **Carte**: non compaiono più di colpo. Prima un banner "RITIRA LE TUE CARTE" con A per
+  scegliere; ognuno preme A e si apre il suo riquadro con le 3 carte (il gioco resta fermo come
+  prima). Una A tenuta da prima non conta.
 - [deciso 20/10] **Lingua**: dalla prima schermata una pagina per scegliere tra inglese, italiano,
   spagnolo, portoghese (del Portogallo), cinese (semplificato), giapponese e hindi.
   - [proposta, fatta nella 0.5.3] Ogni lingua scritta nella sua lingua (English, Italiano, Español,
@@ -648,6 +680,7 @@ triangoli a 60 fps fissi; con la visuale larga della 0.3.2 se ne inquadrano circ
     l'elenco (voce grigia se non ce n'è nessuno); Duplica nel primo posto libero, Elimina con la
     conferma. Nel salvataggio solo la partita: lingua, volumi, mira e antialias restano unici per
     la console. Il salvataggio di oggi diventa il numero 1.
+  - [deciso 29/10] Ogni partita ha un nome (capitolo 10): chiave `nome=` nel suo file.
   - *0.5.3*: impostazioni in `pupazzi.sav` (con `lingua=` e `salvataggi=1`), partite in
     `partita1.sav` ... `partita4.sav` (con `tempo=`, i secondi di gioco); al primo avvio i progressi
     del `pupazzi.sav` della 0.5.2 (o della 0.4) diventano `partita1.sav`, una volta sola (se la
@@ -686,8 +719,9 @@ Il gioco completo si consegna a tappe; ognuna si prova sulla console prima della
 | 0.5.1 | [deciso 18/10] visuale minima più lontana; mappe tutte giocabili senza acqua attraversabile, paesaggio ridotto; gladiatore che insegue e combatte; Chichén Itzá con i cenote al posto di Machu Picchu; scorpione e arciere di terracotta al posto di sciacallo e lama — consegnata il 18/10 |
 | 0.5.2 | [deciso 19/10] interfaccia nuova (stile Orbita, colori Tramonto) in tutte le schermate e nell'HUD; pausa con la voce COMANDI; mappe al centro — consegnata il 19/10, provata il 20/10 ("molto bella") |
 | 0.5.3 | [deciso 20/10] visuale vicina senza HDMI; più salvataggi (nuova, carica, gestisci: duplica ed elimina); 7 lingue — consegnata il 20/10, da provare |
-| 0.5.4 | [deciso 20/10] gioco in rete con ognuno il suo schermo e la telecamera sul proprio eroe |
+| 0.5.4 | [deciso 29/10] nomi dei salvataggi; antialias migliore; CPU nel riquadro delle prestazioni; via la storia; banner prima delle carte; bonus nelle casse; batteria in alto a destra; cancelli a battente |
 | 0.6 e dopo | un pianeta per versione, nell'ordine del viaggio: Luna, Marte, Venere, Mercurio, Giove, Saturno, Urano, Nettuno; compiti nelle zone, mini-boss, livelli e bonus; modalità Contro |
+| molto più avanti | [deciso 20/10, rimandato il 29/10] gioco in rete con ognuno il suo schermo e la telecamera sul proprio eroe |
 | dopo | app per le console-controller; gioco via internet (da valutare) |
 
 ## 15. Registro delle decisioni
@@ -773,3 +807,9 @@ Il gioco completo si consegna a tappe; ognuna si prova sulla console prima della
   suo schermo e la telecamera centrata sul proprio eroe; visuale vicina quando si gioca sullo
   schermo della console, come ora con l'HDMI. Ordine proposto: 0.5.3 visuale, salvataggi e lingue;
   0.5.4 gioco in rete. Si comincia al via.
+- **29/10/2026**: lista per la 0.5.4. Nome dei salvataggi modificabile (anche subito dopo nuova
+  partita); antialias "x2", cioè che si veda meglio; nel riquadro di SELECT anche il carico della
+  CPU; via la storia; le carte non devono comparire all'improvviso: prima un banner "ritira le tue
+  carte" e A per scegliere; un bonus nelle casse che si rompono (adesso vuote): velocità, furia,
+  scudo, carica; il simbolo della batteria in alto a destra; cancelli a battente che si chiudono
+  bene. Il gioco in rete si farà molto più avanti. Via alla 0.5.4.
