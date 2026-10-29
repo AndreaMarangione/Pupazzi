@@ -66,11 +66,11 @@ void defaults_settings(SaveData* d) {
 }
 
 void defaults_game(SaveData* d) {
-  d->story_seen = false;
   for (int w = 0; w < SAVE_WORLDS; ++w) {
     d->maps_open[w] = 0;
     d->giro[w] = 1;
   }
+  d->name[0] = 0;
   d->maps_open[0] = 1;                       // la prima mappa della Terra
   d->nmaps = 0;
   memset(d->maps, 0, sizeof(d->maps));
@@ -128,6 +128,30 @@ bool valid_key(const char* s) {
   if (!*s) return false;
   for (; *s; ++s)
     if (!id_char(*s) && *s != '.') return false;
+  return true;
+}
+
+// Nome di una partita in dst (SAVE_NAME_LEN byte): spazi attorno tolti, minuscole in maiuscole. false
+// (dst vuoto) se e' troppo lungo o ha caratteri che non vanno.
+bool clean_name(char* dst, const char* src) {
+  char out[SAVE_NAME_LEN];
+  while (*src == ' ') src++;
+  int len = (int)strlen(src);
+  while (len > 0 && src[len - 1] == ' ') len--;
+  if (len > SAVE_NAME_LEN - 1) {
+    dst[0] = 0;
+    return false;
+  }
+  for (int i = 0; i < len; ++i) {
+    const char c = src[i] >= 'a' && src[i] <= 'z' ? (char)(src[i] - 'a' + 'A') : src[i];
+    if (!save_name_char(c)) {
+      dst[0] = 0;
+      return false;
+    }
+    out[i] = c;
+  }
+  memcpy(dst, out, (size_t)len);
+  dst[len] = 0;
   return true;
 }
 
@@ -271,8 +295,12 @@ void read_line(Reader* r, char* s, bool broken) {
     }
   } else {
     const int wm = world_key(k, "mappe."), wg = world_key(k, "giro.");
-    if (!strcmp(k, "storia_pianeti")) fv = &d.story_seen;
-    else if (!strcmp(k, "tempo")) { uv = &d.seconds; hi = (long)MAX_SECONDS; }
+    if (!strcmp(k, "nome")) {
+      if (clean_name(d.name, v)) r->ok++;
+      else r->bad++;
+      return;
+    }
+    if (!strcmp(k, "tempo")) { uv = &d.seconds; hi = (long)MAX_SECONDS; }
     else if (wm >= 0) { bv = &d.maps_open[wm]; lo = wm == 0 ? 1 : 0; hi = 99; }
     else if (wg >= 0) { bv = &d.giro[wg]; lo = 1; hi = SAVE_GIRO_MAX; }
     else if (!strncmp(k, "stelle.", 7) && valid_id(k + 7) && (find_map_in(d, k + 7) || d.nmaps < SAVE_MAX_MAPS)) {
@@ -343,7 +371,9 @@ int serialize(const File* f, SaveData& d, char* buf, int cap) {
     if (d.seconds > MAX_SECONDS) d.seconds = MAX_SECONDS;
     put(&o, "%s", GAME_HEADER);
     put(&o, "versione=%d\n", SAVE_VERSION);
-    put(&o, "storia_pianeti=%d\n", d.story_seen ? 1 : 0);
+    d.name[SAVE_NAME_LEN - 1] = 0;
+    if (!clean_name(d.name, d.name)) d.name[0] = 0;      // il gioco lo scrive a mano: solo un nome valido
+    if (d.name[0]) put(&o, "nome=%s\n", d.name);
     // La Terra sempre, gli altri pianeti quando sono stati raggiunti.
     for (int w = 0; w < SAVE_WORLDS; ++w) {
       if (w > 0 && d.maps_open[w] == 0 && d.giro[w] <= 1) continue;
@@ -698,18 +728,48 @@ bool save_slot_load(int i) {
   return true;
 }
 
-bool save_slot_new(int i) {
+bool save_slot_new(int i, const char* name) {
   if (!slot_ok(i)) return false;
   if (g_active >= 0 && g_active != i) write_file(&g_game, data());
   SaveData& d = data();
   defaults_game(&d);
+  if (name) clean_name(d.name, name);
   reset_file(&g_game, K_GAME);
-  const char* name = strrchr(g_slot_paths[i], '/');
-  set_paths(&g_game, name ? name + 1 : g_slot_paths[i]);
+  const char* file = strrchr(g_slot_paths[i], '/');
+  set_paths(&g_game, file ? file + 1 : g_slot_paths[i]);
   g_active = i;
   snprintf(g_slot_status, sizeof(g_slot_status), "nuova");
-  plat_log("salvataggio: partita %d nuova", i + 1);
+  plat_log("salvataggio: partita %d nuova%s%s%s", i + 1, d.name[0] ? " (\"" : "", d.name, d.name[0] ? "\")" : "");
   return write_file(&g_game, d);
+}
+
+bool save_slot_rename(int i, const char* name) {
+  char nm[SAVE_NAME_LEN];
+  if (!slot_ok(i) || !clean_name(nm, name ? name : "")) return false;
+  bool ok;
+  if (i == g_active) {
+    memcpy(data().name, nm, sizeof(nm));
+    ok = write_file(&g_game, data());
+  } else {
+    // Un'altra partita: la si rilegge (chiavi sconosciute comprese) e la si riscrive col nome nuovo.
+    static SaveData tmp;
+    defaults(&tmp);
+    reset_file(&g_scratch, K_GAME);
+    snprintf(g_scratch.path, sizeof(g_scratch.path), "%s", g_slot_paths[i]);
+    snprintf(g_scratch.tmp, sizeof(g_scratch.tmp), "%s.tmp", g_slot_paths[i]);
+    snprintf(g_scratch.bad, sizeof(g_scratch.bad), "%s.illeggibile", g_slot_paths[i]);
+    char st[200];
+    if (read_file(&g_scratch, &tmp, st, sizeof(st), false) != SAVE_LETTO) return false;
+    memcpy(tmp.name, nm, sizeof(nm));
+    ok = write_file(&g_scratch, tmp);
+  }
+  if (ok) plat_log("salvataggio: partita %d rinominata \"%s\"", i + 1, nm);
+  return ok;
+}
+
+bool save_name_char(char c) {
+  return (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == ' ' || c == '-' || c == '\'' || c == '!' || c == '?' ||
+         c == '.';
 }
 
 bool save_slot_copy(int from, int to) {

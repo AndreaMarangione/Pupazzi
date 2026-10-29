@@ -107,13 +107,17 @@ enum ShotKind {
 };
 
 enum { PH_FIGHT = 0, PH_ENTER, PH_CLEAR, PH_MAP_DONE, PH_WIPE };
-enum { SC_TITLE = 0, SC_MODE, SC_MAPS, SC_CHARS, SC_PLAY, SC_STATS, SC_STORY, SC_SLOTS, SC_LANG, NSCREENS };
+enum { SC_TITLE = 0, SC_MODE, SC_MAPS, SC_CHARS, SC_PLAY, SC_STATS, SC_SLOTS, SC_LANG, SC_NAME, NSCREENS };
 // Prima schermata (0.5.3): nuova partita, carica, gestisci i salvataggi, lingua, esci.
 enum { TI_NEW = 0, TI_LOAD, TI_MANAGE, TI_LANG, TI_QUIT, TITLE_ITEMS };
 // Schermata dei salvataggi: per caricarne uno, per gestirli (duplica, elimina) o, con la nuova partita
 // e i posti pieni, per scegliere quale sovrascrivere. Finestre sopra: azioni, conferma.
 enum { SL_LOAD = 0, SL_MANAGE, SL_OVERWRITE };
 enum { SP_NONE = 0, SP_ACTIONS, SP_DELETE, SP_OVERWRITE };
+// Voci della finestra delle azioni (0.5.4: anche RINOMINA).
+enum { SA_COPY = 0, SA_RENAME, SA_DELETE, SA_COUNT };
+// Tastiera per il nome della partita (0.5.4): partita nuova (prima di crearla) o nome nuovo.
+enum { NM_NEW = 0, NM_RENAME };
 // Voci della pausa: riprendi, comandi (0.5.2: apre il riquadro con i tasti), mira, antialias, musica,
 // effetti, lascia la partita, torna al menu.
 enum { PS_RESUME = 0, PS_CONTROLS, PS_AIM, PS_AA, PS_MUSIC, PS_SFX, PS_LEAVE, PS_MENU, PAUSE_ITEMS };
@@ -330,6 +334,9 @@ struct Game {
   char map_note[120];
   int slots_mode, slots_sel, slots_pop, slots_pop_sel;   // salvataggi (SL_*, posto col cursore, SP_*, voce della finestra)
   int lang_sel;
+  int name_mode, name_slot, name_row, name_col;          // tastiera del nome (NM_*, posto, tasto col cursore)
+  bool name_overwrite;                                   // partita nuova al posto di un'altra (B torna ai posti)
+  char name_buf[SAVE_NAME_LEN];
   int pause_owner, pause_sel;
   bool paused;
   bool pause_help;            // nella pausa e' aperto il riquadro dei comandi
@@ -401,7 +408,6 @@ struct Game {
   bool giro_done;               // si e' guardato il giro (fine dell'arena)
   bool giro_up;                 // aperto il giro dopo (le stelle del pianeta ripartono da zero)
   int giro_stars, giro_was;     // stelle del pianeta nel giro appena finito; quel giro
-  int story_t;                  // storia: fotogrammi da quando e' aperta
 };
 
 extern Game g;

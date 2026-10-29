@@ -250,6 +250,107 @@ zh 永久删除
 ja 完全に消去します
 hi हमेशा के लिए मिटा देता है
 
+# 0.5.4: nome della partita. Voce della finestra delle azioni (S16) e la sua spiegazione (S12)
+it RINOMINA
+en RENAME
+es RENOMBRAR
+pt MUDAR NOME
+zh 重命名
+ja 名前を変更
+hi नाम बदलें
+
+it gli dai un nome nuovo
+en give it a new name
+es le pones un nombre nuevo
+pt dás-lhe um nome novo
+zh 给它起个新名字
+ja 新しい名前をつけます
+hi इसे नया नाम दें
+
+# nome di una partita che non ne ha (B16 nelle righe, B22 nella tastiera)
+@B22
+it PARTITA %d
+en GAME %d
+es PARTIDA %d
+pt JOGO %d
+zh 游戏 %d
+ja ゲーム %d
+hi गेम %d
+
+# tastiera del nome: titolo, tasti (S14, da 140 e 100 pixel), piede
+@T32
+it NOME DELLA PARTITA
+en GAME NAME
+es NOMBRE DE LA PARTIDA
+pt NOME DO JOGO
+zh 存档名称
+ja データの名前
+hi गेम का नाम
+
+it SPAZIO
+en SPACE
+es ESPACIO
+pt ESPAÇO
+zh 空格
+ja スペース
+hi स्पेस
+
+it CANCELLA
+en DELETE
+es BORRAR
+pt APAGAR
+zh 删除
+ja 削除
+hi मिटाएँ
+
+it OK
+en OK
+es OK
+pt OK
+zh 确定
+ja OK
+hi ठीक है
+
+it scrivi
+en type
+es escribir
+pt escrever
+zh 输入
+ja 入力
+hi लिखें
+
+it cancella
+en delete
+es borrar
+pt apagar
+zh 删除
+ja 削除
+hi मिटाएँ
+
+it fatto
+en done
+es listo
+pt pronto
+zh 完成
+ja 決定
+hi हो गया
+
+it non riesco a rinominare il salvataggio %d
+en couldn't rename save %d
+es no se pudo renombrar la partida %d
+pt não foi possível mudar o nome do jogo %d
+zh 无法重命名存档%d
+ja データ%dの名前を変更できませんでした
+hi सेव %d का नाम बदला नहीं जा सका
+
+it salvataggio illeggibile: non si può rinominare
+en unreadable save: it can't be renamed
+es partida ilegible: no se puede renombrar
+pt jogo ilegível: não se pode mudar o nome
+zh 存档无法读取，不能重命名
+ja 読めないデータは名前を変更できません
+hi सेव पढ़ा नहीं जा सकता: नाम नहीं बदल सकते
+
 it nessun posto libero: elimina prima un salvataggio
 en no empty slot: delete a save first
 es no hay espacio libre: borra antes una partida
@@ -396,40 +497,6 @@ pt CONTRA chega com a versão 0.6
 zh 对战模式将在0.6版本推出
 ja 対戦はバージョン0.6で登場
 hi मुक़ाबला मोड वर्ज़न 0.6 में आएगा
-
-@T32
-it IL GIRO DEI PIANETI
-en THE PLANET TOUR
-es LA VUELTA A LOS PLANETAS
-pt A VOLTA AOS PLANETAS
-zh 行星之旅
-ja 惑星めぐり
-hi ग्रहों की यात्रा
-
-# la storia: due paragrafi, a capo da soli (S16, righe da 440 pixel)
-it Astro parte dalla Terra con gli amici della Luna, di Marte e di Venere: il giro dei pianeti comincia! Ogni pianeta ha i suoi mostri e un boss.
-en Astro leaves Earth with his friends from the Moon, Mars and Venus: the planet tour begins! Every planet has its own monsters and a boss.
-es Astro sale de la Tierra con sus amigos de la Luna, Marte y Venus: ¡empieza la vuelta a los planetas! Cada planeta tiene sus monstruos y un jefe.
-pt O Astro parte da Terra com os amigos da Lua, de Marte e de Vénus: começa a volta aos planetas! Cada planeta tem os seus monstros e um chefe.
-zh 阿斯特罗和来自月球、火星、金星的朋友们从地球出发：行星之旅开始了！每颗星球都有自己的怪物和一个首领。
-ja アストロは月・火星・金星の仲間たちと地球を出発。惑星めぐりのはじまりだ！どの惑星にもモンスターとボスがいる。
-hi एस्ट्रो चंद्रमा, मंगल और शुक्र के दोस्तों के साथ पृथ्वी से निकलता है: ग्रहों की यात्रा शुरू होती है! हर ग्रह के अपने राक्षस हैं और एक बॉस।
-
-it Battuto il boss, l'eroe del pianeta entra in squadra. In ogni mappa c'è una capsula nascosta: salvate l'esploratore!
-en Beat the boss and the planet's hero joins the team. Every map has a hidden capsule: rescue the explorer!
-es Vence al jefe y el héroe del planeta se une al equipo. En cada mapa hay una cápsula escondida: ¡rescata al explorador!
-pt Vence o chefe e o herói do planeta junta-se à equipa. Em cada mapa há uma cápsula escondida: salva o explorador!
-zh 打败首领后，该星球的英雄就会加入队伍。每张地图都藏着一个太空舱：救出探险家吧！
-ja ボスを倒すと、その惑星のヒーローが仲間になる。どのマップにもカプセルがかくれている。探検家を助けよう！
-hi बॉस को हराओ और उस ग्रह का हीरो टीम में आ जाएगा। हर मैप में एक छिपा कैप्सूल है: खोजी को बचाओ!
-
-it tutto
-en show all
-es ver todo
-pt ver tudo
-zh 全部显示
-ja 全部表示
-hi सब दिखाएँ
 
 it avanti
 en next

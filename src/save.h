@@ -29,7 +29,8 @@
 //                          partita1.sav, o non c'era); 0 se non ci si e' riusciti: si riprova all'avvio
 // partitaN.sav:
 //   versione=2
-//   storia_pianeti=0       storia del giro dei pianeti gia' vista (0 o 1)
+//   nome=ANDREA            (dalla 0.5.4) nome della partita: fino a 12 tra A-Z 0-9 spazio - ' ! ? .
+//                          (le minuscole diventano maiuscole); senza, si mostra "PARTITA N"
 //   mappe.terra=1          mappe aperte del pianeta, in ordine di campagna: finire una mappa apre la
 //                          successiva (anche nei giri dopo restano aperte); la Terra ne ha almeno 1, un
 //                          altro pianeta si apre (1) battendo il boss di quello prima. Da 0 a 99.
@@ -47,7 +48,7 @@
 // 0.5.2 rimessa sulla console li ritrova) e la riga salvataggi=1 dice che sono gia' stati presi.
 // Se c'e' gia' una partita i progressi vecchi non si prendono piu'.
 // Dalla 0.4: mappe_sbloccate, storia_vista e le stelle della prateria restano dove sono, come le
-// chiavi sconosciute.
+// chiavi sconosciute; dalla 0.5.4 anche storia_pianeti (la storia non c'e' piu').
 //
 // Un file che non si legge tutto (rovinato, errore della scheda, troppo grande) alla prima scrittura
 // resta come NOME.illeggibile; se non lo si riesce a mettere da parte non lo si sostituisce.
@@ -66,6 +67,7 @@
 #define SAVE_GIRO_MAX 99
 #define SAVE_SLOTS 4                // partite
 #define SAVE_LANGS 7                // lingue (lang.h)
+#define SAVE_NAME_LEN 13            // nome di una partita: al massimo 12 caratteri (save_name_char)
 
 // Stelle di una mappa: finita, esploratore salvato, senza ricominciare la mappa da capo.
 enum { SAVE_STAR_DONE = 1, SAVE_STAR_EXPLORER = 2, SAVE_STAR_NO_WIPE = 4 };
@@ -84,7 +86,7 @@ struct SaveData {
   uint8_t music_vol, sfx_vol;       // da 0 a 10 (predefiniti 6 e 8)
   uint8_t lang;                     // LANG_* (lang.h), predefinita l'italiano
   // Partita (partitaN.sav).
-  bool story_seen;
+  char name[SAVE_NAME_LEN];         // nome=: "" finche' non gliene si da' uno (si mostra PARTITA N)
   uint8_t maps_open[SAVE_WORLDS];   // mappe.<pianeta>: mappe aperte in ordine (Terra da 1, gli altri da 0)
   uint8_t giro[SAVE_WORLDS];        // giro.<pianeta>: da 1 a SAVE_GIRO_MAX
   int nmaps;                        // mappe con le stelle (quelle che non ci sono hanno 0 stelle)
@@ -129,9 +131,15 @@ int save_slot_peek(int i, SaveData* out);
 // illeggibile si parte dai valori predefiniti (e il file vecchio, alla prima scrittura, resta come
 // partitaN.sav.illeggibile): true.
 bool save_slot_load(int i);
-// Partita nuova (valori predefiniti) al posto i, attiva e subito scritta (anche se non riesce a
-// scriverla resta attiva in memoria). false se i e' fuori dai limiti o se la scrittura non riesce.
-bool save_slot_new(int i);
+// Partita nuova (valori predefiniti, con il nome name se c'e') al posto i, attiva e subito scritta
+// (anche se non riesce a scriverla resta attiva in memoria). false se i e' fuori dai limiti o se la
+// scrittura non riesce.
+bool save_slot_new(int i, const char* name = 0);
+// Cambia il nome della partita i (attiva o no) e la scrive; il resto del file resta com'e'. false se
+// il posto e' libero, il file non si legge o non si scrive, o il nome non e' valido.
+bool save_slot_rename(int i, const char* name);
+// Il carattere c puo' stare nel nome di una partita (A-Z, 0-9, spazio, - ' ! ? .).
+bool save_name_char(char c);
 // Copia la partita from al posto to (prima si scrive quella attiva, se e' from). false se non riesce.
 bool save_slot_copy(int from, int to);
 // Toglie il file della partita i; se era quella attiva non c'e' piu' una partita attiva.

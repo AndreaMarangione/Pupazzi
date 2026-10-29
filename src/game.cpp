@@ -617,7 +617,6 @@ void go_screen(int s) {
   if (s != SC_PLAY && s != SC_STATS) {
     if (!g.level_ok) load_map_preview(s == SC_MAPS || s == SC_CHARS ? g.map_sel : 0);
   }
-  if (s == SC_STORY) g.story_t = 0;
   if (s == SC_CHARS) {
     for (int i = 0; i < MAX_PLAYERS; ++i) {
       g.ready[i] = false;

@@ -152,27 +152,26 @@ int main() {
   printf("3) larghezze e a capo\n");
   {
     lang_set(LANG_HI);
-    const char* s = tr("Battuto il boss, l'eroe del pianeta entra in squadra. In ogni mappa c'è una capsula nascosta: salvate l'esploratore!");
+    const char* s = tr("quando usi lo speciale i compagni vicini recuperano 25 vita");
     const float w = hud_text_w(HF_S16, s, 0.5f);
     char L[12][ui::WRAP_LEN];
     bool cut = true;
-    const int n = ui::wrap(s, 300.0f, HF_S16, 0.5f, L, 12, &cut);
-    bool ok = n >= 2 && !cut && w > 300.0f;
-    for (int k = 0; k < n; ++k) ok &= hud_text_w(HF_S16, L[k], 0.5f) <= 300.0f && whole_words(L[k], s);
-    check(ok, "hindi: righe entro 300 pixel, parole intere");
+    const int n = ui::wrap(s, 200.0f, HF_S16, 0.5f, L, 12, &cut);
+    bool ok = n >= 2 && !cut && w > 200.0f;
+    for (int k = 0; k < n; ++k) ok &= hud_text_w(HF_S16, L[k], 0.5f) <= 200.0f && whole_words(L[k], s);
+    check(ok, "hindi: righe entro 200 pixel, parole intere");
     char f[128];
     ui::fit(f, sizeof(f), s, HF_S16, 0.5f, 150.0f);
     ok = hud_text_w(HF_S16, f, 0.5f) <= 150.0f && strstr(f, "\xE2\x80\xA6") && whole_words(f, s);
     check(ok, "hindi: puntini dopo una parola intera");
     lang_set(LANG_ZH);
-    s = tr("Astro parte dalla Terra con gli amici della Luna, di Marte e di Venere: il giro dei pianeti comincia! "
-           "Ogni pianeta ha i suoi mostri e un boss.");
-    const int nz = ui::wrap(s, 200.0f, HF_S16, 0.5f, L, 12, &cut);
+    s = tr("a ogni zona uno scudo ferma il primo colpo che prendi");
+    const int nz = ui::wrap(s, 120.0f, HF_S16, 0.5f, L, 12, &cut);
     ok = nz >= 3 && !cut;
     static char joined[4096];
     joined[0] = 0;
     for (int k = 0; k < nz; ++k) {
-      ok &= hud_text_w(HF_S16, L[k], 0.5f) <= 200.0f && (k == nz - 1 || hud_text_w(HF_S16, L[k], 0.5f) > 160.0f);
+      ok &= hud_text_w(HF_S16, L[k], 0.5f) <= 120.0f && (k == nz - 1 || hud_text_w(HF_S16, L[k], 0.5f) > 90.0f);
       if (strlen(joined) + strlen(L[k]) < sizeof(joined)) strcat(joined, L[k]);
       // niente riga che comincia con la punteggiatura di chiusura
       ok &= strncmp(L[k], "\xEF\xBC\x8C", 3) && strncmp(L[k], "\xE3\x80\x82", 3) && strncmp(L[k], "\xEF\xBC\x81", 3);
@@ -205,7 +204,7 @@ int main() {
     check(ok && !strcmp(a, b), "parola piu' larga della riga: spezzata senza perdere nulla, cut");
     // In hindi no: la parola resta intera (o i puntini), e cut.
     lang_set(LANG_HI);
-    s = tr("Battuto il boss, l'eroe del pianeta entra in squadra. In ogni mappa c'è una capsula nascosta: salvate l'esploratore!");
+    s = tr("quando usi lo speciale i compagni vicini recuperano 25 vita");
     const int nh = ui::wrap(s, 24.0f, HF_S16, 0.5f, L, 12, &cut);
     ok = cut && nh >= 1;
     for (int k = 0; k < nh; ++k) ok &= whole_words(L[k], s);

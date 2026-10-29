@@ -266,7 +266,7 @@ void footer(Hud* h, const char* const* items, int n) {
   float x = SAFE_X;
   for (int i = 0; i + 1 < n; i += 2) {
     if (i > 0) x += 8.0f;
-    x += key(h, x, cy, items[i]) + 7.0f;
+    x += (items[i][1] ? keycap(h, x, cy, items[i], true) : key(h, x, cy, items[i])) + 7.0f;   // START: tasto rettangolare
     text(h, x, cy, HF_S14, O(FTX), items[i + 1], 0.5f);
     x += hud_text_w(HF_S14, items[i + 1], 0.5f) + 7.0f;
   }

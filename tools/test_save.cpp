@@ -97,7 +97,7 @@ static bool settings_default(const SaveData* d) {
   return ok;
 }
 
-static bool game_default(const SaveData* d) { return worlds_default(d) && !d->story_seen && d->nmaps == 0 && d->seconds == 0; }
+static bool game_default(const SaveData* d) { return worlds_default(d) && !d->name[0] && d->nmaps == 0 && d->seconds == 0; }
 static bool is_default(const SaveData* d) { return settings_default(d) && game_default(d); }
 
 static const char* const FULL_SET =
@@ -119,7 +119,7 @@ static const char* const FULL_GAME =
     "# giro.PIANETA: giro del pianeta; mappe.PIANETA: sue mappe aperte, in ordine; tempo: secondi di gioco\n"
     "# stelle.MAPPA: stelle del giro in corso, somma di 1 (finita), 2 (esploratore salvato), 4 (senza ricominciare la mappa)\n"
     "versione=2\n"
-    "storia_pianeti=1\n"
+    "nome=SQUADRA 1\n"
     "mappe.terra=3\n"
     "giro.terra=2\n"
     "mappe.luna=1\n"
@@ -136,7 +136,7 @@ static bool settings_full(const SaveData* d) {
 static bool game_full(const SaveData* d) {
   bool ok = d->maps_open[0] == 3 && d->giro[0] == 2 && d->maps_open[1] == 1 && d->giro[1] == 1;
   for (int w = 2; w < SAVE_WORLDS; ++w) ok &= d->maps_open[w] == 0 && d->giro[w] == 1;
-  return ok && d->story_seen && d->seconds == 3725 && save_stars_in(d, "terra1") == 3 && save_stars_in(d, "terra_boss") == 4;
+  return ok && !strcmp(d->name, "SQUADRA 1") && d->seconds == 3725 && save_stars_in(d, "terra1") == 3 && save_stars_in(d, "terra_boss") == 4;
 }
 
 // Il file della partita 1 con questi byte, poi la si carica partendo da capo: una partita gia' attiva
@@ -185,7 +185,7 @@ int main() {
     d->maps_open[0] = 3;
     d->giro[0] = 2;
     d->maps_open[1] = 1;          // Luna raggiunta: si scrive anche lei
-    d->story_seen = true;
+    snprintf(d->name, sizeof(d->name), "Squadra 1");   // il gioco lo scrive com'e': nel file in maiuscolo
     d->seconds = 3725;
     d->aim[0] = 0; d->aim[1] = 2; d->aim[2] = 3; d->aim[3] = 1;
     d->antialias = false;
@@ -258,7 +258,7 @@ int main() {
           "riportati nei limiti; volume_effetti=abc e lingua=fr ignorati; spazi attorno e \\r finale");
     snprintf(text, sizeof(text), "mappe.terra=0\nciao\nstelle.prateria2=12\nstelle.prateria2=1\n  storia_pianeti = 1  \r\ntempo=-5\ngiro.luna=x\n");
     check(load_text(B, text) && strstr(save_slot_status(), "righe non valide ignorate: 2"), save_slot_status());
-    check(d->maps_open[0] == 1 && d->story_seen && save_stars("prateria2") == 7 && d->seconds == 0, "partita: mappe.terra=0 -> 1, stelle 12 -> 7, tempo negativo -> 0");
+    check(d->maps_open[0] == 1 && save_stars("prateria2") == 7 && d->seconds == 0, "partita: mappe.terra=0 -> 1, stelle 12 -> 7, tempo negativo -> 0");
   }
 
   printf("5) file troncato in ogni punto\n");
@@ -528,14 +528,14 @@ int main() {
     check(st == SAVE_LETTO && !strcmp(save_status(), "letto") && d->music_vol == 1 && d->sfx_vol == 7 && save_slot() == -1,
           "letto senza errori; impostazioni tenute");
     check(exists(file_in(Q, "partita1.sav")) && g_logs == logs + 1 && strstr(g_lastlog, "partita 1"), "i progressi sono diventati la partita 1");
-    check(save_slot_load(0) && worlds_default(d) && !d->story_seen && save_stars("terra1") == 0 && save_stars("prateria1") == 7,
-          "partita 1: Terra con la sola prima mappa aperta, giro 1, storia nuova; le stelle della prateria restano");
+    check(save_slot_load(0) && worlds_default(d) && !d->name[0] && save_stars("terra1") == 0 && save_stars("prateria1") == 7,
+          "partita 1: Terra con la sola prima mappa aperta, giro 1, senza nome; le stelle della prateria restano");
     save_data()->maps_open[0] = 2;
     save_add_stars("terra1", SAVE_STAR_DONE);
     check(save_write(), "scritto");
     get_file(save_slot_path(0), buf, sizeof(buf));
     bool ok = count_of(buf, "\nmappe_sbloccate=4\n") == 1 && count_of(buf, "\nstelle.prateria_boss=7\n") == 1;
-    ok &= count_of(buf, "\nstoria_vista=1\n") == 1 && count_of(buf, "\nstoria_pianeti=0\n") == 1;
+    ok &= count_of(buf, "\nstoria_vista=1\n") == 1 && count_of(buf, "storia_pianeti") == 0 && count_of(buf, "nome=") == 0;
     ok &= count_of(buf, "\nmappe.terra=2\n") == 1 && count_of(buf, "\ngiro.terra=1\n") == 1 && count_of(buf, "\nstelle.terra1=1\n") == 1;
     ok &= count_of(buf, "mappe.luna") == 0 && count_of(buf, "mira.") == 0 && count_of(buf, "volume_") == 0;
     check(ok, "nella partita: mappe_sbloccate, storia_vista e la prateria accanto alle chiavi nuove; niente impostazioni");
@@ -560,7 +560,7 @@ int main() {
     check(d->aim[0] == 0 && d->music_vol == 4 && d->lang == 0 && save_slot() == -1, "impostazioni lette, italiano");
     SaveData peek;
     const bool p = save_slot_peek(0, &peek) == SAVE_LETTO;
-    check(p && peek.story_seen && peek.maps_open[0] == 4 && peek.giro[0] == 2 && peek.maps_open[1] == 1 && save_stars_in(&peek, "terra1") == 7 &&
+    check(p && peek.maps_open[0] == 4 && peek.giro[0] == 2 && peek.maps_open[1] == 1 && save_stars_in(&peek, "terra1") == 7 &&
               save_stars_in(&peek, "terra2") == 3 && peek.seconds == 0,
           "la partita 1 ha tutti i progressi");
     check(save_slot_peek(1, &peek) == SAVE_NUOVO && save_slot_peek(3, &peek) == SAVE_NUOVO, "gli altri posti sono liberi");
@@ -719,6 +719,58 @@ int main() {
     remove(file_in(Z2, "partita3.sav"));
     save_open(Z2);
     check(!exists(file_in(Z2, "partita1.sav")), "eliminata la partita: i progressi vecchi non tornano");
+  }
+
+  printf("17) nome delle partite\n");
+  {
+    const char* N = dir_of("n", true);
+    save_open(N);
+    check(save_slot_new(0, "  andrea rossi ") && !strcmp(save_data()->name, "ANDREA ROSSI"), "partita nuova col nome: in maiuscolo, spazi attorno tolti");
+    get_file(save_slot_path(0), buf, sizeof(buf));
+    check(count_of(buf, "\nnome=ANDREA ROSSI\n") == 1 && strstr(buf, "\nversione=2\nnome=ANDREA ROSSI\n"), "nel file subito dopo versione");
+    check(save_slot_new(1, "TROPPO LUNGO 13") && !save_data()->name[0] && save_slot_new(2, "SÌ") && !save_data()->name[0] &&
+              save_slot_new(3) && !save_data()->name[0],
+          "nome troppo lungo, con caratteri che non vanno o nessuno: senza nome");
+    get_file(save_slot_path(1), buf, sizeof(buf));
+    check(count_of(buf, "nome=") == 0, "senza nome nessuna riga nome=");
+    bool chars = true;
+    for (int c = 1; c < 256; ++c) {
+      const bool want = (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == ' ' || c == '-' || c == '\'' || c == '!' || c == '?' || c == '.';
+      chars &= save_name_char((char)c) == want;
+    }
+    check(chars, "caratteri del nome: A-Z 0-9 spazio - ' ! ? .");
+    // Rinominare una partita che non e' quella attiva: il resto del file resta (anche le chiavi sconosciute).
+    put_text(save_slot_path(1), "versione=2\nnome=VECCHIO\nmappe.terra=3\nfutura=7\nstelle.terra1=5\ntempo=99\n");
+    check(save_slot() == 3 && save_slot_rename(1, "Nuovo Nome!") && save_slot() == 3, "rinominata la 2 (attiva la 4)");
+    SaveData peek;
+    check(save_slot_peek(1, &peek) == SAVE_LETTO && !strcmp(peek.name, "NUOVO NOME!") && peek.maps_open[0] == 3 && peek.seconds == 99 &&
+              save_stars_in(&peek, "terra1") == 5,
+          "la 2 ha il nome nuovo e tutto il resto");
+    get_file(save_slot_path(1), buf, sizeof(buf));
+    check(count_of(buf, "\nfutura=7\n") == 1 && count_of(buf, "nome=") == 1 && count_of(buf, "VECCHIO") == 0, "chiave sconosciuta conservata, un solo nome");
+    // Quella attiva: cambia anche in memoria; il nome vuoto torna a "PARTITA N".
+    check(save_slot_rename(3, "zeta") && !strcmp(save_data()->name, "ZETA") && save_slot_peek(3, &peek) == SAVE_LETTO && !strcmp(peek.name, "ZETA"),
+          "rinominata quella attiva");
+    check(save_slot_rename(3, "") && !save_data()->name[0] && save_slot_peek(3, &peek) == SAVE_LETTO && !peek.name[0], "nome vuoto: torna senza nome");
+    check(!save_slot_rename(3, "àèì") && !save_slot_rename(3, "ABCDEFGHIJKLM") && !save_slot_rename(-1, "A") && !save_slot_rename(4, "A"),
+          "nomi non validi e posti fuori dai limiti: false");
+    save_slot_delete(2);
+    check(!save_slot_rename(2, "X") && !exists(save_slot_path(2)), "posto libero: non si rinomina e non si crea");
+    put_text(save_slot_path(2), "solo testo senza uguali\n");
+    check(!save_slot_rename(2, "X"), "file illeggibile: non si rinomina");
+    get_file(save_slot_path(2), buf, sizeof(buf));
+    check(!strcmp(buf, "solo testo senza uguali\n"), "e resta com'era");
+    // Lettura: minuscole e spazi attorno vanno bene; troppo lungo o caratteri strani: riga non valida.
+    check(load_text(N, "nome=   Mario  \nmappe.terra=2\n") && !strcmp(save_data()->name, "MARIO") && !strcmp(save_slot_status(), "letto"),
+          "nome=   Mario  : MARIO");
+    check(load_text(N, "nome=ABCDEFGHIJKLM\nmappe.terra=2\n") && !save_data()->name[0] && strstr(save_slot_status(), "righe non valide ignorate: 1"),
+          "nome di 13 caratteri: riga non valida");
+    check(load_text(N, "nome=G\xC3\xB2\nmappe.terra=2\n") && !save_data()->name[0] && strstr(save_slot_status(), "righe non valide ignorate: 1"),
+          "nome con una lettera accentata: riga non valida");
+    check(load_text(N, "nome=ABCDEFGHIJKL\nnome=\n") && !save_data()->name[0] && !strcmp(save_slot_status(), "letto"), "nome= vuoto: valido, senza nome");
+    // Una copia ha lo stesso nome.
+    check(load_text(N, "nome=COPIA\nmappe.terra=2\n") && save_slot_copy(0, 2) && save_slot_peek(2, &peek) == SAVE_LETTO && !strcmp(peek.name, "COPIA"),
+          "la copia ha lo stesso nome");
   }
 
   char cmd[256];

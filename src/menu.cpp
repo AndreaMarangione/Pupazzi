@@ -1,6 +1,7 @@
-// Menu: titolo, modalita', storia, scelta della mappa (con il giro e le stelle del pianeta), scelta
-// dei personaggi (ognuno col suo pad), fine mappa con le statistiche e il giro; durante la partita la
-// pausa (con il riquadro dei comandi) e le finestre per entrare.
+// Menu: titolo, salvataggi (con la tastiera per il nome), lingua, modalita', scelta della mappa (con
+// il giro e le stelle del pianeta), scelta dei personaggi (ognuno col suo pad), fine mappa con le
+// statistiche e il giro; durante la partita la pausa (con il riquadro dei comandi) e le finestre per
+// entrare.
 // Nei menu A conferma e B torna indietro; START breve vale come A.
 // Dalla 0.5.2 il disegno e' nello stile Orbita (ui.h), in pixel a 640x480 come i mockup.
 #include "game_int.h"
@@ -47,7 +48,7 @@ void info(const char* s) {
 
 // Cosa si mostra di ogni posto: il pianeta piu' lontano raggiunto con il suo giro, le stelle del giro,
 // le mappe aperte, il tempo di gioco.
-struct SlotView { int state, world, giro, stars, smax, open, total; uint32_t seconds; };
+struct SlotView { int state, world, giro, stars, smax, open, total; uint32_t seconds; char name[SAVE_NAME_LEN]; };
 SlotView g_slot_view[SAVE_SLOTS];
 
 void slots_refresh(void) {
@@ -69,7 +70,15 @@ void slots_refresh(void) {
     v.open = d.maps_open[w] < v.total ? d.maps_open[w] : v.total;
     if (w == 0 && v.open < 1) v.open = 1;
     v.seconds = d.seconds;
+    memcpy(v.name, d.name, sizeof(v.name));
   }
+}
+
+// Nome da mostrare: quello dato o "PARTITA N".
+const char* slot_name(int i, char* buf, int n) {
+  if (i >= 0 && i < SAVE_SLOTS && g_slot_view[i].state == SAVE_LETTO && g_slot_view[i].name[0]) return g_slot_view[i].name;
+  snprintf(buf, (size_t)n, tr("PARTITA %d"), i + 1);
+  return buf;
 }
 
 int first_free_slot(void) {
@@ -84,11 +93,20 @@ int used_slots(void) {
   return n;
 }
 
-void new_game(int slot, int who) {
-  save_slot_new(slot);
+// Tastiera del nome (0.5.4): per una partita nuova (che si crea solo quando si conferma il nome) o
+// per cambiare il nome di una che c'e'.
+void enter_name(int mode, int slot, int who, bool overwrite) {
+  g.name_mode = mode;
+  g.name_slot = slot;
+  g.name_overwrite = overwrite;
   g.menu_owner = who;
   g.slots_pop = SP_NONE;
-  go_screen(SC_MODE);
+  g.name_buf[0] = 0;
+  if (mode == NM_RENAME) memcpy(g.name_buf, g_slot_view[slot].name, sizeof(g.name_buf));
+  g.name_buf[SAVE_NAME_LEN - 1] = 0;
+  g.name_row = 2;                    // sulla A
+  g.name_col = 0;
+  go_screen(SC_NAME);
 }
 
 // Le schermate si preparano prima di andarci: gia' il primo fotogramma e' quello giusto (posti
@@ -126,7 +144,7 @@ void title_update(void) {
     case TI_NEW: {
       snd_ui(SND_UI_OK);
       const int free = first_free_slot();
-      if (free >= 0) new_game(free, who);
+      if (free >= 0) enter_name(NM_NEW, free, who, false);
       else enter_slots(SL_OVERWRITE);
       break;
     }
@@ -187,11 +205,23 @@ void slots_update(void) {
       }
       break;
     case SP_ACTIONS:
-      if (nav == NAV_UP || nav == NAV_DOWN) g.slots_pop_sel ^= 1;
+      if (nav == NAV_UP) g.slots_pop_sel = (g.slots_pop_sel + SA_COUNT - 1) % SA_COUNT;
+      if (nav == NAV_DOWN) g.slots_pop_sel = (g.slots_pop_sel + 1) % SA_COUNT;
       if (ok) {
-        if (g.slots_pop_sel == 1) {
+        if (g.slots_pop_sel == SA_DELETE) {
           snd_ui(SND_UI_OK);
           g.slots_pop = SP_DELETE;
+          break;
+        }
+        if (g.slots_pop_sel == SA_RENAME) {
+          g.slots_pop = SP_NONE;
+          if (v.state != SAVE_LETTO) {
+            snd_ui(SND_UI_BACK);
+            info(tr("salvataggio illeggibile: non si può rinominare"));
+          } else {
+            snd_ui(SND_UI_OK);
+            enter_name(NM_RENAME, sel, who, false);
+          }
           break;
         }
         const int free = first_free_slot();
@@ -217,7 +247,7 @@ void slots_update(void) {
       if (ok) {
         if (g.slots_pop == SP_OVERWRITE) {
           snd_ui(SND_UI_OK);
-          new_game(sel, who);
+          enter_name(NM_NEW, sel, who, true);
           break;
         }
         const bool done = save_slot_delete(sel);
@@ -256,6 +286,101 @@ void lang_update(void) {
   }
 }
 
+// --- nome della partita (0.5.4) ------------------------------------------------------------------
+
+// Tastiera a schermo: quattro righe da dieci caratteri e la riga dei comandi (SPAZIO sulle prime
+// quattro colonne, CANCELLA sulle tre dopo, OK sulle ultime tre).
+const char KB_KEYS[4][11] = { "1234567890", "QWERTYUIOP", "ASDFGHJKL'", "ZXCVBNM-.!" };
+const int KB_ROWS = 5, KB_COLS = 10, KB_NAME_MAX = SAVE_NAME_LEN - 1;
+enum { KA_SPACE = 0, KA_DEL, KA_OK };
+const int KA_COL0[3] = { 0, 4, 7 }, KA_COLS[3] = { 4, 3, 3 };
+int kb_action(int col) { return col < 4 ? KA_SPACE : (col < 7 ? KA_DEL : KA_OK); }
+
+void name_type(char c) {
+  const int len = (int)strlen(g.name_buf);
+  if (len >= KB_NAME_MAX || (c == ' ' && (len == 0 || g.name_buf[len - 1] == ' '))) {
+    snd_ui(SND_UI_BACK);                         // pieno, o spazio all'inizio o doppio
+    return;
+  }
+  g.name_buf[len] = c;
+  g.name_buf[len + 1] = 0;
+  snd_ui(SND_UI_MOVE);
+}
+
+void name_cancel(void) {
+  snd_ui(SND_UI_BACK);
+  const int slot = g.name_slot;
+  if (g.name_mode == NM_RENAME || g.name_overwrite) {
+    enter_slots(g.name_mode == NM_RENAME ? SL_MANAGE : SL_OVERWRITE);
+    g.slots_sel = slot;
+  } else {
+    back_to_title(TI_NEW);
+  }
+}
+
+void name_done(void) {
+  snd_ui(SND_UI_OK);
+  const int slot = g.name_slot;
+  if (g.name_mode == NM_NEW) {
+    save_slot_new(slot, g.name_buf);             // la partita nasce adesso, con il suo nome
+    go_screen(SC_MODE);
+    return;
+  }
+  const bool ok = save_slot_rename(slot, g.name_buf);
+  enter_slots(SL_MANAGE);
+  g.slots_sel = slot;
+  if (!ok) {
+    char buf[256];
+    snprintf(buf, sizeof(buf), tr("non riesco a rinominare il salvataggio %d"), slot + 1);
+    info(buf);
+  }
+}
+
+void name_update(void) {
+  const int nav = any_nav();
+  int& r = g.name_row;
+  int& c = g.name_col;
+  if (nav == NAV_UP) r = (r + KB_ROWS - 1) % KB_ROWS;
+  if (nav == NAV_DOWN) r = (r + 1) % KB_ROWS;
+  if (nav == NAV_LEFT) c = r == 4 ? KA_COL0[(kb_action(c) + 2) % 3] : (c + KB_COLS - 1) % KB_COLS;
+  if (nav == NAV_RIGHT) c = r == 4 ? KA_COL0[(kb_action(c) + 1) % 3] : (c + 1) % KB_COLS;
+  bool a = false, b = false, done = false;
+  for (int i = 0; i < MAX_PLAYERS; ++i) {
+    a |= pad_pressed(i, PAD_A);
+    b |= pad_pressed(i, PAD_B);
+    done |= g.start_tap[i];
+  }
+  if (done) {
+    name_done();
+    return;
+  }
+  if (a) {
+    if (r < 4) {
+      name_type(KB_KEYS[r][c]);
+    } else if (kb_action(c) == KA_SPACE) {
+      name_type(' ');
+    } else if (kb_action(c) == KA_OK) {
+      name_done();
+      return;
+    } else {
+      b = true;                                  // CANCELLA come B, ma senza uscire
+      if (!g.name_buf[0]) {
+        snd_ui(SND_UI_BACK);
+        return;
+      }
+    }
+  }
+  if (b) {
+    const int len = (int)strlen(g.name_buf);
+    if (len == 0) {
+      name_cancel();
+      return;
+    }
+    g.name_buf[len - 1] = 0;
+    snd_ui(SND_UI_BACK);
+  }
+}
+
 // Le due schede stanno affiancate: si cambia con destra/sinistra (e anche su/giu').
 void mode_update(void) {
   const int nav = any_nav();
@@ -264,7 +389,7 @@ void mode_update(void) {
   if (any_confirm(&who)) {
     if (g.menu_sel == 0) {
       snd_ui(SND_UI_OK);
-      go_screen(save_data()->story_seen ? SC_MAPS : SC_STORY);    // la prima volta, la storia
+      go_screen(SC_MAPS);
     } else {
       snd_ui(SND_UI_BACK);
       info(tr("CONTRO arriva con la versione 0.6"));
@@ -272,58 +397,6 @@ void mode_update(void) {
   } else if (any_back()) {
     snd_ui(SND_UI_BACK);
     back_to_title(TI_NEW);
-  }
-}
-
-// La storia: due paragrafi, a capo dove serve nella lingua scelta. Le righe compaiono una alla
-// volta; A le mostra tutte, poi va avanti.
-const char* const STORY[] = {
-  N_("Astro parte dalla Terra con gli amici della Luna, di Marte e di Venere: il giro dei pianeti comincia! "
-     "Ogni pianeta ha i suoi mostri e un boss."),
-  N_("Battuto il boss, l'eroe del pianeta entra in squadra. In ogni mappa c'è una capsula nascosta: salvate l'esploratore!"),
-};
-const int STORY_PARAS = (int)(sizeof(STORY) / sizeof(STORY[0]));
-const int STORY_STEP = 34, STORY_MAX = 12;
-const float STORY_W = 440.0f;
-struct StoryLines { char s[STORY_MAX][ui::WRAP_LEN]; int para[STORY_MAX]; int n; };
-
-void story_lines(StoryLines* L) {
-  L->n = 0;
-  for (int p = 0; p < STORY_PARAS && L->n < STORY_MAX; ++p) {
-    const int k = ui::wrap(tr(STORY[p]), STORY_W, HF_S16, 0.5f, &L->s[L->n], STORY_MAX - L->n);
-    for (int i = 0; i < k; ++i) L->para[L->n + i] = p;
-    L->n += k;
-  }
-}
-
-int story_total(void) {
-  static StoryLines L;
-  story_lines(&L);
-  return L.n;
-}
-
-int story_shown(void) { return g.story_t / STORY_STEP + 1; }
-
-void story_update(void) {
-  g.story_t++;
-  int who;
-  if (any_confirm(&who)) {
-    const int total = story_total();
-    if (story_shown() < total) {
-      g.story_t = total * STORY_STEP;
-      snd_ui(SND_UI_MOVE);
-      return;
-    }
-    snd_ui(SND_UI_OK);
-    SaveData* sd = save_data();
-    if (!sd->story_seen) {
-      sd->story_seen = true;
-      save_write();
-    }
-    go_screen(SC_MAPS);
-  } else if (any_back()) {
-    snd_ui(SND_UI_BACK);
-    go_screen(SC_MODE);
   }
 }
 
@@ -527,7 +600,7 @@ void play_time(char* buf, int n, uint32_t s) {
   else snprintf(buf, (size_t)n, tr("%u h %02u min"), m / 60u, m % 60u);
 }
 
-// Un posto: numero, pianeta e giro, stelle, mappe aperte, tempo; vuoto o illeggibile.
+// Un posto: numero, nome; sotto pianeta e giro, stelle, mappe aperte, tempo; vuoto o illeggibile.
 void slot_row(Hud* h, float x, float y, float w, float hh, int i, bool sel) {
   const SlotView& v = g_slot_view[i];
   char buf[256], t[64];
@@ -548,11 +621,13 @@ void slot_row(Hud* h, float x, float y, float w, float hh, int i, bool sel) {
     ui::text(h, tx, cy + 11.0f, HF_S13, sub, tr("si riparte dall'inizio"), 0.5f);
     return;
   }
-  char wn[96];
+  char wn[96], nm[64];
+  ui::text(h, tx, cy - 9.0f, HF_B16, mc, slot_name(i, nm, sizeof(nm)), 1.5f);
   hud_upper(wn, tr(WORLD_NAMES[v.world]), sizeof(wn));
-  snprintf(buf, sizeof(buf), tr("%s · GIRO %d"), wn, v.giro);
-  ui::text(h, tx, cy - 9.0f, HF_B16, mc, buf, 1.5f);
+  snprintf(t, sizeof(t), tr("%s · GIRO %d"), wn, v.giro);
   float lx = tx;
+  ui::text(h, lx, cy + 11.0f, HF_S13, O(sel ? ui::ON : ui::L1), ui::fit(buf, sizeof(buf), t, HF_S13, 0.5f, 120.0f), 0.5f);
+  lx += hud_text_w(HF_S13, buf, 0.5f) + 12.0f;
   ui::star(h, HI_STAR15, lx, cy + 11.0f - 7.5f, true, O(ui::DIM2));
   lx += 21.0f;
   snprintf(buf, sizeof(buf), "%d/%d", v.stars, v.smax);
@@ -575,24 +650,28 @@ void slots_popup(Hud* h) {
   const float W = 380.0f, X = 130.0f;
   const int i = g.slots_sel;
   if (g.slots_pop == SP_ACTIONS) {
-    const float Y = 146.0f, H = 176.0f;
+    const float Y = 122.0f, H = 224.0f;
     ui::panel(h, X, Y, W, H, 16.0f, ui::SOLID, true);
+    char nm[64], t[256];
     snprintf(buf, sizeof(buf), tr("SALVATAGGIO %d"), i + 1);
     ui::text(h, X + 22.0f, Y + 30.0f, HF_B22, O(ui::TX), buf, 3.0f);
+    const float nw = hud_text_w(HF_B22, buf, 3.0f);
+    ui::text(h, X + 22.0f + nw + 14.0f, Y + 31.0f, HF_S14, O(ui::L1),
+             ui::fit(t, sizeof(t), slot_name(i, nm, sizeof(nm)), HF_S14, 1.0f, W - 58.0f - nw), 1.0f);
     ui::sep(h, X + 22.0f, Y + 56.0f, W - 44.0f);
-    static const char* const ACT[2] = { N_("DUPLICA"), N_("ELIMINA") };
-    static const char* const HINT[2] = { N_("una copia nel primo posto libero"), N_("lo cancella per sempre") };
-    for (int k = 0; k < 2; ++k) {
+    static const char* const ACT[SA_COUNT] = { N_("DUPLICA"), N_("RINOMINA"), N_("ELIMINA") };
+    static const char* const HINT[SA_COUNT] = { N_("una copia nel primo posto libero"), N_("gli dai un nome nuovo"),
+                                                N_("lo cancella per sempre") };
+    for (int k = 0; k < SA_COUNT; ++k) {
       const float y = Y + 66.0f + 48.0f * (float)k;           // righe alte anche per cinese, giapponese e hindi
       const bool sel = k == g.slots_pop_sel;
       if (sel) ui::bar_sel(h, X + 12.0f, y, W - 24.0f, 44.0f);
-      char t[256];
-      ui::text(h, X + 26.0f, y + 14.0f, HF_S16, O(sel ? ui::ON : (k == 1 ? ui::L2 : ui::TX)), tr(ACT[k]), 1.0f);
+      ui::text(h, X + 26.0f, y + 14.0f, HF_S16, O(sel ? ui::ON : (k == SA_DELETE ? ui::L2 : ui::TX)), tr(ACT[k]), 1.0f);
       ui::text(h, X + 26.0f, y + 32.0f, HF_S12, O(sel ? ui::ON : ui::MU), ui::fit(t, sizeof(t), tr(HINT[k]), HF_S12, 0.5f, W - 52.0f), 0.5f);
     }
     return;
   }
-  const float Y = 170.0f, H = 128.0f;
+  const float Y = 162.0f, H = 146.0f;
   ui::panel(h, X, Y, W, H, 16.0f, ui::SOLID, true);
   char q[256], fitted[256];
   snprintf(q, sizeof(q), g.slots_pop == SP_DELETE ? tr("ELIMINARE IL SALVATAGGIO %d?") : tr("SOVRASCRIVERE IL SALVATAGGIO %d?"), i + 1);
@@ -600,23 +679,25 @@ void slots_popup(Hud* h) {
   ui::text(h, 320.0f, Y + 32.0f, HF_B16, O(g.slots_pop == SP_DELETE ? ui::L2 : ui::TX), fitted, 1.5f, 0);
   const SlotView& v = g_slot_view[i];
   if (v.state == SAVE_LETTO) {
-    char wn[96], t[64];
+    char wn[96], t[64], nm[64];
+    ui::text(h, 320.0f, Y + 58.0f, HF_S14, O(ui::L1), ui::fit(fitted, sizeof(fitted), slot_name(i, nm, sizeof(nm)), HF_S14, 1.0f, W - 44.0f),
+             1.0f, 0);
     hud_upper(wn, tr(WORLD_NAMES[v.world]), sizeof(wn));
     play_time(t, sizeof(t), v.seconds);
     snprintf(buf, sizeof(buf), tr("%s, giro %d: %d stelle, %s di gioco"), wn, v.giro, v.stars, t);
     ui::fit(fitted, sizeof(fitted), buf, HF_S13, 0.5f, W - 44.0f);
-    ui::text(h, 320.0f, Y + 58.0f, HF_S13, O(ui::MU), fitted, 0.5f, 0);
+    ui::text(h, 320.0f, Y + 80.0f, HF_S13, O(ui::MU), fitted, 0.5f, 0);
   }
   // A si', B no (come le finestre per entrare).
   const char* yes = tr("sì");
   const char* no = tr("no");
   const float ww = 22.0f + 7.0f + hud_text_w(HF_S14, yes, 0.5f) + 34.0f + 22.0f + 7.0f + hud_text_w(HF_S14, no, 0.5f);
   float kx = 320.0f - ww * 0.5f;
-  kx += ui::key(h, kx, Y + 96.0f, "A") + 7.0f;
-  ui::text(h, kx, Y + 96.0f, HF_S14, O(ui::TX), yes, 0.5f);
+  kx += ui::key(h, kx, Y + 116.0f, "A") + 7.0f;
+  ui::text(h, kx, Y + 116.0f, HF_S14, O(ui::TX), yes, 0.5f);
   kx += hud_text_w(HF_S14, yes, 0.5f) + 34.0f;
-  kx += ui::key(h, kx, Y + 96.0f, "B") + 7.0f;
-  ui::text(h, kx, Y + 96.0f, HF_S14, O(ui::TX), no, 0.5f);
+  kx += ui::key(h, kx, Y + 116.0f, "B") + 7.0f;
+  ui::text(h, kx, Y + 116.0f, HF_S14, O(ui::TX), no, 0.5f);
 }
 
 void slots_hud(Hud* h) {
@@ -676,6 +757,64 @@ void lang_hud(Hud* h) {
   ui::version(h);
 }
 
+// Tastiera del nome: il campo con il nome (o "PARTITA N" in grigio finche' e' vuoto) e il cursore che
+// lampeggia, sotto la tastiera.
+void name_hud(Hud* h) {
+  ui::scrim_top(h);
+  ui::scrim_bottom(h);
+  ui::title(h, 320, 26, HF_T32, tr("NOME DELLA PARTITA"), 3.0f);
+  char buf[64];
+  const float FX = 150.0f, FY = 74.0f, FW = 340.0f, FH = 52.0f, fcy = FY + FH * 0.5f;
+  ui::panel(h, FX, FY, FW, FH, 12.0f, ui::SOLID, true);
+  const int len = (int)strlen(g.name_buf);
+  float cx = FX + 20.0f;
+  if (len == 0) {
+    snprintf(buf, sizeof(buf), tr("PARTITA %d"), g.name_slot + 1);   // finche' e' vuoto, in grigio dopo il cursore
+    ui::text(h, cx + 9.0f, fcy, HF_B22, O(ui::DIS), buf, 3.0f);
+  } else {
+    ui::text(h, cx, fcy, HF_B22, O(ui::TX), g.name_buf, 3.0f);
+    cx += hud_text_w(HF_B22, g.name_buf, 3.0f) + 3.0f;
+  }
+  if (blinking(16)) hud_box(h, cx, fcy - 12.0f, 3.0f, 24.0f, 0.0f, O(ui::L1));
+  snprintf(buf, sizeof(buf), "%d/%d", len, KB_NAME_MAX);
+  ui::text(h, FX + FW - 16.0f, fcy, HF_S13, O(ui::MU), buf, 0.5f, 1);
+  // La tastiera.
+  const float KW = 44.0f, KH = 38.0f, KG = 4.0f, PX = 70.0f, PY = 146.0f;
+  const float PW = 24.0f + KW * (float)KB_COLS + KG * (float)(KB_COLS - 1), PH = 24.0f + KH * (float)KB_ROWS + KG * (float)(KB_ROWS - 1);
+  ui::panel(h, PX, PY, PW, PH);
+  for (int r = 0; r < KB_ROWS; ++r) {
+    const float y = PY + 12.0f + (KH + KG) * (float)r;
+    const int nk = r < 4 ? KB_COLS : 3;
+    for (int k = 0; k < nk; ++k) {
+      const int c0 = r < 4 ? k : KA_COL0[k], span = r < 4 ? 1 : KA_COLS[k];
+      const float x = PX + 12.0f + (KW + KG) * (float)c0, w = KW * (float)span + KG * (float)(span - 1);
+      const bool sel = r == g.name_row && (r < 4 ? k == g.name_col : k == kb_action(g.name_col));
+      if (sel) {
+        ui::bar_sel(h, x, y, w, KH, 6.0f, true);
+      } else {
+        hud_box(h, x, y, w, KH, 6.0f, ui::BASE);
+        hud_frame(h, x, y, w, KH, 6.0f, 1.5f, O(ui::DIM));
+      }
+      if (r < 4) {
+        const char ch[2] = { KB_KEYS[r][k], 0 };
+        ui::text(h, x + w * 0.5f, y + KH * 0.5f, HF_B16, O(sel ? ui::ON : ui::TX), ch, 0.0f, 0);
+      } else {
+        static const char* const ACT[3] = { N_("SPAZIO"), N_("CANCELLA"), N_("OK") };
+        char t[128];
+        ui::fit(t, sizeof(t), tr(ACT[k]), HF_S14, 1.0f, w - 12.0f);
+        ui::text(h, x + w * 0.5f, y + KH * 0.5f, HF_S14, O(sel ? ui::ON : (k == KA_OK ? ui::L1 : ui::TX)), t, 1.0f, 0);
+      }
+    }
+  }
+  if (g_info_t > 0) {
+    toast(h, g_info, ui::L1);
+  } else {
+    const char* it[6] = { "A", tr("scrivi"), "B", tr("cancella"), "START", tr("fatto") };
+    ui::footer(h, it, 6);
+  }
+  ui::version(h);
+}
+
 // Scheda di Come si gioca: Insieme (i 4 eroi) o Contro (2 contro 2, in arrivo).
 void mode_card(Hud* h, float x, float y, bool insieme, bool sel) {
   const float W = 262.0f, H = 112.0f, cx0 = x + 20.0f;
@@ -706,26 +845,6 @@ void mode_hud(Hud* h) {
   mode_card(h, 52, 308, true, g.menu_sel == 0);
   mode_card(h, 326, 308, false, g.menu_sel == 1);
   footer(h, tr("conferma"), tr("indietro"));
-}
-
-void story_hud(Hud* h) {
-  ui::scrim_top(h);
-  ui::scrim_bottom(h);
-  ui::title(h, 320, 28, HF_T32, tr("IL GIRO DEI PIANETI"), 3.0f);
-  ui::panel(h, 70, 84, 500, 300);
-  static StoryLines L;
-  story_lines(&L);
-  const int n = story_shown() < L.n ? story_shown() : L.n;
-  // Righe ogni 33 pixel e 20 in piu' tra i paragrafi, piu' strette se in una lingua sono di piu'.
-  const float GAP = 20.0f * (float)(STORY_PARAS - 1);
-  const float step = L.n > 1 ? fminf(33.0f, (300.0f - 72.0f - GAP) / (float)(L.n - 1)) : 33.0f;
-  float cy = 84.0f + 36.0f;
-  for (int k = 0; k < n; ++k) {
-    if (k > 0 && L.para[k] != L.para[k - 1]) cy += 20.0f;
-    ui::text(h, 320, cy, HF_S16, O(L.para[k] > 0 ? ui::L1 : ui::TX), L.s[k], 0.5f, 0);
-    cy += step;
-  }
-  footer(h, n < L.n ? tr("tutto") : tr("avanti"), tr("indietro"));
 }
 
 // Stelle del giro di un pianeta: quante, quante ne servono, cosa dire a destra.
@@ -1032,9 +1151,9 @@ void menu_update(void) {
     case SC_MAPS: maps_update(); break;
     case SC_CHARS: chars_update(); break;
     case SC_STATS: stats_update(); break;
-    case SC_STORY: story_update(); break;
     case SC_SLOTS: slots_update(); break;
     case SC_LANG: lang_update(); break;
+    case SC_NAME: name_update(); break;
     default: break;
   }
 }
@@ -1178,9 +1297,9 @@ void menu_build_hud(Hud* h, const Camera& cam) {
     case SC_MAPS: maps_hud(h); break;
     case SC_CHARS: chars_hud(h); break;
     case SC_STATS: stats_hud(h); break;
-    case SC_STORY: story_hud(h); break;
     case SC_SLOTS: slots_hud(h); break;
     case SC_LANG: lang_hud(h); break;
+    case SC_NAME: name_hud(h); break;
     default: break;
   }
 }
