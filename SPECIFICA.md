@@ -14,7 +14,7 @@ provare sulla console e da confermare).
 
 Ultimo aggiornamento: 29/10/2026 (lista della 0.5.4: nomi dei salvataggi, antialias migliore, CPU
 nel riquadro delle prestazioni, via la storia, banner delle carte, bonus nelle casse, batteria,
-cancelli a battente; il gioco in rete si farà molto più avanti).
+cancelli a battente; e il gioco in rete nella stessa Wi-Fi, ognuno col suo schermo).
 
 ## 1. Il gioco in breve
 
@@ -88,8 +88,8 @@ cancelli a battente; il gioco in rete si farà molto più avanti).
     quelli arrivati a ogni fotogramma (RetroArch non le apre più): niente ritardo, e sulle altre
     console non cambia nulla. Resta il limite dei messaggi persi (raro in casa), coperto dai 30
     secondi qui sopra.
-- [deciso 29/10] Il gioco in rete con ognuno il suo schermo (qui sotto) si farà **molto più avanti**:
-  non è più la 0.5.4 (capitolo 14).
+- [deciso 29/10] Il gioco in rete con ognuno il suo schermo (qui sotto), nella stessa Wi-Fi, è nella
+  **0.5.4** con il resto della lista. Il gioco via internet resta da valutare in futuro.
 - [deciso 20/10] **Gioco in rete, ognuno con il suo schermo**: oltre alla TV con le console-controller
   (che resta), ogni console fa girare il gioco e lo mostra sul suo schermo, **con la telecamera
   centrata sul proprio eroe**.
@@ -719,9 +719,8 @@ Il gioco completo si consegna a tappe; ognuna si prova sulla console prima della
 | 0.5.1 | [deciso 18/10] visuale minima più lontana; mappe tutte giocabili senza acqua attraversabile, paesaggio ridotto; gladiatore che insegue e combatte; Chichén Itzá con i cenote al posto di Machu Picchu; scorpione e arciere di terracotta al posto di sciacallo e lama — consegnata il 18/10 |
 | 0.5.2 | [deciso 19/10] interfaccia nuova (stile Orbita, colori Tramonto) in tutte le schermate e nell'HUD; pausa con la voce COMANDI; mappe al centro — consegnata il 19/10, provata il 20/10 ("molto bella") |
 | 0.5.3 | [deciso 20/10] visuale vicina senza HDMI; più salvataggi (nuova, carica, gestisci: duplica ed elimina); 7 lingue — consegnata il 20/10, da provare |
-| 0.5.4 | [deciso 29/10] nomi dei salvataggi; antialias migliore; CPU nel riquadro delle prestazioni; via la storia; banner prima delle carte; bonus nelle casse; batteria in alto a destra; cancelli a battente |
+| 0.5.4 | [deciso 29/10] gioco in rete nella stessa Wi-Fi con ognuno il suo schermo e la telecamera sul proprio eroe; nomi dei salvataggi; antialias migliore; CPU nel riquadro delle prestazioni; via la storia; banner prima delle carte; bonus nelle casse; batteria in alto a destra; cancelli a battente |
 | 0.6 e dopo | un pianeta per versione, nell'ordine del viaggio: Luna, Marte, Venere, Mercurio, Giove, Saturno, Urano, Nettuno; compiti nelle zone, mini-boss, livelli e bonus; modalità Contro |
-| molto più avanti | [deciso 20/10, rimandato il 29/10] gioco in rete con ognuno il suo schermo e la telecamera sul proprio eroe |
 | dopo | app per le console-controller; gioco via internet (da valutare) |
 
 ## 15. Registro delle decisioni
@@ -812,4 +811,5 @@ Il gioco completo si consegna a tappe; ognuna si prova sulla console prima della
   CPU; via la storia; le carte non devono comparire all'improvviso: prima un banner "ritira le tue
   carte" e A per scegliere; un bonus nelle casse che si rompono (adesso vuote): velocità, furia,
   scudo, carica; il simbolo della batteria in alto a destra; cancelli a battente che si chiudono
-  bene. Il gioco in rete si farà molto più avanti. Via alla 0.5.4.
+  bene. Dopo un equivoco (online o in casa) chiarito subito: il gioco in rete nella stessa Wi-Fi,
+  ognuno sul suo gameboy, è nella 0.5.4; quello via internet in futuro. Via alla 0.5.4.
