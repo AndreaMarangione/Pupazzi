@@ -74,6 +74,18 @@ static void pads_step(const Pad* p) {
   game_update(pads);
 }
 
+// 0.5.4: sul banner delle carte si aspetta quanto serve e ognuno preme A per vedere le sue carte.
+static void cards_reveal(void) {
+  Pad pads[MAX_PLAYERS];
+  memset(pads, 0, sizeof(pads));
+  while (g.cards_open && g.cards_age <= CARDS_BANNER_MIN) pads_step(pads);
+  for (int i = 0; i < MAX_PLAYERS; ++i)
+    if (g.offer[i].on && !g.offer[i].done) pads[i].btn = 1u << PAD_A;
+  pads_step(pads);
+  memset(pads, 0, sizeof(pads));
+  pads_step(pads);
+}
+
 // Mostro fermo (gia' spuntato) in pos; restituisce il suo indice.
 static int test_monster(Vec3 pos) {
   if (!monster_spawn(MO_SCORPIONE, false, &pos)) return -1;
@@ -114,6 +126,10 @@ static void test_cards(void) {
     }
     check(ok, "inizio mappa con 4 giocatori: 3 carte diverse e adatte per ognuno, scelta aperta");
     const unsigned t0 = g.tick;
+    cards_reveal();
+    ok = g.cards_open && g.tick == t0;
+    for (int i = 0; i < MAX_PLAYERS; ++i) ok &= g.offer[i].shown && !g.offer[i].done && g.pl[i].cards == 0;
+    check(ok, "A sul banner: ognuno vede le sue carte, nessuna presa; tutto fermo");
     Pad pads[MAX_PLAYERS];
     memset(pads, 0, sizeof(pads));
     game_start_tap(0);                      // G1: START breve prende la prima carta, non apre la pausa
@@ -144,26 +160,66 @@ static void test_cards(void) {
     check(!g.cards_open && frames + 1 == CARDS_CLOSE_FRAMES && g.tick == t0 + 11u && g.pl[3].pos.y - y0 < 0.01f, buf);
   }
   {
-    // Un pad che non risponde: dopo un minuto prende la carta col cursore e si riparte.
+    // Un pad che non risponde: dopo un minuto prende la carta col cursore e si riparte. G1 preme
+    // A a fotogrammi alterni (vede le carte e prende la prima).
     game_init();
     game_quick_start(0, 2, "01");
     Pad pads[MAX_PLAYERS];
     memset(pads, 0, sizeof(pads));
-    pads[0].btn = 1u << PAD_A;
     int frames = 0;
     while (g.cards_open && frames < 2 * CARDS_TIMEOUT) {
+      pads[0].btn = (frames & 1) ? 1u << PAD_A : 0;
       pads_step(pads);
       frames++;
     }
     char buf[128];
     snprintf(buf, sizeof(buf), "G2 fermo: la scelta si chiude da sola dopo %d fotogrammi", frames);
-    check(!g.cards_open && frames == CARDS_TIMEOUT + CARDS_CLOSE_FRAMES - 1 && has_card(g.pl[1], g.offer[1].card[0]), buf);
+    check(!g.cards_open && frames == CARDS_TIMEOUT + CARDS_CLOSE_FRAMES - 1 && has_card(g.pl[1], g.offer[1].card[0]) &&
+              has_card(g.pl[0], g.offer[0].card[0]),
+          buf);
+  }
+  {
+    // 0.5.4: il banner. Una A tenuta da prima o premuta appena compare non conta; poi A fa vedere le
+    // carte (senza prenderne una), START breve pure; l'A dopo prende.
+    game_init();
+    game_quick_start(0, 2, "01");
+    Pad pads[MAX_PLAYERS];
+    memset(pads, 0, sizeof(pads));
+    bool ok = g.cards_open && !g.offer[0].shown && !g.offer[1].shown;
+    pads[0].btn = 1u << PAD_A;                     // G1: A tenuta dall'inizio
+    for (int k = 0; k < CARDS_BANNER_MIN + 10; ++k) pads_step(pads);
+    ok &= !g.offer[0].shown;
+    pads[0].btn = 0;
+    pads_step(pads);
+    game_init();
+    game_quick_start(0, 2, "01");
+    memset(pads, 0, sizeof(pads));
+    pads_step(pads);
+    pads[1].btn = 1u << PAD_A;                     // G2: A appena compare il banner
+    pads_step(pads);
+    pads[1].btn = 0;
+    pads_step(pads);
+    ok &= !g.offer[1].shown;
+    while (g.cards_age <= CARDS_BANNER_MIN) pads_step(pads);
+    pads[1].btn = 1u << PAD_A;
+    pads_step(pads);
+    ok &= g.offer[1].shown && !g.offer[1].done && !g.offer[0].shown;
+    pads[1].btn = 0;
+    pads_step(pads);
+    game_start_tap(0);                             // G1: START breve, vede le carte
+    pads_step(pads);
+    ok &= g.offer[0].shown && !g.offer[0].done;
+    pads[0].btn = pads[1].btn = 1u << PAD_A;
+    pads_step(pads);
+    ok &= g.offer[0].done && g.offer[1].done && g.cards_open;
+    check(ok, "banner: A tenuta o troppo presto non conta; A (o START) fa vedere le carte, l'A dopo prende");
   }
   {
     game_init();
     game_quick_start(0, 1, "0");
     Pad pads[MAX_PLAYERS];
     memset(pads, 0, sizeof(pads));
+    cards_reveal();
     pads[0].btn = 1u << PAD_A;
     pads_step(pads);
     for (int k = 0; k < 30; ++k) pads_step(NULL);
@@ -183,6 +239,7 @@ static void test_cards(void) {
     CardOffer& o = g.offer[0];
     o.card[0] = CA_VITA;
     o.sel = 0;
+    cards_reveal();
     pads[0].btn = 0;
     pads_step(pads);
     pads[0].btn = 1u << PAD_A;

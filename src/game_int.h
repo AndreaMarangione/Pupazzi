@@ -317,10 +317,12 @@ struct CardOffer {
   uint8_t card[3];
   int8_t n, sel;           // carte proposte, voce su cui sta il cursore
   bool on, done;           // ha una proposta (era in partita all'apertura) / ha gia' scelto
+  bool shown;              // (0.5.4) ha premuto A sul banner "RITIRA LE TUE CARTE": vede le sue carte
 };
 const int CARDS_CLOSE_FRAMES = 20;   // quando hanno scelto tutti, si chiude dopo cosi'
 const int CARDS_CLEAR_DELAY = 40;    // zona ripulita: si vede "ZONA LIBERA!", poi le carte
 const int CARDS_TIMEOUT = 60 * 60;   // chi non sceglie in un minuto (pad spento?) prende quella col cursore
+const int CARDS_BANNER_MIN = 15;     // (0.5.4) il banner c'e' da cosi' prima che A conti: niente scelte per sbaglio
 enum { EL_NONE = 0, EL_FIRE, EL_SNOW };   // colpi di fuoco o di neve (per VAPORE)
 
 struct Game {

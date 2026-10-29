@@ -185,6 +185,26 @@ inline uint32_t O(uint32_t rgb) { return HUD_OPAQUE(rgb); }
 
 struct PanelFit { float bottom; int desc_lines; bool name_cut, head_cut, cut; };
 
+// Dorso di tre carte coperte a ventaglio (0.5.4), centrate in (cx, cy), larghe w: prima le due ai
+// lati, poi quella in mezzo, piu' in alto, con la stella.
+void card_backs(Hud* h, float cx, float cy, float w, float alpha = 1.0f) {
+  const float hh = floorf(w * 1.4f);
+  static const int ORDER[3] = { 0, 2, 1 };
+  for (int j = 0; j < 3; ++j) {
+    const int k = ORDER[j];
+    const float x = floorf(cx + (float)(k - 1) * w * 0.42f - w * 0.5f), y = floorf(cy - hh * 0.5f + (k == 1 ? -5.0f : 0.0f));
+    if (alpha >= 1.0f) {
+      ui::card_sel(h, x, y, w, hh, 6.0f);
+    } else {
+      hud_box_grad(h, x, y, w, hh, 6.0f, hud_a(ui::CARD_A, alpha), hud_a(ui::CARD_B, alpha), 160.0f, 1.0f);
+      hud_frame_grad(h, x, y, w, hh, 6.0f, 2.0f, hud_a(ui::L1, alpha), hud_a(ui::L2, alpha), 135.0f);
+    }
+  }
+  const int icon = w >= 40.0f ? HI_STAR22 : HI_STAR16;
+  const float iw = (float)hud_icon_w(icon), ih = (float)hud_icon_h(icon);
+  hud_icon(h, icon, floorf(cx - iw * 0.5f), floorf(cy - 5.0f - ih * 0.5f), hud_a(ui::STAR, alpha));
+}
+
 // Riquadro di un giocatore: "G1 ASTRO", le tre carte, la descrizione di quella col cursore e in
 // fondo le carte gia' prese; dopo la scelta "PRESA!". Con h NULL misura soltanto (prove).
 PanelFit draw_panel(Hud* h, int i, int ch, const CardOffer& o, uint32_t owned, bool others, float px, float pw) {
@@ -211,6 +231,20 @@ PanelFit draw_panel(Hud* h, int i, int ch, const CardOffer& o, uint32_t owned, b
     ui::text(h, hx, py + 22.0f, HF_B13, O(ui::TX), hero, htrack);
   }
   Lines L;
+  if (!o.shown && !o.done) {
+    // 0.5.4: carte ancora coperte finche' questo giocatore non preme A.
+    const float cw = narrow ? 36.0f : 46.0f;
+    if (h) card_backs(h, cx, py + 132.0f, cw);
+    Lines W;
+    W.n = ui::wrap(tr("per scegliere"), inner, HF_S13, 0.5f, W.s, 2, &W.cut);
+    const float ky = py + 214.0f;
+    if (h) ui::key(h, cx - 11.0f, ky, "A");
+    for (int k = 0; k < W.n; ++k)
+      if (h) ui::text(h, cx, ky + 26.0f + 15.0f * (float)k, HF_S13, O(ui::TX), W.s[k], 0.5f, 0);
+    fit.cut = W.cut;
+    fit.bottom = ky + 26.0f + 15.0f * (float)W.n;
+    return fit;
+  }
   if (o.done) {
     const int c = o.card[o.sel];
     if (h) ui::text(h, cx, py + 70.0f, HF_B22, O(ui::L1), tr("PRESA!"), 3.0f, 0);
@@ -362,6 +396,18 @@ void cards_update(void) {
       o.done = true;
       continue;
     }
+    // 0.5.4: prima il banner "RITIRA LE TUE CARTE"; ognuno preme A (una pressione nuova, dopo
+    // CARDS_BANNER_MIN fotogrammi) e vede le sue tre carte. Quella A non sceglie.
+    if (!o.shown) {
+      if (late || (g.cards_age > CARDS_BANNER_MIN && (pad_pressed(i, PAD_A) || g.start_tap[i]))) {
+        o.shown = true;
+        snd_ui(SND_CARD_OPEN);
+      }
+      if (!late) {                     // dopo un minuto (late) le vede e prende subito quella col cursore
+        all = false;
+        continue;
+      }
+    }
     if (g.in[i].nav == NAV_UP) { o.sel = (int8_t)((o.sel + o.n - 1) % o.n); snd_ui(SND_UI_MOVE); }
     if (g.in[i].nav == NAV_DOWN) { o.sel = (int8_t)((o.sel + 1) % o.n); snd_ui(SND_UI_MOVE); }
     if (pad_pressed(i, PAD_A) || g.start_tap[i] || late) {
@@ -384,17 +430,40 @@ void cards_update(void) {
   plat_log("carte scelte: si riparte");
 }
 
+// 0.5.4: prima delle carte, finche' nessuno ha premuto A, un banner al centro con le carte coperte:
+// "RITIRA LE TUE CARTE", sotto A per scegliere. Entra in un attimo, sopra il gioco fermo.
+void cards_banner(Hud* h) {
+  // Sopra il centro dello schermo, dove di solito c'e' il gruppo.
+  const float a = fminf(1.0f, (float)(g.cards_age + 1) / 10.0f), cy = 160.0f;
+  ui::overlay(h, 0.55f * a);
+  hud_box_grad(h, 0, cy - 52.0f, 320, 104.0f, 0, hud_a(ui::SCRIM, 0.0f), hud_a(ui::SCRIM, 0.85f * a), 90.0f);
+  hud_box_grad(h, 320, cy - 52.0f, 320, 104.0f, 0, hud_a(ui::SCRIM, 0.85f * a), hud_a(ui::SCRIM, 0.0f), 90.0f);
+  card_backs(h, 320.0f, cy - 96.0f, 34.0f, a);
+  char t[256];
+  ui::fit(t, sizeof(t), tr("RITIRA LE TUE CARTE"), HF_T32, 3.0f, 560.0f, "...");
+  ui::title(h, 320, cy - 34.0f, HF_T32, t, 3.0f, true, a);
+  const char* sub = tr("per scegliere");
+  const float tw = hud_text_w(HF_S15, sub, 0.5f), x = 320.0f - (22.0f + 8.0f + tw) * 0.5f;
+  ui::key(h, x, cy + 30.0f, "A", ui::L1);
+  ui::text(h, x + 30.0f, cy + 30.0f, HF_S15, hud_a(ui::TX, a), sub, 0.5f);
+}
+
 void cards_hud(Hud* h) {
-  ui::overlay(h, 0.72f);
-  ui::title(h, 320, 20, HF_T32, tr("SCEGLI UNA CARTA"), 3.0f);
-  ui::text(h, 320, 70, HF_S14, HUD_OPAQUE(ui::FTX), tr("vale fino alla fine della mappa"), 1.0f, 0);
   int who[MAX_PLAYERS], n = 0;
-  bool waiting = false;
+  bool waiting = false, opened = false;
   for (int i = 0; i < MAX_PLAYERS; ++i)
     if (g.offer[i].on) {
       who[n++] = i;
       waiting |= !g.offer[i].done;
+      opened |= g.offer[i].shown || g.offer[i].done;
     }
+  if (!opened) {
+    cards_banner(h);
+    return;
+  }
+  ui::overlay(h, 0.72f);
+  ui::title(h, 320, 20, HF_T32, tr("SCEGLI UNA CARTA"), 3.0f);
+  ui::text(h, 320, 70, HF_S14, HUD_OPAQUE(ui::FTX), tr("vale fino alla fine della mappa"), 1.0f, 0);
   for (int k = 0; k < n; ++k) {
     const int i = who[k];
     float px, pw;
@@ -546,7 +615,7 @@ bool cards_layout_ok(char* why, int n, bool all) {
     }
     for (int ch = 0; ch < NCHARS; ++ch)        // ogni eroe: il nome in alto
       for (int c = 1; c < NCARDS; ++c)
-        for (int done = 0; done < 2; ++done) {
+        for (int st = 0; st < 3; ++st) {               // coperte, da scegliere, presa
           CardOffer o;
           memset(&o, 0, sizeof(o));
           o.card[0] = (uint8_t)c;
@@ -554,15 +623,17 @@ bool cards_layout_ok(char* why, int n, bool all) {
           o.card[2] = CA_SCHEGGE_GELO;
           o.n = 3;
           o.on = true;
-          o.done = done != 0;
+          o.shown = st >= 1;
+          o.done = st == 2;
+          const char* what = st == 0 ? " (coperte)" : (st == 2 ? " (presa)" : "");
           const PanelFit f = draw_panel(NULL, 3, ch, o, owned & ~(1u << c), true, px, pw);
           if (f.cut || f.name_cut || f.head_cut || f.desc_lines > 6 || f.bottom > PANEL_Y + PANEL_H) {
             const char* hc = f.head_cut ? ", nome dell'eroe tagliato" : "";
             if (good)
               snprintf(why, (size_t)n, "%d giocatori, %s, %s%s: %d righe, testo fino a %.1f%s%s%s", np, CHARS[ch].name, CARDS[c].name,
-                       done ? " (presa)" : "", f.desc_lines, (double)f.bottom, f.name_cut ? ", nome tagliato" : "", hc, f.cut ? ", testo tagliato" : "");
+                       what, f.desc_lines, (double)f.bottom, f.name_cut ? ", nome tagliato" : "", hc, f.cut ? ", testo tagliato" : "");
             if (all)
-              printf("    %d giocatori, %s, %s%s: %d righe, testo fino a %.1f%s%s%s\n", np, tr(CHARS[ch].name), tr(CARDS[c].name), done ? " (presa)" : "",
+              printf("    %d giocatori, %s, %s%s: %d righe, testo fino a %.1f%s%s%s\n", np, tr(CHARS[ch].name), tr(CARDS[c].name), what,
                      f.desc_lines, (double)f.bottom, f.name_cut ? ", nome tagliato" : "", hc, f.cut ? ", testo tagliato" : "");
             good = false;
             if (!all) return false;

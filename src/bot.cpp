@@ -27,8 +27,9 @@ struct Bot {
 Bot B[MAX_PLAYERS];
 int g_lag;                            // prove: i segni a terra si vedono dopo cosi' tanti fotogrammi (bot_set_lag)
 
-// Carte: ognuno aspetta un po' (30-60 fotogrammi, diverso per giocatore), a volte sposta il cursore
-// e conferma con A. Le scelte vengono da un miscuglio di numeri della partita: g.rng non si tocca.
+// Carte: ognuno preme A sul banner per vedere le sue carte (dalla 0.5.4), aspetta un po' (30-60
+// fotogrammi, diverso per giocatore), a volte sposta il cursore e conferma con A. Le scelte vengono
+// da un miscuglio di numeri della partita: g.rng non si tocca.
 void bot_cards(int i, Pad& pad) {
   Bot& b = B[i];
   const CardOffer& o = g.offer[i];
@@ -44,6 +45,10 @@ void bot_cards(int i, Pad& pad) {
     b.card_wait = 30 + (int)((h >> 8) % 31u);
   }
   b.card_t++;
+  if (!o.shown) {                       // il banner: A (premuto a fotogrammi alterni, ogni volta di nuovo)
+    if (b.card_t >= 20 + (b.card_wait - 30) / 2 && (b.card_t & 1)) pad.btn = (uint16_t)(1u << PAD_A);
+    return;
+  }
   if (o.sel != b.card_want) {
     if (b.card_t % 8 == 0) pad.btn = (uint16_t)(1u << (b.card_want > o.sel ? PAD_DOWN : PAD_UP));
     return;

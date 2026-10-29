@@ -43,6 +43,14 @@ static void press(int i, int b) {
   memset(g_pads, 0, sizeof(g_pads));
 }
 
+// Carte (0.5.4): passato il banner, A per vedere le carte e A per prendere quella col cursore.
+static void pick_card(int i) {
+  memset(g_pads, 0, sizeof(g_pads));
+  while (g.cards_open && g.cards_age <= CARDS_BANNER_MIN) step();
+  press(i, PAD_A);
+  press(i, PAD_A);
+}
+
 // Niente mostri e niente ondate: le cadute le decide la prova.
 static void quiet(void) {
   memset(g.spawn_left, 0, sizeof(g.spawn_left));
@@ -255,7 +263,7 @@ int main(int argc, char** argv) {
     game_quick_start(0, 1, "0");
     const bool open = g.cards_open;
     g.offer[0].card[g.offer[0].sel] = CA_VITA;
-    press(0, PAD_A);
+    pick_card(0);
     step(CARDS_CLOSE_FRAMES + 2);
     quiet();
     Player& p = g.pl[0];

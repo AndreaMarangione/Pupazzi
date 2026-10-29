@@ -1113,6 +1113,25 @@ zh 选择一张卡牌
 ja カードを選ぼう
 hi एक कार्ड चुनो
 
+# 0.5.4: banner prima delle carte (titolo T32, al massimo 560 pixel) e sotto il tasto A (S15; nei
+# riquadri con le carte coperte S13, anche su due righe)
+@T32
+it RITIRA LE TUE CARTE
+en COLLECT YOUR CARDS
+es RECOGE TUS CARTAS
+pt RECOLHE AS TUAS CARTAS
+zh 领取你的卡牌
+ja カードを受け取ろう
+hi अपने कार्ड लो
+
+it per scegliere
+en to choose
+es para elegir
+pt para escolher
+zh 按下选择
+ja 押して選ぶ
+hi दबाकर चुनो
+
 it vale fino alla fine della mappa
 en lasts until the end of the map
 es dura hasta el final del mapa
