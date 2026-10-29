@@ -2332,3 +2332,13 @@ pt Desempenho (com START mantidos: sair)
 zh 性能（与START一起按住：退出）
 ja パフォーマンス（STARTと長押し：終了）
 hi परफ़ॉर्मेंस (START के साथ दबाए रखें: बाहर)
+
+
+# 0.5.4: riquadro delle prestazioni (SELECT), seconda riga: "CPU 37% · 12 18 64 55 · gioco 30%" (S13)
+it gioco
+en game
+es juego
+pt jogo
+zh 游戏
+ja ゲーム
+hi गेम

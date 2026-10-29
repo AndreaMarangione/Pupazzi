@@ -68,6 +68,9 @@ float tag(Hud* h, float x, float cy, const char* s, uint32_t color, int face, fl
 // Gettone del giocatore (G1...): colore del giocatore, scritta bianca; restituisce la larghezza.
 float gp(Hud* h, float x, float cy, int player, int face = HF_B11);
 float gp_w(int player, int face = HF_B11);   // larghezza di gp, senza disegnare
+// Batteria della console (0.5.4): "87%" e la pila, allineate a destra su right; tick per il
+// lampeggio sotto il 15%. Restituisce la larghezza.
+float battery(Hud* h, float right, float cy, int percent, bool charging, unsigned tick);
 // Tasti nel popup dei comandi: tasto rettangolare (R1, START...) e levetta tonda (L, R).
 float keycap(Hud* h, float x, float cy, const char* s, bool small);
 float stick(Hud* h, float x, float cy, const char* s);

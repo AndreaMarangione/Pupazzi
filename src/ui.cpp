@@ -307,6 +307,32 @@ float keycap(Hud* h, float x, float cy, const char* s, bool small) {
   return w;
 }
 
+float battery(Hud* h, float right, float cy, int percent, bool charging, unsigned tick) {
+  const float BW = 22.0f, BH = 12.0f, x = right - BW - 2.0f, y = cy - BH * 0.5f;
+  const float k = (float)(percent < 0 ? 0 : (percent > 100 ? 100 : percent)) / 100.0f;
+  const bool low = percent < 15 && !charging;
+  const uint32_t fill = low ? 0xFF4A3A : (percent < 30 && !charging ? L1 : 0x7CF29A);
+  // Ombra, corpo, polo e carica.
+  hud_box(h, x - 1.0f, y - 1.0f, BW + 5.0f, BH + 2.0f, 3.0f, A(SCRIM, 0.55f));
+  hud_frame(h, x, y, BW, BH, 2.5f, 1.5f, O(FTX));
+  hud_box(h, x + BW, cy - 3.0f, 2.0f, 6.0f, 0.0f, O(FTX));
+  const float fw = floorf((BW - 5.0f) * k + 0.5f);
+  if (fw > 0.0f && (!low || ((tick / 20u) & 1u) == 0u)) hud_box(h, x + 2.5f, y + 2.5f, fw, BH - 5.0f, 1.0f, O(fill));
+  if (charging) {
+    // Fulmine: due parallelogrammi storti, contornati di scuro.
+    hud_para(h, x + 8.0f, y - 1.0f, 6.0f, 7.5f, -0.45f, O(SCRIM));
+    hud_para(h, x + 8.5f, y + 6.5f, 6.0f, 6.5f, -0.45f, O(SCRIM));
+    hud_para(h, x + 9.0f, y + 0.0f, 4.0f, 6.5f, -0.45f, O(0xFFE14D));
+    hud_para(h, x + 9.5f, y + 6.0f, 4.0f, 5.5f, -0.45f, O(0xFFE14D));
+  }
+  char buf[16];
+  snprintf(buf, sizeof(buf), "%d%%", percent);
+  const float tw = hud_text_w(HF_B12, buf, 0.5f);
+  text(h, x - 6.0f + 1.0f, cy + 1.0f, HF_B12, A(SCRIM, 0.85f), buf, 0.5f, 1);
+  text(h, x - 6.0f, cy, HF_B12, O(low ? 0xFF4A3A : FTX), buf, 0.5f, 1);
+  return BW + 2.0f + 6.0f + tw;
+}
+
 float stick(Hud* h, float x, float cy, const char* s) {
   hud_ring(h, x + 13.0f, cy, 13.0f, 13.0f, 1.5f, O(L1));
   hud_ellipse(h, x + 13.0f, cy, 6.5f, 6.5f, KCFILL);

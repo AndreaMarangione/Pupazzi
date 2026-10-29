@@ -1,7 +1,7 @@
 // Generato da tools/make_lang.py da lang/testi.txt: non modificare a mano.
 #pragma once
 #include <stdint.h>
-#define LANG_NTEXTS 274
+#define LANG_NTEXTS 275
 // Hash FNV-1a dell'italiano, in ordine crescente; per ogni testo le 7 lingue (it en es pt zh ja hi).
 static const uint32_t LANG_HASH[LANG_NTEXTS] = {
   0x012f3453u, 0x015f0ed9u, 0x01625946u, 0x020e0e78u, 0x02487820u, 0x04eb5aebu, 0x062a88e6u, 0x0898a47au,
@@ -25,20 +25,20 @@ static const uint32_t LANG_HASH[LANG_NTEXTS] = {
   0x8693da9au, 0x86d757a8u, 0x86e1ed4bu, 0x89570c88u, 0x89a6619cu, 0x89dcfdb9u, 0x89e017a7u, 0x8d5617aau,
   0x8dedd901u, 0x8eb20f18u, 0x8ee3c32fu, 0x8f2b2757u, 0x8f75702fu, 0x8fdfdb63u, 0x9004ca5cu, 0x92308a2fu,
   0x93c40c81u, 0x95ceb50fu, 0x9746e222u, 0x97784438u, 0x979f1eeeu, 0x98e2c8c6u, 0x9966aebeu, 0x9a2a4285u,
-  0x9b333c75u, 0x9becaf04u, 0x9cecff1eu, 0x9d88efbeu, 0x9e88f151u, 0x9f055b09u, 0xa053a54au, 0xa08c706du,
-  0xa18a1f2cu, 0xa38f0da4u, 0xa5a12cc9u, 0xa5f67fa7u, 0xa60b5788u, 0xa6303dadu, 0xa66b4a1cu, 0xa685172bu,
-  0xa6f68d1cu, 0xa96200cfu, 0xaad9a938u, 0xab863e9bu, 0xac4de1c3u, 0xad78717au, 0xae30314au, 0xb0f80b70u,
-  0xb428675fu, 0xb4d2d9c3u, 0xb52912dau, 0xb5be01d7u, 0xb638a331u, 0xb675e9c6u, 0xb6b6ba67u, 0xb70036b5u,
-  0xb754888fu, 0xba4143fbu, 0xbbe44330u, 0xbd999721u, 0xbe1cf77au, 0xc05b2b43u, 0xc1bd06d5u, 0xc47f17fcu,
-  0xc5c43549u, 0xc5f98767u, 0xc6b2594cu, 0xc7e1a475u, 0xc87dcdb2u, 0xc8982282u, 0xcabd6d7au, 0xd29a37c5u,
-  0xd2bdbb61u, 0xd5a71bf4u, 0xd849bbdbu, 0xd918e2afu, 0xd93cfe9du, 0xd993ca66u, 0xd9d02cddu, 0xdb2b9a2au,
-  0xdb48e548u, 0xdb5c4825u, 0xdb602a55u, 0xdbe93fa9u, 0xdc4dde2du, 0xddf83107u, 0xe049a4eeu, 0xe2c3fd5bu,
-  0xe34e7d10u, 0xe36ac551u, 0xe4342ed5u, 0xe4ceb8f3u, 0xe4f24486u, 0xe5d432c2u, 0xe6041a15u, 0xe63d8c22u,
-  0xe7300fcdu, 0xe753ff15u, 0xe774065bu, 0xe95f35eeu, 0xea70f898u, 0xeb1263f3u, 0xeb705696u, 0xed4a3d31u,
-  0xed4eb08du, 0xee2998c8u, 0xee542e4du, 0xeed5b9a2u, 0xef3974beu, 0xf2395b27u, 0xf2b03fdbu, 0xf3333100u,
-  0xf343b6c4u, 0xf34a6988u, 0xf34ac023u, 0xf4228f40u, 0xf4408aebu, 0xf5003a2fu, 0xf50eeca8u, 0xf594268du,
-  0xf73ba41bu, 0xf7e1e703u, 0xf88cd79eu, 0xfafe6da4u, 0xfc3e74c9u, 0xfc9320f3u, 0xfdf45a31u, 0xff3920d0u,
-  0xff487cf6u, 0xffc08d1fu,
+  0x9b333c75u, 0x9becaf04u, 0x9cecff1eu, 0x9d88efbeu, 0x9e88f151u, 0x9f055b09u, 0xa0301b40u, 0xa053a54au,
+  0xa08c706du, 0xa18a1f2cu, 0xa38f0da4u, 0xa5a12cc9u, 0xa5f67fa7u, 0xa60b5788u, 0xa6303dadu, 0xa66b4a1cu,
+  0xa685172bu, 0xa6f68d1cu, 0xa96200cfu, 0xaad9a938u, 0xab863e9bu, 0xac4de1c3u, 0xad78717au, 0xae30314au,
+  0xb0f80b70u, 0xb428675fu, 0xb4d2d9c3u, 0xb52912dau, 0xb5be01d7u, 0xb638a331u, 0xb675e9c6u, 0xb6b6ba67u,
+  0xb70036b5u, 0xb754888fu, 0xba4143fbu, 0xbbe44330u, 0xbd999721u, 0xbe1cf77au, 0xc05b2b43u, 0xc1bd06d5u,
+  0xc47f17fcu, 0xc5c43549u, 0xc5f98767u, 0xc6b2594cu, 0xc7e1a475u, 0xc87dcdb2u, 0xc8982282u, 0xcabd6d7au,
+  0xd29a37c5u, 0xd2bdbb61u, 0xd5a71bf4u, 0xd849bbdbu, 0xd918e2afu, 0xd93cfe9du, 0xd993ca66u, 0xd9d02cddu,
+  0xdb2b9a2au, 0xdb48e548u, 0xdb5c4825u, 0xdb602a55u, 0xdbe93fa9u, 0xdc4dde2du, 0xddf83107u, 0xe049a4eeu,
+  0xe2c3fd5bu, 0xe34e7d10u, 0xe36ac551u, 0xe4342ed5u, 0xe4ceb8f3u, 0xe4f24486u, 0xe5d432c2u, 0xe6041a15u,
+  0xe63d8c22u, 0xe7300fcdu, 0xe753ff15u, 0xe774065bu, 0xe95f35eeu, 0xea70f898u, 0xeb1263f3u, 0xeb705696u,
+  0xed4a3d31u, 0xed4eb08du, 0xee2998c8u, 0xee542e4du, 0xeed5b9a2u, 0xef3974beu, 0xf2395b27u, 0xf2b03fdbu,
+  0xf3333100u, 0xf343b6c4u, 0xf34a6988u, 0xf34ac023u, 0xf4228f40u, 0xf4408aebu, 0xf5003a2fu, 0xf50eeca8u,
+  0xf594268du, 0xf73ba41bu, 0xf7e1e703u, 0xf88cd79eu, 0xfafe6da4u, 0xfc3e74c9u, 0xfc9320f3u, 0xfdf45a31u,
+  0xff3920d0u, 0xff487cf6u, 0xffc08d1fu,
 };
 static const char* const LANG_TEXT[LANG_NTEXTS][7] = {
   { "scrivi", "type", "escribir", "escrever", "输入", "入力", "लिखें" },
@@ -215,6 +215,7 @@ static const char* const LANG_TEXT[LANG_NTEXTS][7] = {
   { "Mira X", "Aim X", "Apuntar X", "Mira X", "瞄准 X", "エイム X", "निशाना X" },
   { "Mira Y", "Aim Y", "Apuntar Y", "Mira Y", "瞄准 Y", "エイム Y", "निशाना Y" },
   { "VITA EXTRA", "EXTRA LIFE", "VIDA EXTRA", "VIDA EXTRA", "额外一命", "残機+1", "एक्स्ट्रा जान" },
+  { "gioco", "game", "juego", "jogo", "游戏", "ゲーム", "गेम" },
   { "vale fino alla fine della mappa", "lasts until the end of the map", "dura hasta el final del mapa", "vale até ao fim do mapa", "持续到本地图结束", "マップの最後まで有効", "मैप के अंत तक चलता है" },
   { "sì", "yes", "sí", "sim", "是", "はい", "हाँ" },
   { "resta fuori fino alla fine della mappa", "out until the end of the map", "queda fuera hasta el final del mapa", "fica de fora até ao fim do mapa", "本地图结束前无法回来", "マップの最後まで見学", "मैप के अंत तक बाहर" },
@@ -323,8 +324,8 @@ static const uint8_t LANG_BIG[LANG_NTEXTS] = {
   0, 0, 0, 0, 1, 16, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 1, 0, 0, 0, 0, 8, 0,
   0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0,
   0, 4, 0, 0, 4, 0, 0, 0, 1, 2, 0, 0, 0, 4, 0, 0, 0, 0, 4, 0, 0, 4, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0,
-  0, 0, 0, 1, 0, 0, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4, 0, 0,
-  0, 1, 0, 0, 4, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4, 0, 4,
-  1, 0, 0, 0, 0, 0, 0, 0, 0, 4, 1, 0, 0, 0, 1, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0, 4, 0, 0, 4, 0, 0, 16,
-  4, 0, 0, 0, 4, 0, 0, 0, 0, 8, 0, 0, 0, 0, 1, 0, 0, 2,
+  0, 0, 0, 1, 0, 0, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4, 0,
+  0, 0, 1, 0, 0, 4, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4, 0,
+  4, 1, 0, 0, 0, 0, 0, 0, 0, 0, 4, 1, 0, 0, 0, 1, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0, 4, 0, 0, 4, 0, 0,
+  16, 4, 0, 0, 0, 4, 0, 0, 0, 0, 8, 0, 0, 0, 0, 1, 0, 0, 2,
 };

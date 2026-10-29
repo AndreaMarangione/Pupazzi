@@ -23,6 +23,7 @@
 #include "audio.h"
 #include "save.h"
 #include "lang.h"
+#include "sysinfo.h"
 
 #ifndef PUPAZZI_BUILD
 #define PUPAZZI_BUILD "locale"
@@ -578,15 +579,29 @@ static void handle_controls(void) {
 
 // --- riquadro delle prestazioni (SELECT) -------------------------------------
 
-// Una riga in basso a sinistra, sotto le finestre di chi entra in partita (che finiscono a 432).
+// Una riga in basso a sinistra, sotto le finestre di chi entra in partita (che finiscono a 432); dalla
+// 0.5.4 sopra una seconda riga con il carico della CPU (letto ogni mezzo secondo mentre si vede).
 static void perf_overlay(Hud* h) {
+  static unsigned cpu_t;
+  static SysCpu cpu;
+  if (cpu_t++ % 30u == 0u) {
+    const SysCpu c = sys_cpu_sample();
+    if (c.valid || !cpu.valid) cpu = c;
+  }
   char buf[160];
   snprintf(buf, sizeof(buf), "%.1f fps · %.1f ms (max %.1f) · %s %.1f ms · tri %d/%d", (double)A.fps, (double)A.frame_avg,
            (double)A.frame_max, A.use_gl ? (game_aa_wanted() ? "GPU+AA" : "GPU") : "CPU", (double)A.e_core, A.st.tris_drawn,
            A.st.tris_in);
-  const float w = hud_text_w(HF_S13, buf) + 24.0f;
+  float w = hud_text_w(HF_S13, buf) + 24.0f;
   hud_box(h, 24, 440, w, 24, 6, hud_a(0x18081E, 0.85f));
   hud_text(h, 36, hud_mid(HF_S13, 452), HF_S13, 0xFFFFFFFFu, buf);
+  if (!cpu.valid) return;
+  int n = snprintf(buf, sizeof(buf), "CPU %d%% ·", cpu.total);
+  for (int i = 0; i < cpu.ncore && n < (int)sizeof(buf) - 8; ++i) n += snprintf(buf + n, sizeof(buf) - (size_t)n, " %d", cpu.core[i]);
+  if (n < (int)sizeof(buf)) snprintf(buf + n, sizeof(buf) - (size_t)n, " · %s %d%%", tr("gioco"), cpu.game);
+  w = hud_text_w(HF_S13, buf) + 24.0f;
+  hud_box(h, 24, 412, w, 24, 6, hud_a(0x18081E, 0.85f));
+  hud_text(h, 36, hud_mid(HF_S13, 424), HF_S13, cpu.total >= 90 ? 0xFFFF8A6Au : 0xFFFFFFFFu, buf);
 }
 
 // --- contesto hardware ----------------------------------------------------

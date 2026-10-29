@@ -12,7 +12,8 @@
 
 SRC := src/core.cpp src/game.cpp src/game_draw.cpp src/player.cpp src/combat.cpp src/monsters.cpp \
        src/flow.cpp src/menu.cpp src/bot.cpp src/cards.cpp src/level.cpp src/level_mesh.cpp src/maps.cpp src/models.cpp \
-       src/swr.cpp src/glr.cpp src/hud.cpp src/ui.cpp src/lang.cpp src/mesh.cpp src/plat.cpp src/save.cpp src/audio.cpp
+       src/swr.cpp src/glr.cpp src/hud.cpp src/ui.cpp src/lang.cpp src/mesh.cpp src/plat.cpp src/save.cpp src/audio.cpp \
+       src/sysinfo.cpp
 HDR := $(wildcard src/*.h)
 # Mappe della campagna, in ordine: incorporate nel core e copiate nella cartella mappe/ della console.
 MAPS := maps/terra1.txt maps/terra2.txt maps/terra3.txt maps/terra_boss.txt
@@ -48,7 +49,7 @@ CHECK_ARM32 = @if command -v readelf >/dev/null 2>&1; then \
 all: native tools
 native: build/native/pupazzi_libretro.so
 tools: build/native/host build/native/test_raster build/native/test_aim build/native/test_save build/native/test_rules build/native/test_maps build/native/test_boss \
-       build/native/test_lang
+       build/native/test_lang build/native/test_sys
 console: arm32 arm64
 arm32: build/arm32/pupazzi_libretro.so
 arm64: build/arm64/pupazzi_libretro.so
@@ -117,9 +118,15 @@ build/native/test_save: tools/test_save.cpp src/save.cpp src/plat.cpp $(HDR)
 	@mkdir -p build/native
 	$(CXX) $(filter-out -fPIC -fvisibility=hidden,$(CXXFLAGS)) -Isrc -o $@ tools/test_save.cpp src/save.cpp src/plat.cpp
 
+# Prove di batteria e CPU (0.5.4) con una /sys e una /proc finte.
+build/native/test_sys: tools/test_sys.cpp src/sysinfo.cpp $(HDR)
+	@mkdir -p build/native
+	$(CXX) $(filter-out -fPIC -fvisibility=hidden,$(CXXFLAGS)) -Isrc -o $@ tools/test_sys.cpp src/sysinfo.cpp
+
 test: native tools
 	python3 tools/make_lang.py --controlla
 	./build/native/test_lang
+	./build/native/test_sys
 	./build/native/test_raster 300
 	./build/native/test_aim
 	./build/native/test_save

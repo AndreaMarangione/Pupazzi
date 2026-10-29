@@ -9,6 +9,7 @@
 #include "maps.h"
 #include "plat.h"
 #include "save.h"
+#include "sysinfo.h"
 #include "ui.h"
 #include <stdio.h>
 #include <string.h>
@@ -1302,6 +1303,9 @@ void menu_build_hud(Hud* h, const Camera& cam) {
     case SC_NAME: name_hud(h); break;
     default: break;
   }
+  // La batteria della console in alto a destra (0.5.4), sopra i titoli.
+  const SysBattery bat = sys_battery(plat_now_ms());
+  if (bat.present) ui::battery(h, 640.0f - ui::SAFE_X, 17.0f, bat.percent, bat.charging, g.ui_tick);
 }
 
 // Finestre di chi entra a partita iniziata (anche in pausa: allora sopra la pausa).

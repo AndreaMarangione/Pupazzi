@@ -2,6 +2,7 @@
 #include "game_int.h"
 #include "maps.h"
 #include "plat.h"
+#include "sysinfo.h"
 #include "ui.h"
 #include <stdio.h>
 #include <string.h>
@@ -1332,6 +1333,8 @@ void top_line(Hud* h, float x) {
   hud_frame(h, x + 1.0f, cy - 8.5f, hud_text_w(HF_B11, buf, 1.5f) + 15.0f, 19.0f, 0, 1.5f, A(ui::SCRIM, 0.6f));
   x += ui::tag(h, x, cy, buf, ui::FTX, HF_B11, 1.5f, 6.0f, 19.0f) + 12.0f;
   float xr = 640.0f - HX;
+  const SysBattery bat = sys_battery(plat_now_ms());
+  if (bat.present) xr -= 70.0f;                    // la batteria (0.5.4) all'estremo destro
   if (g.phase == PH_CLEAR) {
     const char* go = tr("VAI AVANTI");
     const float tw = hud_text_w(HF_B13, go, 1.5f);
@@ -1445,6 +1448,9 @@ void build_play_hud(Hud* h, const Camera& cam) {
   }
   if (g.cards_open) cards_hud(h);      // scelta delle carte al posto di pausa e finestre per entrare
   else play_menus_hud(h);
+  // La batteria della console in alto a destra, sempre (anche in pausa e con le carte).
+  const SysBattery bat = sys_battery(plat_now_ms());
+  if (bat.present) ui::battery(h, 640.0f - HX, HY + 14.0f, bat.percent, bat.charging, g.ui_tick);
 }
 
 }  // namespace
