@@ -57,6 +57,14 @@ for m in prova8:8x prova8no:4x; do
   if [ -n "$h0" ] && [ "$h0" = "$h2" ]; then echo "antialias ${m%%:*}: ${m##*:}, stessa immagine ($h2)"
   else echo "ERRORE: antialias ${m%%:*}, immagine diversa ($h2 invece di $h0)"; fail=1; fi
 done
+# 0.5.4: con "il migliore" a 8 campioni, sotto i 55 fotogrammi al secondo in partita si passa da
+# soli a 4 (qui l'host va apposta a 30 al secondo).
+mkdir -p "$T/adatta"
+o3=$(PUPAZZI_AA_ADATTA=1 PUPAZZI_AA=prova8 PUPAZZI_RES=320 PUPAZZI_OUT="$T/adatta" PUPAZZI_SALVATAGGI="$T/adatta" PUPAZZI_HUD=0 PUPAZZI_RENDERER=gpu $H $C --gl --frames 200 --tempo 30 2>&1)
+case "$o3" in
+  *"antialias 8x pronto"*"si passa a 4"*"antialias 4x pronto"*) echo "antialias 8x a 30 fotogrammi al secondo: si passa da solo a 4" ;;
+  *) echo "ERRORE: a 30 fotogrammi al secondo l'antialias non passa da 8 a 4 campioni"; fail=1 ;;
+esac
 
 # Software e GPU senza antialias: la stessa scena, a meno di pochi pixel sui bordi.
 mkdir -p "$T/sw" "$T/gl" "$T/aa"
