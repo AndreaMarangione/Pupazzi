@@ -39,6 +39,11 @@ const uint8_t PROTO = 1;
 enum { T_DISCOVER = 1, T_OFFER, T_JOIN, T_WELCOME, T_REFUSE, T_LOBBY, T_PING, T_BYE, T_START, T_INPUT, T_BUNDLE };
 const int HIST = 1024;              // fotogrammi tenuti (chi crea) e ricevuti (le altre): 17 secondi
 const int IN_RING = 64;             // comandi in arrivo da una console in attesa di essere usati
+// Numeri dei comandi di una console (ripartono da 0 a ogni partita): il primo che arriva deve essere
+// sotto FIRST_MAX (i primi possono andare persi), e uno piu' avanti di AHEAD_MAX di quelli in attesa e'
+// un messaggio sbagliato. Le differenze si fanno a 32 bit con segno: reggono anche il giro dei numeri.
+const uint32_t FIRST_MAX = 1u << 16;
+const int32_t AHEAD_MAX = 1 << 20;
 const int WIN = 16;                 // fotogrammi o comandi al massimo in un messaggio
 const int MAX_PKTS = 4;             // messaggi al massimo per console in un fotogramma (quando e' indietro)
 const int MAX_STEPS = 4;            // fotogrammi della partita al massimo in un fotogramma (per recuperare)
@@ -544,7 +549,7 @@ NetPad host_take(Peer& p) {
   }
   // Troppi in attesa (la console si era fermata, o i messaggi sono arrivati tutti insieme): si
   // tengono solo gli ultimi.
-  if (p.top >= p.next && p.top - p.next >= 8u) {
+  if ((int32_t)(p.top - p.next) >= 8) {
     p.skips += p.top - 2u - p.next;
     p.next = p.top - 2u;
   }
@@ -557,7 +562,7 @@ NetPad host_take(Peer& p) {
     // Ancora piu' di uno in attesa: se ne usano due in questo fotogramma (i tasti premuti nel primo
     // restano premuti, cosi' una pressione breve non si perde).
     const int s2 = (int)(p.next % IN_RING);
-    if (p.top >= p.next && p.top - p.next >= 1u && p.rec_ok[s2] && p.rec_no[s2] == p.next) {
+    if ((int32_t)(p.top - p.next) >= 1 && p.rec_ok[s2] && p.rec_no[s2] == p.next) {
       const NetPad b = p.rec[s2];
       p.rec_ok[s2] = false;
       p.next++;
@@ -572,8 +577,8 @@ NetPad host_take(Peer& p) {
   }
   // Nessun comando nuovo: si ripete l'ultimo (senza lo START breve). Un buco (comando perso) che
   // dura si salta.
-  if (p.top >= p.next && ++p.gap_t > 3) {
-    while (p.next <= p.top) {
+  if ((int32_t)(p.top - p.next) >= 0 && ++p.gap_t > 3) {
+    for (int k = 0; k <= IN_RING && (int32_t)(p.top - p.next) >= 0; ++k) {
       const int s = (int)(p.next % IN_RING);
       if (p.rec_ok[s] && p.rec_no[s] == p.next) break;
       p.next++;
@@ -620,15 +625,21 @@ void host_input(Rd& r, const sockaddr_in& from) {
     if (r.bad) return;
     const uint32_t no = first + (uint32_t)k;
     if (!p.any) {
+      if (no >= FIRST_MAX) return;                 // un messaggio sbagliato
       p.any = true;
       p.next = p.top = no;
     }
-    if (no < p.next) continue;                     // gia' usato
+    const int32_t ahead = (int32_t)(no - p.next);
+    if (ahead < 0 || ahead >= AHEAD_MAX) continue; // gia' usato, o un messaggio sbagliato
+    if (ahead >= IN_RING) {                        // molto avanti (chi ha creato la partita si era fermato): si va li'
+      p.skips += (uint32_t)(ahead - (IN_RING - 1));
+      p.next = no - (uint32_t)(IN_RING - 1);
+    }
     const int s = (int)(no % IN_RING);
     p.rec[s] = pad;
     p.rec_no[s] = no;
     p.rec_ok[s] = true;
-    if (no > p.top) p.top = no;
+    if ((int32_t)(no - p.top) > 0) p.top = no;
   }
 }
 

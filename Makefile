@@ -50,7 +50,7 @@ CHECK_ARM32 = @if command -v readelf >/dev/null 2>&1; then \
 all: native tools
 native: build/native/pupazzi_libretro.so
 tools: build/native/host build/native/test_raster build/native/test_aim build/native/test_save build/native/test_rules build/native/test_maps build/native/test_boss \
-       build/native/test_lang build/native/test_sys
+       build/native/test_lang build/native/test_sys build/native/test_netin
 console: arm32 arm64
 arm32: build/arm32/pupazzi_libretro.so
 arm64: build/arm64/pupazzi_libretro.so
@@ -119,6 +119,11 @@ build/native/test_save: tools/test_save.cpp src/save.cpp src/plat.cpp $(HDR)
 	@mkdir -p build/native
 	$(CXX) $(filter-out -fPIC -fvisibility=hidden,$(CXXFLAGS)) -Isrc -o $@ tools/test_save.cpp src/save.cpp src/plat.cpp
 
+# Prove dei comandi che arrivano a chi ha creato la partita in rete (0.5.4): src/net.cpp senza rete.
+build/native/test_netin: tools/test_netin.cpp src/net.cpp $(GAME_SRC) $(GEN) $(HDR)
+	@mkdir -p build/native
+	$(CXX) $(filter-out -fPIC -fvisibility=hidden,$(CXXFLAGS)) -Isrc -o $@ tools/test_netin.cpp $(GAME_SRC) $(GEN) -lm -lpthread
+
 # Prove di batteria e CPU (0.5.4) con una /sys e una /proc finte.
 build/native/test_sys: tools/test_sys.cpp src/sysinfo.cpp $(HDR)
 	@mkdir -p build/native
@@ -128,6 +133,7 @@ test: native tools
 	python3 tools/make_lang.py --controlla
 	./build/native/test_lang
 	./build/native/test_sys
+	./build/native/test_netin
 	./build/native/test_raster 300
 	./build/native/test_aim
 	./build/native/test_save

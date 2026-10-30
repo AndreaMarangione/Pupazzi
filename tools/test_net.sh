@@ -237,7 +237,8 @@ fi
 if want menu; then
   say "11) dai menu, con i tasti"
   D=$OUT/menu; P=PUPAZZI_RETE_PORTA=56510
-  start "$D/a" 700 $P -- --in "0:DOWN@30-31,0:DOWN@40-41,0:A@50-51,0:A@70-71,0:A@90-91,0:START@110-111,0:A@420-421"
+  # A per cominciare tenuta 6 fotogrammi: dopo non deve contare anche in COME SI GIOCA?
+  start "$D/a" 700 $P -- --in "0:DOWN@30-31,0:DOWN@40-41,0:A@50-51,0:A@70-71,0:A@90-91,0:START@110-111,0:A@420-425"
   sleep 0.3
   start "$D/b" 700 $P -- --in "0:DOWN@30-31,0:DOWN@40-41,0:A@50-51,0:DOWN@70-71,0:A@80-81,0:A@220-221"
   wait_all
@@ -246,6 +247,8 @@ if want menu; then
   has "$D/b" "mi unisco alla partita" "l'altra la trova e si unisce"
   has "$D/a" "si comincia con 2 console" "A fa cominciare"
   has "$D/b" "sono il giocatore 2" "l'altra console e' il giocatore 2"
+  has "$D/a" "f=600 .*| modalita'" "la A tenuta per cominciare non salta COME SI GIOCA?"
+  has "$D/b" "f=600 .*| modalita'" "... nemmeno sull'altra console"
   same "$D/a" "$D/b" 150
 fi
 

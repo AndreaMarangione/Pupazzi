@@ -389,10 +389,17 @@ void gate_slam(int gi) {
   const float half = 0.5f * (float)(gt.horiz ? gt.x1 - gt.x0 + 1 : gt.z1 - gt.z0 + 1);
   const int col = GATE_DUST[g.L.style >= 0 && g.L.style < NSTYLES ? g.L.style : 0];
   for (int k = 0; k < 14; ++k) {
+    // Una chiamata al generatore per istruzione: l'ordine resta lo stesso con ogni compilatore.
+    const float r0 = rng_f();
+    const float r1 = rng_f();
+    const float r2 = rng_f();
+    const float r3 = rng_f();
+    const float r4 = rng_f();
+    const int life = 32 + (int)(rng_next() % 14u);
     const float u = ((float)k - 6.5f) / 6.5f * half;
-    const Vec3 at = mid + eu * u + m * (0.35f + 0.25f * rng_f()) + v3(0.0f, 0.25f, 0.0f);
-    const Vec3 vel = m * (0.5f + 0.9f * rng_f()) + eu * (0.8f * (rng_f() - 0.5f)) + v3(0.0f, 0.35f + 0.35f * rng_f(), 0.0f);
-    puff(at, PK_PUFF, col, vel, 2.4f + 0.8f * rng_f(), 32 + (int)(rng_next() % 14u));
+    const Vec3 at = mid + eu * u + m * (0.35f + 0.25f * r0) + v3(0.0f, 0.25f, 0.0f);
+    const Vec3 vel = m * (0.5f + 0.9f * r1) + eu * (0.8f * (r2 - 0.5f)) + v3(0.0f, 0.35f + 0.35f * r3, 0.0f);
+    puff(at, PK_PUFF, col, vel, 2.4f + 0.8f * r4, life);
   }
   snd_at(SND_GATE_SHUT, mid);
   add_shake(0.1f);
@@ -1256,6 +1263,9 @@ static void net_reset_sim(void) {
     g.start_tap[i] = false;
   }
   memset(g.in, 0, sizeof(g.in));
+  // Tasti tenuti da prima (la A con cui chi ha creato la partita la fa cominciare) contano solo
+  // dopo essere stati lasciati: uguale su tutte le console.
+  for (int i = 0; i < MAX_PLAYERS; ++i) g.in[i].btn = 0xFFFFu;
   memset(g.offer, 0, sizeof(g.offer));
   memset(g.last_vis, 0, sizeof(g.last_vis));
   memset(g.spawn_left, 0, sizeof(g.spawn_left));
