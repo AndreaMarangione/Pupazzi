@@ -896,7 +896,44 @@ int main(int argc, char** argv) {
       const uint64_t h1 = game_state_hash();
       g.L.gates[gi].vel = 0.0f;
       check(h0 != h1 && game_state_hash() == h0, "l'impronta della partita comprende i cancelli");
+      // Revisione 0.5.4: entrati tutti, chi torna subito indietro non resta chiuso fuori (le ante
+      // partono piano: il passaggio si chiude appena cominciano a girare), anche con VELOCITA'.
+      int out = 0, tries2 = 0;
+      for (int delay = 0; delay <= 6; ++delay)
+        for (int sp = 0; sp < 2; ++sp) {
+          fresh(m, 1, "0");
+          clear_zone();
+          for (int k = 0; k < 120 && g.L.gates[gi].open < 1.0f; ++k) step();
+          quiet();
+          Player& p = g.pl[0];
+          p.pos = mid + mm * 2.0f;
+          if (sp) p.pw_t[PW_SPEED] = PW_FRAMES[PW_SPEED];
+          g_pads[0].lx = -mm.x;
+          g_pads[0].ly = -mm.z;
+          for (int k = 0; k < 200 && g.zone == 0; ++k) step();
+          step(delay);
+          g_pads[0].lx = mm.x;
+          g_pads[0].ly = mm.z;
+          for (int k = 0; k < 60; ++k) {
+            step();
+            quiet();
+          }
+          memset(g_pads, 0, sizeof(g_pads));
+          step(30);
+          out += level_zone_at(&g.L, p.pos.x, p.pos.z) != g.zone || g.zone != 1;
+          tries2++;
+        }
+      snprintf(buf, sizeof(buf), "%s: chi torna indietro appena entrato non resta chiuso fuori (%d casi su %d)", name, out, tries2);
+      check(out == 0, buf);
     }
+    // Chi si ritrova in una zona di prima a cancello chiuso torna alla sua partenza nella zona in corso.
+    fresh(0, 2, "01");
+    const bool in2 = enter_next();
+    g.pl[1].pos = g.L.zones[0].start[1];
+    step(2);
+    snprintf(buf, sizeof(buf), "a cancello chiuso, chi e' nella zona di prima torna nella zona in corso (zona %d, %s)",
+             level_zone_at(&g.L, g.pl[1].pos.x, g.pl[1].pos.z) + 1, g_lastmsg);
+    check(in2 && g.zone == 1 && level_zone_at(&g.L, g.pl[1].pos.x, g.pl[1].pos.z) == 1 && dist2d(g.pl[1].pos, g.L.zones[1].start[1]) < 1.0f, buf);
   }
 
   if (g_shots) {

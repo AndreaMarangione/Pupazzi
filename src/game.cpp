@@ -242,6 +242,21 @@ void update_spawning(void) {
   }
 }
 
+// Il giocatore i alla sua partenza nella zona in corso (uno sbuffo dove era e uno dove arriva).
+void to_zone_start(int i) {
+  Player& p = g.pl[i];
+  p.leap_n = p.leap_t = 0;
+  burst(p.pos + v3(0, 0.6f, 0), 8, i, 2.5f);
+  p.pos = g.L.zones[g.zone].start[i];
+  level_push_out(&g.L, &p.pos.x, &p.pos.z, 0.0f, PL_R, PL_STEP, BODY_WALK);
+  level_body_guard(&g.L, g.L.zones[g.zone].start[i].x, g.L.zones[g.zone].start[i].z, &p.pos.x, &p.pos.z, 0.0f, PL_R, PL_STEP, BODY_WALK);
+  p.pos.y = level_ground(&g.L, p.pos.x, p.pos.z, 0.0f, PL_STEP);
+  p.vy = 0.0f;
+  p.grounded = true;
+  p.tramp_t = 0;
+  burst(p.pos + v3(0, 0.6f, 0), 8, i, 2.5f);
+}
+
 // Chi e' rimasto indietro quando la zona comincia viene portato alla sua partenza nella zona.
 void regroup(void) {
   for (int i = 0; i < MAX_PLAYERS; ++i) {
@@ -249,16 +264,21 @@ void regroup(void) {
     if (!p.active || !p.alive) continue;
     if (p.leap_n == 0 && level_zone_at(&g.L, p.pos.x, p.pos.z) == g.zone) continue;
     if (p.leap_n > 0 && level_zone_at(&g.L, p.leap_b.x, p.leap_b.z) == g.zone) continue;   // atterra dentro
-    p.leap_n = p.leap_t = 0;
-    burst(p.pos + v3(0, 0.6f, 0), 8, i, 2.5f);
-    p.pos = g.L.zones[g.zone].start[i];
-    level_push_out(&g.L, &p.pos.x, &p.pos.z, 0.0f, PL_R, PL_STEP, BODY_WALK);
-    level_body_guard(&g.L, g.L.zones[g.zone].start[i].x, g.L.zones[g.zone].start[i].z, &p.pos.x, &p.pos.z, 0.0f, PL_R, PL_STEP, BODY_WALK);
-    p.pos.y = level_ground(&g.L, p.pos.x, p.pos.z, 0.0f, PL_STEP);
-    p.vy = 0.0f;
-    p.grounded = true;
-    p.tramp_t = 0;
-    burst(p.pos + v3(0, 0.6f, 0), 8, i, 2.5f);
+    to_zone_start(i);
+  }
+}
+
+// 0.5.4 (revisione): chi, a cancello chiuso, si ritrova in una zona di prima (tornato indietro proprio
+// mentre il cancello si chiudeva, spinto...) torna alla sua partenza nella zona in corso: da li' non
+// potrebbe piu' uscire, e da soli la zona non finirebbe mai.
+void strays_back(void) {
+  for (int i = 0; i < MAX_PLAYERS; ++i) {
+    const Player& p = g.pl[i];
+    if (!p.active || !p.alive || p.leap_n > 0 || p.tramp_t > 0) continue;
+    const int z = level_zone_at(&g.L, p.pos.x, p.pos.z);
+    if (z < 0 || z >= g.zone) continue;
+    plat_log("G%d nella zona %d a cancello chiuso: torna nella zona %d", i + 1, z + 1, g.zone + 1);
+    to_zone_start(i);
   }
 }
 
@@ -330,8 +350,8 @@ bool leaf_push(Player& p, const Leaf& lf) {
   } else {
     return false;                                        // dietro il cardine: dentro il pilastro
   }
-  level_push_out(&g.L, &nx, &nz, p.pos.y, PL_R, PL_STEP, BODY_WALK);
-  level_body_guard(&g.L, p.pos.x, p.pos.z, &nx, &nz, p.pos.y, PL_R, PL_STEP, BODY_WALK);
+  level_push_out(&g.L, &nx, &nz, p.pos.y, PL_R, PL_STEP, BODY_WALK | BODY_PIT);             // mai dentro un cenote
+  level_body_guard(&g.L, p.pos.x, p.pos.z, &nx, &nz, p.pos.y, PL_R, PL_STEP, BODY_WALK | BODY_PIT);
   const bool moved = nx != p.pos.x || nz != p.pos.z;
   p.pos.x = nx;
   p.pos.z = nz;
@@ -514,6 +534,7 @@ void play_update(const Pad pads[MAX_PLAYERS]) {
   explorer_update();
   update_gates();
 
+  if (g.phase == PH_FIGHT || g.phase == PH_CLEAR) strays_back();
   switch (g.phase) {
     case PH_FIGHT:
       update_spawning();
@@ -963,9 +984,11 @@ static void settings_save(void) {
 void game_update(const Pad pads[MAX_PLAYERS]) {
   g.ui_tick++;
   g.screen_t++;
-  // Tempo di gioco della partita attiva (fuori dalla prima schermata e dalle sue pagine).
+  // Tempo di gioco della partita attiva (fuori dalla prima schermata e dalle sue pagine: salvataggi,
+  // lingua, nome, gioco in rete).
   static int s_frames;
-  if (save_slot() >= 0 && g.screen != SC_TITLE && g.screen != SC_SLOTS && g.screen != SC_LANG && ++s_frames >= 60) {
+  if (save_slot() >= 0 && g.screen != SC_TITLE && g.screen != SC_SLOTS && g.screen != SC_LANG && g.screen != SC_NAME &&
+      g.screen != SC_NET && g.screen != SC_LOBBY && ++s_frames >= 60) {
     s_frames = 0;
     save_data()->seconds++;
   }

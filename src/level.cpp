@@ -995,9 +995,12 @@ int level_zone_at(const Level* L, float x, float z) {
   return level_cell(L, x, z, &cx, &cz) ? L->zone[cz][cx] : -1;
 }
 
+// Il passaggio si apre quando i battenti sono quasi aperti del tutto e si chiude appena cominciano a
+// chiudersi (0.5.4: si chiudono partendo piano, e nei primi fotogrammi chi tornava indietro poteva
+// restare dall'altra parte).
 static inline bool gate_closed(const Level* L, int cx, int cz) {
   const int gi = L->gate_at[cz][cx];
-  return gi < 0 || L->gates[gi].open < 0.95f;
+  return gi < 0 || L->gates[gi].open < 0.95f || L->gates[gi].vel < 0.0f;
 }
 static inline bool crate_whole(const Level* L, int cx, int cz) {
   const int d = L->dyn_at[cz][cx];
