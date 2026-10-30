@@ -11,8 +11,8 @@
 #   TEMPO=60 sh tools/test_net.sh   fotogrammi al secondo di ogni copia (120: il doppio del vero)
 set -u
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
-HOST=$ROOT/build/native/host
-CORE=$ROOT/build/native/pupazzi_libretro.so
+HOST=${HOST:-$ROOT/build/native/host}                   # altri binari (sanitizer): HOST=... CORE=...
+CORE=${CORE:-$ROOT/build/native/pupazzi_libretro.so}
 OUT=${OUT:-$ROOT/build/rete}
 TEMPO=${TEMPO:-120}
 ONLY=${1:-}

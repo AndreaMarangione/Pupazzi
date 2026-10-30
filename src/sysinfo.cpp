@@ -69,10 +69,19 @@ bool parse_cpu_line(const char* s, Ticks* t) {
 // a - b, ma 0 se b e' piu' grande (iowait sui kernel SMP a volte torna indietro).
 unsigned long long sub0(unsigned long long a, unsigned long long b) { return a > b ? a - b : 0ull; }
 
+// Le differenze tra due letture (circa un secondo) sono piccole: si divide a 32 bit. A 64 bit, su ARM a
+// 32 bit la divisione chiama una routine del compilatore che con zig si porta dietro una memset lenta
+// al posto di quella di glibc (la regola arm32 del Makefile lo controlla).
 int pct(unsigned long long part, unsigned long long whole) {
   if (whole == 0) return 0;
-  const unsigned long long p = (part * 100ull + whole / 2ull) / whole;
-  return p > 100ull ? 100 : (int)p;
+  if (part >= whole) return 100;
+  while (whole >= (1ull << 24)) {
+    whole >>= 1;
+    part >>= 1;
+  }
+  const unsigned w = (unsigned)whole, p = (unsigned)part;
+  const unsigned r = (p * 100u + w / 2u) / w;
+  return r > 100u ? 100 : (int)r;
 }
 
 }  // namespace
