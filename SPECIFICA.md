@@ -498,9 +498,12 @@ triangoli a 60 fps fissi; con la visuale larga della 0.3.2 se ne inquadrano circ
   - Si aprono verso la zona appena liberata (verso chi aspetta), non verso la zona dopo come nella
     proposta: così chiudendosi girano nella zona ormai vuota e non spingono chi è appena entrato
     (le partenze della zona sono subito oltre il cancello). Mentre girano spingono via chi hanno
-    davanti, senza farlo entrare negli ostacoli; ferme e aperte non fermano nessuno (i giocatori
-    automatici non si incastrano negli angoli tra anta e muro). Nelle mappe personalizzate un'anta
-    che sbatterebbe contro un ostacolo davanti al cancello si ferma prima.
+    davanti, senza farlo entrare negli ostacoli né nei cenote; ferme e aperte non fermano nessuno (i
+    giocatori automatici non si incastrano negli angoli tra anta e muro). Nelle mappe personalizzate
+    un'anta che sbatterebbe contro un ostacolo davanti al cancello si ferma prima.
+  - [fatto 0.5.4, dopo la revisione] Il passaggio si chiude appena le ante cominciano a girare (chi
+    tornava indietro subito dopo essere entrato poteva restare chiuso fuori); chi si trovasse in una
+    zona di prima a cancello chiuso viene riportato nella zona in corso.
 - [deciso 18/10] **La mappa disegnata è tutta visitabile e giocabile**: niente parti irraggiungibili
   dentro la mappa (nella 0.5, alle Piramidi, saltando nel Nilo si camminava nella parte non usata e
   si passava nelle altre zone); l'acqua non si attraversa nemmeno saltando; il paesaggio attorno
