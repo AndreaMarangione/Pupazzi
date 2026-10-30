@@ -346,8 +346,9 @@ def test_main(args):
     print("--- comandi dalla rete durante la partita (a, b, c)")
     frames = 540
     base = free_base()
-    # Pad del frontend: G1 sceglie la carta; G2 tiene la levetta a sinistra e R mentre arriva altro dalla rete.
-    local = "0:A@5-7,1:lx=-0.5@400-470,1:R@400-470"
+    # Pad del frontend: G1 sceglie la carta (0.5.4: A dopo il banner apre le carte, A sceglie); G2 tiene la
+    # levetta a sinistra e R mentre arriva altro dalla rete.
+    local = "0:A@20-22,0:A@30-32,1:lx=-0.5@400-470,1:R@400-470"
     h = Host(args, frames, local, {"PUPAZZI_REMOTO_PORTA": str(base)})
     try:
         sa, sb, sc = (socket.socket(socket.AF_INET, socket.SOCK_DGRAM) for _ in range(3))
@@ -362,9 +363,11 @@ def test_main(args):
             sent2[0] += n
             return n
 
-        # c) G2 sceglie la carta con A dalla rete
-        marks["A"] = h.window(8, lambda: send2(pad2, BTN["A"]))
-        marks["A0"] = h.window(12, lambda: send2(pad2, 0))
+        # c) G2 sceglie la carta con A dalla rete: la prima apre le sue carte (passato il banner), la seconda sceglie
+        marks["A"] = h.window(24, lambda: send2(pad2, BTN["A"]))
+        marks["A0"] = h.window(28, lambda: send2(pad2, 0))
+        marks["A2"] = h.window(34, lambda: send2(pad2, BTN["A"]))
+        marks["A20"] = h.window(38, lambda: send2(pad2, 0))
         # b) tremolio continuo su tutte e quattro le levette, mandato mentre il gioco gira
         h.wait_frame(45)
         jit0, jit_frames0 = sent2[0], h.frame
@@ -424,7 +427,9 @@ def test_main(args):
     check(any(re.match(r"^G2 \(.*\) prende la carta", line) for line in h.lines), "c) G2 sceglie la carta con A dalla rete")
     applied(h, 2, marks["A"], "c) A premuto", n=1, btn=BTN["A"])
     applied(h, 2, marks["A0"], "c) A lasciato", n=1, btn=0)
-    rows = [r for r in h.net() if r[1] == 2 and marks["A0"] + 2 < r[0] <= marks["tieni"]]
+    applied(h, 2, marks["A2"], "c) A di nuovo (sceglie)", n=1, btn=BTN["A"])
+    applied(h, 2, marks["A20"], "c) A lasciato di nuovo", n=1, btn=0)
+    rows = [r for r in h.net() if r[1] == 2 and marks["A20"] + 2 < r[0] <= marks["tieni"]]
     per_frame = [r[2] for r in rows]
     print("        tremolio: %d messaggi in %d fotogrammi (al massimo %d in uno)" % (jitter_msgs, jitter_frames, max(per_frame or [0])))
     check(sum(per_frame) == jitter_msgs, "b) tremolio: tutti i %d messaggi letti man mano (letti %d)" % (jitter_msgs, sum(per_frame)))
@@ -457,7 +462,7 @@ def test_main(args):
 def test_stall(args):
     print("--- gioco fermo piu' di mezzo secondo (menu di RetroArch)")
     frames = 300
-    local = "0:A@5-7,1:A@5-7"
+    local = "0:A@20-22,1:A@20-22,0:A@30-32,1:A@30-32"
     for attempt in range(3):
         base = free_base()
         h = Host(args, frames, local, {"PUPAZZI_REMOTO_PORTA": str(base)})
@@ -491,7 +496,7 @@ def test_stall(args):
 def test_quiet(args):
     print("--- senza messaggi dalla rete (d)")
     frames = 600
-    script = ("0:A@5-7,1:A@5-7,0:lx=1@40-160,0:ly=-0.5@90-200,1:ly=-1@50-200,1:lx=0.5@120-260,0:R@60-90,"
+    script = ("0:A@20-22,1:A@20-22,0:A@30-32,1:A@30-32,0:lx=1@40-160,0:ly=-0.5@90-200,1:ly=-1@50-200,1:lx=0.5@120-260,0:R@60-90,"
               "1:R2@100-104,0:rx=0.5@120-300,0:ry=-0.25@150-240,1:rx=-1@200-330,1:L@220-226,0:L2@250-252,1:X@300-302")
     base = free_base()
     a = run_plain(args, frames, script, {"PUPAZZI_REMOTO_PORTA": str(base)})
