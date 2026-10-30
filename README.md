@@ -1,4 +1,4 @@
-# Pupazzi — 0.5.3
+# Pupazzi — 0.5.4
 
 Gioco cooperativo da 1 a 4 giocatori per l'Anbernic RG35XX Pro (Stock OS MOD), ispirato a
 Brawl Stars: il giro del **sistema solare**, pianeta dopo pianeta, attraversando mappe fatte di
@@ -36,6 +36,14 @@ SALVATAGGIO, GESTISCI SALVATAGGI per duplicarli ed eliminarli, LINGUA, ESCI), **
 (italiano, inglese, spagnolo, portoghese, cinese, giapponese, hindi) e la **visuale più vicina
 sullo schermo della console**: da 15 a 30 m, e da 22 a 30 m quando l'HDMI è collegato (lo capisce da
 solo, anche se lo si attacca o stacca a partita iniziata).
+
+La 0.5.4 porta il **gioco in rete**: fino a 4 console nella stessa Wi-Fi, ognuna con il suo schermo
+e la telecamera sul suo eroe (vedi **Gioco in rete**). Poi i **bonus** nelle casse e nelle anfore
+che si rompono (VELOCITÀ, FURIA, INVINCIBILE, CARICA), i **cancelli a battente** che si aprono verso
+chi aspetta e si richiudono sbattendo, il **nome** delle partite scritto con la tastiera a schermo
+(anche dopo, con RINOMINA), il banner **RITIRA LE TUE CARTE** prima della scelta, l'antialias fino a
+**8 campioni**, la **batteria** in alto a destra e il carico della **CPU** nel riquadro di SELECT.
+La storia all'inizio non c'è più.
 
 ## Installazione
 
@@ -77,10 +85,12 @@ per il suo controller: **extra morbida** (la più calma: filtra di più e serve 
 **morbida** (quella di partenza), **media**, **rapida** (segue la levetta quasi subito). Resta
 salvata, per ogni controller (giocatore 1, 2, 3, 4).
 
-**Antialias**: con la GPU i bordi vengono lisciati (4 campioni per pixel). Dalla pausa, voce
-**ANTIALIAS**, si spegne e si riaccende per tutti, e resta salvato; il riquadro delle prestazioni
-(SELECT) scrive "GPU+AA" quando è acceso. Se la GPU non lo permette la voce dice ASSENTE e si
-gioca senza. Se il gioco si chiudesse da solo nei primi secondi con l'antialias, alla partenza
+**Antialias**: con la GPU i bordi vengono lisciati. Dalla pausa, voce **ANTIALIAS**: **8X** (8
+campioni per pixel, quello di partenza), **4X** o **NO**, per tutti, e resta salvato; il riquadro
+delle prestazioni (SELECT) scrive "GPU+8X" o "GPU+4X". Se con 8 campioni la partita non sta nei 60
+fotogrammi al secondo (meno di 55 per un secondo e mezzo) si passa da soli a 4 per il resto della
+sessione (riga "antialias:" nel registro); dalla pausa si può rimettere 8X. Se la GPU non lo
+permette la voce dice ASSENTE e si gioca senza. Se il gioco si chiudesse da solo nei primi secondi con l'antialias, alla partenza
 dopo riparte senza e lo salva spento (file `out/aa_in_prova.txt` e riga "antialias spento
 all'avvio" nel registro); dalla pausa si riaccende.
 
@@ -90,18 +100,21 @@ Tenere premuto START due secondi apre il menu di RetroArch come negli altri gioc
 
 Prima schermata (gli eroi a sinistra, le voci a destra):
 
-- **NUOVA PARTITA**: una partita nuova nel primo dei quattro posti liberi; se sono tutti pieni si
-  sceglie quale sovrascrivere (con conferma).
-- **CARICA SALVATAGGIO**: i quattro posti, ognuno con il pianeta più lontano raggiunto e il suo
-  giro, le stelle, le mappe aperte e il tempo di gioco; A carica e si va avanti.
+- **NUOVA PARTITA**: una partita nuova nel primo dei quattro posti liberi (se sono tutti pieni si
+  sceglie quale sovrascrivere, con conferma); prima si scrive il **nome** con la tastiera a schermo
+  (A scrive la lettera, B cancella, START o OK conferma; fino a 12 caratteri; senza nome resta
+  "PARTITA N").
+- **CARICA SALVATAGGIO**: i quattro posti, ognuno con il nome, il pianeta più lontano raggiunto e
+  il suo giro, le stelle, le mappe aperte e il tempo di gioco; A carica e si va avanti.
+- **GIOCO IN RETE**: crea una partita o unisciti a quella di un'altra console (vedi **Gioco in
+  rete**).
 - **GESTISCI SALVATAGGI**: gli stessi posti; A su una partita apre **DUPLICA** (una copia nel primo
-  posto libero) ed **ELIMINA** (con conferma: A sì, B no).
+  posto libero), **RINOMINA** (la tastiera) ed **ELIMINA** (con conferma: A sì, B no).
 - **LINGUA**: italiano, inglese, spagnolo, portoghese (del Portogallo), cinese semplificato,
   giapponese, hindi; vale subito e resta salvata.
 - **ESCI**: torna al menu della console.
 
-Poi **Insieme** (Contro arriva con la 0.6) → la prima volta la **storia** (A mostra tutte le
-righe, poi A va avanti) → mappa → ogni giocatore sceglie il suo eroe col suo pad (A per entrare,
+Poi **Insieme** (Contro arriva con la 0.6) → mappa → ogni giocatore sceglie il suo eroe col suo pad (A per entrare,
 ← → per scegliere, A per "pronto") → partita → fine mappa con le statistiche (mostri sconfitti,
 danni, cadute e il migliore) e le stelle → si sceglie di nuovo e si passa alla mappa successiva.
 Dopo il Colosseo si torna alla prima mappa della Terra (vedi **Giri**).
@@ -136,8 +149,9 @@ volumi, lasciare la partita o tornare al menu delle mappe.
     lascia la partita e rientra nella stessa mappa ritrova le vite che aveva (e le sue
     statistiche); chi entra nuovo ne ha 3.
   - Se il boss va giù nello stesso momento in cui cade l'ultimo giocatore, la mappa è vinta.
-- **Carte**: all'inizio della mappa e dopo la prima e la seconda zona il gioco si ferma e ognuno,
-  sul suo riquadro, sceglie 1 carta su 3 (su/giù e A, oppure START breve). La carta vale fino alla
+- **Carte**: all'inizio della mappa e dopo la prima e la seconda zona il gioco si ferma, compare il
+  banner **RITIRA LE TUE CARTE** e ognuno, con A sul suo riquadro, vede le sue 3 carte e ne sceglie
+  una (su/giù e A, oppure START breve). La carta vale fino alla
   fine della mappa, anche se una zona si rifà; in fondo al riquadro le carte già prese. Elenco
   più sotto.
 - **Stelle**: ogni mappa ne dà 3: mappa finita; **esploratore** salvato; mappa finita senza
@@ -151,6 +165,13 @@ volumi, lasciare la partita o tornare al menu delle mappe.
   stelle del pianeta ripartono da zero (le mappe restano aperte). Con meno di 10 stelle il giro
   resta quello: si rifanno le mappe per le stelle che mancano.
 - **Ondate**: i mostri escono dal terreno, mai troppo vicino ai giocatori; più giocatori, più mostri.
+- **Bonus** (dalla 0.5.4): in ogni cassa o anfora che si rompe (quelle senza il segno verde del
+  talismano) c'è una moneta che si prende passandoci sopra: **VELOCITÀ** (+40% per 10 secondi),
+  **FURIA** (danni doppi per 10 secondi), **INVINCIBILE** (nessun danno per 6 secondi), **CARICA**
+  (speciale subito pronto; chi ce l'ha già pronto la lascia ai compagni). Quale bonus esce si
+  decide quando la cassa si rompe. Sotto i cuori della tessera compare il bonus in corso, che
+  lampeggia quando sta per finire; attorno all'eroe un alone del suo colore. In pausa e nelle carte
+  il tempo si ferma; chi cade lo perde; rifacendo la zona le casse tornano intere con il bonus.
 - **Vita**: non si ricarica da sola; un po' torna con ogni mostro sconfitto, tanta con i
   **talismani** verdi (si prendono solo se non si ha la vita piena). Qualcuno sta sopra le
   piattaforme o dentro le anfore con il segno verde.
@@ -239,13 +260,19 @@ intera, e i giocatori non si possono allontanare più di quanto si vede. L'HDMI 
 secondo (`/sys/class/extcon/hdmi/state`): attaccarlo o staccarlo in partita cambia solo la visuale
 minima; il registro lo dice (righe "HDMI:" e "schermo:").
 
-In alto a sinistra una tessera per ogni giocatore: la faccia del suo eroe nel suo colore e i
-cuori delle vite. Chi è a terra ha la faccia spenta e una barra rossa che si svuota fino al
+In alto a sinistra una tessera per ogni giocatore: la faccia del suo eroe nel suo colore, i cuori
+delle vite e, sotto, i bonus in corso. In alto a destra, anche nei menu, la **batteria** della console con la
+percentuale (il fulmine quando è in carica; rossa e lampeggiante sotto il 15%), letta dal sistema
+ogni due secondi. Chi è a terra ha la faccia spenta e una barra rossa che si svuota fino al
 rientro; chi ha finito le vite ha la faccia grigia con una X. Accanto: pianeta e mappa, giro, zona
 e mostri che mancano; nel Colosseo la vita del boss. Sopra ogni eroe: numero del giocatore, vita,
 barra del colpo, barra dello speciale, bombe; sopra i mostri colpiti la loro vita. I numeri
 bianchi sono i danni del colpo normale, quelli gialli i danni di speciali e bombe, i rossi i
 danni presi, i verdi la vita recuperata.
+
+**SELECT** (pressione breve, giocatore 1) mostra in basso a sinistra fotogrammi al secondo, tempi e
+triangoli, e sopra il carico della CPU (tutta, ogni core e quanto ne usa il gioco); in una partita
+in rete anche il tempo di andata e ritorno e, su chi si è unito, la scorta di fotogrammi.
 
 ## Sonoro
 
@@ -269,12 +296,12 @@ nella riga "salvataggio:" del registro. Dalla 0.5.3 i file sono due tipi:
 
 - `pupazzi.sav`: le impostazioni di questa console (mira di ogni controller, antialias, volumi,
   lingua);
-- `partita1.sav` ... `partita4.sav`: le quattro partite (mappe aperte e giro di ogni pianeta,
-  stelle di ogni mappa nel giro in corso, storia già vista, tempo di gioco). Un posto libero è un
-  file che non c'è.
+- `partita1.sav` ... `partita4.sav`: le quattro partite (nome, mappe aperte e giro di ogni
+  pianeta, stelle di ogni mappa nel giro in corso, tempo di gioco). Un posto libero è un file che
+  non c'è.
 
-Si scrive a fine mappa, dopo la storia, quando si chiude la pausa dopo aver cambiato qualcosa,
-quando si cambia lingua e all'uscita, sempre in modo sicuro (prima un file a parte, poi lo scambio:
+Si scrive a fine mappa, quando si chiude la pausa dopo aver cambiato qualcosa, quando si cambia
+lingua o nome e all'uscita, sempre in modo sicuro (prima un file a parte, poi lo scambio:
 se la console si spegne a metà resta quello di prima). I file sono di testo e spiegano da soli cosa
 contengono; un file in cui non c'è niente di valido, o che la scheda non riesce a leggere, si vede
 come ILLEGGIBILE: caricandolo si riparte da zero e il file vecchio resta da parte come
@@ -285,8 +312,8 @@ La prima volta la partita della 0.5.2 (o della 0.4) diventa la **partita 1**, co
 in `pupazzi.sav` i dati vecchi restano (una 0.5.2 rimessa sulla console li ritrova) e la riga
 `salvataggi=1` dice che sono già stati presi: se poi si eliminano tutte le partite non tornano.
 Se la partita 1 non si riesce a scrivere resta `salvataggi=0` e si riprova all'avvio dopo.
-Con un salvataggio della 0.4 restano mira, antialias e volumi; la storia nuova si vede la prima
-volta e la Terra riparte dalla prima mappa.
+Con un salvataggio della 0.4 restano mira, antialias e volumi e la Terra riparte dalla prima
+mappa. Nel gioco in rete scrive solo la console che ha creato la partita (vedi **Gioco in rete**).
 
 ## Lingue
 
@@ -316,6 +343,39 @@ Dalla 0.5.1 il gioco controlla anche che la mappa sia chiusa e tutta giocabile: 
 zone che si toccano solo ai cancelli, ogni casella raggiungibile a piedi, cenote lontani da
 partenze e cancelli (le regole sono in `LEGGIMI.txt`). Una copia di `terra2.txt` o `terra3.txt`
 fatta con la 0.5 è un'altra mappa (dalla 0.5.1 la 2 è la Muraglia e la 3 Chichén Itzá): va tolta.
+
+## Gioco in rete
+
+Dalla 0.5.4 fino a 4 console giocano la stessa partita, ognuna con il suo schermo e la telecamera
+sul suo eroe, nella **stessa rete Wi-Fi** (il router non deve isolare i dispositivi tra loro).
+
+- Su una console: **GIOCO IN RETE → CREA UNA PARTITA**, poi il salvataggio con cui giocarla (uno
+  vuoto: NUOVA PARTITA, con il nome). Si apre la **sala d'attesa** con i quattro posti.
+- Sulle altre: **GIOCO IN RETE → UNISCITI A UNA PARTITA**: compaiono le partite trovate (nome,
+  pianeta e giro, console già dentro); A su quella giusta. Ognuna prende il primo posto libero e
+  il suo colore.
+- Chi ha creato la partita la fa cominciare con A (B la annulla). Da lì è come sullo stesso
+  schermo: Come si gioca?, la mappa, gli eroi (ognuno col suo pad), le carte, la pausa (la apre e
+  la chiude chiunque, per tutti). Un giocatore per console; il riquadro bianco attorno alla tessera
+  è il proprio eroe, e ai bordi dello schermo le frecce dicono dove sono i compagni.
+- I **progressi** (mappe, stelle, giri) si salvano solo sulla console che ha creato la partita, sul
+  salvataggio scelto; le altre giocano con quelli e tengono i loro salvataggi com'erano. Le
+  impostazioni della pausa (mira, antialias, volumi) restano di ogni console.
+- Se una console esce o si spegne, il suo eroe lascia la partita e gli altri continuano ("GIOCATORE
+  N È USCITO"); se esce quella che l'ha creata, le altre tornano al titolo. Chi ha creato la
+  partita, se resta solo, continua da solo. In COME SI GIOCA? B chiede se finire la partita in rete
+  per tutti.
+- Serve la stessa versione del gioco e le stesse mappe (anche quelle personalizzate): altrimenti la
+  partita compare ma non si entra, e la pagina dice perché. In una partita già cominciata non si
+  entra; l'indirizzo non si scrive a mano (le partite si trovano da sole). Sotto il pannello
+  l'indirizzo di questa console nella rete.
+
+Come funziona: chi ha creato la partita raccoglie a ogni fotogramma i comandi di tutti e li manda
+alle altre console, che fanno la stessa partita bit per bit (porte UDP da 55410 a 55419). Le altre
+tengono qualche fotogramma di scorta per assorbire gli scatti della Wi-Fi: i loro comandi arrivano
+al gioco con il tempo di andata e ritorno più la scorta (in casa 40-60 ms). Se una console resta
+indietro compare "rete lenta"; il simbolo della Wi-Fi sulla tessera di un compagno vuol dire che la
+sua console non risponde da un po'.
 
 ## Altre console come controller
 
@@ -361,7 +421,10 @@ si aprono; ogni 10 secondi, nella riga "stato", quanto costa il sonoro ("audio":
 fotogramma, voci che suonano e suoni scartati perché ce n'erano troppi insieme). Dalla 0.5: le vite
 perse e quelle rimaste (anche nella riga "stato"), le zone rifatte, le mappe ricominciate da capo
 e perché, il giro che si apre, e i comandi arrivati dalle altre console. Dalla 0.5.1: chi cade
-nel cenote ("giocatore N caduto nel cenote") e le mosse del gladiatore.
+nel cenote ("giocatore N caduto nel cenote") e le mosse del gladiatore. Dalla 0.5.4: il gioco in
+rete (righe "rete:": partite trovate, chi entra ed esce, ogni 150 fotogrammi andata e ritorno,
+comandi ripetuti o saltati, scorta e volte rimasti senza fotogrammi), i bonus presi e il passaggio
+dell'antialias da 8 a 4 campioni.
 
 ## Sul PC
 
@@ -375,6 +438,7 @@ nel cenote ("giocatore N caduto nel cenote") e le mosse del gladiatore.
                     # gladiatore: test_boss)
     make test-gl    # prove del renderer GPU su un OpenGL ES software (Mesa)
     make test-audio # prove del sonoro; scrive ogni suono e ogni musica in build/wav/ per ascoltarli
+    make test-net   # gioco in rete: più copie del gioco su questo PC (perdite, ritardi, uscite, rifiuti)
     python3 tools/test_remote.py   # comandi dalle altre console (Remote RetroPad) con il frontend di prova
 
 Il frontend di prova registra anche il sonoro di una partita: `build/native/host
@@ -402,7 +466,7 @@ vuole Pillow con raqm, `pip install uharfbuzz freetype-py` e i caratteri Noto Sa
 | `src/monsters.cpp` | mostri della Terra e Gladiatore gigante |
 | `src/cards.cpp` | carte: proposte, scelta, effetti (scudo, vita extra, bruciature, vapore) |
 | `src/flow.cpp` | percorsi dei mostri attorno agli ostacoli |
-| `src/menu.cpp` | menu, storia, stelle e giri, pausa, finestre per entrare a partita iniziata |
+| `src/menu.cpp` | menu (con la tastiera per il nome e le pagine del gioco in rete), stelle e giri, pausa, finestre per entrare a partita iniziata |
 | `src/game_draw.cpp` | animazioni, oggetti da disegnare, HUD con le tessere dei giocatori |
 | `src/audio.cpp` | sonoro: sintetizzatore, effetti, musiche, mixer con limitatore |
 | `src/save.cpp` | salvataggi: impostazioni in `pupazzi.sav`, quattro partite; lettura tollerante, scrittura atomica |
@@ -415,6 +479,8 @@ vuole Pillow con raqm, `pip install uharfbuzz freetype-py` e i caratteri Noto Sa
 | `src/models.cpp`, `mesh.cpp` | modelli in stile cartone con il contorno scuro |
 | `src/bot.cpp` | giocatori automatici, solo per le prove |
 | `src/core.cpp` | interfaccia libretro, comandi dalle altre console, pausa, uscita, riquadro delle prestazioni, registro |
+| `src/net.cpp` | gioco in rete: ricerca delle partite, sala d'attesa, comandi di tutti a ogni fotogramma, controllo dell'impronta |
+| `src/sysinfo.cpp` | batteria e carico della CPU letti da `/sys` e `/proc` |
 | `src/glr.cpp`, `swr.cpp` | renderer OpenGL ES 2 con antialias (console) e software (riserva e prove) |
 | `tools/host.cpp` | frontend libretro minimo per le prove |
 | `tools/test_aim.cpp` | prove della mira (direzione, soglia, tremolio, scatti, rilascio, ventagli, pausa) e delle carte |
@@ -424,6 +490,8 @@ vuole Pillow con raqm, `pip install uharfbuzz freetype-py` e i caratteri Noto Sa
 | `tools/test_save.cpp` | prove dei salvataggi: file rotti, troncati, enormi, chiavi sconosciute, salvataggi della 0.4 e della 0.5.2, partite nuove, copiate, eliminate |
 | `tools/test_lang.cpp` | prove delle lingue: ogni testo in ogni lingua si disegna, a capo e puntini (anche cinese, giapponese, hindi) |
 | `tools/test_audio.cpp` | prove del sonoro: livelli, picchi, voci, tempi, equilibrio musica/effetti; scrive i WAV |
+| `tools/test_net.sh` | prove del gioco in rete con più copie del gioco (stessa partita bit per bit, perdite e ritardi, uscite, rifiuti, dai menu) |
+| `tools/test_sys.cpp` | prove di batteria e carico della CPU con una `/sys` e una `/proc` finte |
 | `tools/remote_send.py`, `test_remote.py` | finto Remote RetroPad e prove dei comandi dalla rete |
 | `console/`, `deploy.sh` | voce di menu, script di avvio, icona; installazione dal PC |
 
@@ -439,7 +507,11 @@ per forzare un modo; `prova` percorso della Mali con un solo campione, per le pr
 (`0`: non apre le porte delle altre console), `PUPAZZI_REMOTO_PORTA` (prima porta, al posto di 55400),
 `PUPAZZI_UI_SEMPLICE=1` (con la GPU, l'interfaccia di riserva senza lo shader nuovo),
 `PUPAZZI_LINGUA` (`it`, `en`, `es`, `pt`, `zh`, `ja`, `hi`: la lingua al posto di quella salvata),
-`PUPAZZI_HDMI` (`1` o `0`: come con l'HDMI collegato o staccato, al posto di guardarlo).
+`PUPAZZI_HDMI` (`1` o `0`: come con l'HDMI collegato o staccato, al posto di guardarlo),
+`PUPAZZI_AA_ADATTA=0` (niente passaggio da solo da 8 a 4 campioni), `PUPAZZI_BATTERIA` (per esempio
+`40` o `80c` in carica, al posto di leggerla), e per il gioco in rete `PUPAZZI_RETE` (`crea[:N]` o
+`unisciti`), `PUPAZZI_RETE_DOPO`, `PUPAZZI_RETE_PORTA`, `PUPAZZI_RETE_PERDITA`, `PUPAZZI_RETE_RITARDO`,
+`PUPAZZI_RETE_ATTESA`, `PUPAZZI_RETE_VERSIONE` (spiegate in `src/net.h`).
 
 ## Stato delle verifiche
 
@@ -549,5 +621,17 @@ dalle altre console sul Wi-Fi vero.
   forme calcolate pixel per pixel dalla distanza dal bordo, con la stessa matematica nel renderer
   software (a strisce, in parallelo) e nello shader della GPU (un solo disegno per fotogramma, con
   l'interno pieno dei pannelli grandi senza calcoli). `make test-gl` confronta le due.
+- Gioco in rete (dalla 0.5.4, `src/net.cpp`): UDP senza connessione, porte 55410-55419 (chi crea
+  prende la prima libera; chi cerca chiede a tutta la rete, agli indirizzi di broadcast di ogni
+  scheda e a 127.0.0.1). Chi ha creato la partita non aspetta mai: a ogni suo fotogramma mette
+  insieme i suoi comandi e il prossimo di ogni altra console (se manca ripete l'ultimo; se ne ha
+  accumulati unisce i tasti premuti) e li manda a tutte, ripetendo quelli non ancora confermati (un
+  messaggio perso non perde comandi). Le altre fanno un fotogramma quando lo ricevono, con da 1 a 8
+  fotogrammi di scorta (cresce quando restano senza, cala dopo 6 secondi tranquilli) e fino a 4
+  fotogrammi per giro per recuperare. Levette in interi a 16 bit, uguali su ogni console; ogni 30
+  fotogrammi l'impronta della partita (`game_state_hash`) si confronta e chi non torna esce. Versione
+  e impronta delle mappe si controllano entrando. Le prove (`make test-net`) fanno girare più copie
+  del gioco sul PC, anche con messaggi persi e in ritardo; tra x86 e ARM (32 e 64 bit, in emulazione)
+  la stessa partita è uguale fotogramma per fotogramma.
 - `libretro.h` viene da libretro-common (licenza MIT); licenze dei caratteri in
   `third_party/fonts/LEGGIMI.txt`.
