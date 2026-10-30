@@ -588,15 +588,36 @@ Fatto senza console, anche sui file veri del firmware (immagine della MOD 4.0.3)
   della 0.5.2); RetroArch a 64 bit della console con il driver `gl`; voce di menu nel RetroArch a 32
   bit in emulazione, anche con i salvataggi della 0.4 e della 0.5.2; revisione indipendente: nessun
   difetto bloccante, 2 medi e 5 piccoli corretti.
+- 0.5.4: gioco in rete con 2, 3 e 4 copie del gioco che si parlano davvero con messaggi UDP (12
+  prove: pause, un messaggio su cinque perso e gli altri in ritardo, una console che esce o si
+  spegne di colpo, chi ha creato la partita che esce, versione diversa, fine della partita dal
+  menu, quattro console, progressi e stelle di chi crea la partita, ingresso dai menu con i tasti,
+  prima una partita da soli): la stessa partita fotogramma per fotogramma su tutte, anche tra il core
+  del PC e quelli ARM a 32 e 64 bit della console in emulazione; messaggi costruiti apposta (numeri
+  dei comandi assurdi, all'indietro, troppo avanti, oltre il giro dei 32 bit) scartati senza fermare
+  nessuno; cancelli a battente (verso giusto anche con un ostacolo davanti nelle mappe
+  personalizzate, aperti in 45–52 fotogrammi e chiusi in 38–44 con un solo tonfo, mai nessuno dentro
+  le ante in 24 prove per mappa, chi torna indietro non resta chiuso fuori); bonus, nome delle
+  partite con la tastiera, banner delle carte, batteria e CPU con file finti al posto di quelli della
+  console; antialias: 4 campioni veri su Mesa, il percorso degli 8 (anche rifiutati dalla GPU) con un
+  campione, passaggio da solo a 4 sotto i 55 fotogrammi al secondo; stessa partita su gcc, clang, PC,
+  ARM32 e ARM64; campagna con 1, 2 e 4 giocatori automatici; AddressSanitizer e UBSan puliti anche
+  con il gioco in rete (perdite, scollegamenti, rifiuti, dai menu), ThreadSanitizer pulito;
+  RetroArch a 64 bit della console con il driver `gl`; voce di menu nel RetroArch a 32 bit in
+  emulazione, con i salvataggi della 0.4, della 0.5.2 e della 0.5.3; revisione indipendente: 6
+  difetti, tutti corretti (uno grave: chi tornava indietro appena passato il cancello poteva restare
+  chiuso fuori; uno medio: un messaggio costruito apposta bloccava la console che aveva creato la
+  partita; 4 piccoli).
 
-Si può sapere solo sulla console: le lingue sullo schermo e sulla TV (cinese e giapponese da 14
-pixel, hindi da 15), la visuale vicina sullo schermo della console e il cambio attaccando e
-staccando l'HDMI, la partita 1 presa dal salvataggio vero della 0.5.2, i tempi di avvio con
-l'atlante dei caratteri più grande; l'interfaccia sullo schermo e sulla TV (testi da 12–16 pixel,
-margini) e quanto costa lo shader alla Mali in menu, pausa e carte; come si gioca davvero, la
-fluidità con la Mali sulle mappe (fino a 46 mila triangoli inviati, a Chichén Itzá e nel Colosseo
-con 4 giocatori), quanto dura il gladiatore con giocatori veri, il sonoro sulla TV e i comandi
-dalle altre console sul Wi-Fi vero.
+Si può sapere solo sulla console: il gioco in rete sul Wi-Fi vero (messaggi persi e ritardi veri,
+la scritta "rete lenta", il tempo di andata e ritorno nel riquadro di SELECT, 3 e 4 console
+insieme); se la Mali regge 8 campioni a 60 fotogrammi al secondo (se no si passa da soli a 4 e lo
+dice il registro); la batteria letta dalla console e il carico della CPU; i cancelli e i bonus
+giocati davvero. E, come prima: le lingue sullo schermo e sulla TV (cinese e giapponese da 14
+pixel, hindi da 15), la visuale vicina e il cambio attaccando e staccando l'HDMI, l'interfaccia
+sulla TV, la fluidità con la Mali sulle mappe (fino a 46 mila triangoli inviati, a Chichén Itzá e
+nel Colosseo con 4 giocatori), quanto dura il gladiatore con giocatori veri, il sonoro sulla TV e
+i comandi dalle altre console sul Wi-Fi vero.
 
 ## Note tecniche
 
