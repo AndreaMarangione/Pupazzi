@@ -1449,7 +1449,10 @@ void boss_update(Game& g) {
   // the game stops there and, when everyone has chosen, he roars.
   const int stage = b.hp < b.hp_max / 3.0f ? 2 : (b.hp < b.hp_max * 2.0f / 3.0f ? 1 : 0);
   if (stage > b.stage && b.act == BA_NONE && b.roar == 0) {
-    if (cards_boss_third(g, stage)) return;
+    if (cards_enabled(g) && stage > g.boss_thirds) {
+      g.boss_card_due = stage;          // the choice at the end of this step (game.cpp), then the roar
+      return;
+    }
     b.stage = stage;
     b.roar = ROAR_FRAMES;
     b.vx = b.vz = 0.0f;

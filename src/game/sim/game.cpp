@@ -602,6 +602,14 @@ void play_update(Game& g, const Pad pads[MAX_PLAYERS]) {
       plat_log("vita persa (restano %d): mappa %d, zona %d da rifare", lives, g.map_idx + 1, g.zone + 1);
     }
   }
+  // 0.5.6: the gladiator has lost a third of its health. The choice opens at the end of the step,
+  // when everything of this step has happened: only if it is still standing and so is someone of
+  // the team (a choice right before the win, or before a zone or map replayed, would be wasted).
+  if (g.boss_card_due > 0) {
+    const int due = g.boss_card_due;
+    g.boss_card_due = 0;
+    if (g.boss.alive && g.boss.hp > 0.0f && g.phase != PH_WIPE && g.phase != PH_MAP_DONE && count_alive(g) > 0) cards_boss_third(g, due);
+  }
   g.enemies_left = g.phase == PH_FIGHT ? zone_total_left(g) : count_monsters(g);
   ev_camera(g, CAM_FOLLOW);
 }
@@ -784,6 +792,7 @@ void game_reset(Game& g) {
     g.vita_kept[i] = g.stats_kept[i] = false;
   }
   g.cards_open = false;
+  g.lobby_pop = false;
   g.session.quit = false;
   bot_reset(g);
   load_map_preview(g, 0);
@@ -1101,7 +1110,7 @@ static void net_reset_sim(Game& g) {
   g.cards_open = false;
   g.cards_t = g.cards_age = g.cards_due = 0;
   g.cards_seq = 0;
-  g.boss_thirds = 0;
+  g.boss_thirds = g.boss_card_due = 0;
   g.explorer_free = false;
   g.expl_t = -1;
   g.expl_pos = v3(0, 0, 0);
@@ -1115,6 +1124,7 @@ static void net_reset_sim(Game& g) {
   g.bots = 0;
   g.net_pop = false;
   g.lobby_sel = 0;
+  g.lobby_pop = false;
   g.session.quit = false;
   bot_reset(g);
   g.level_ok = false;

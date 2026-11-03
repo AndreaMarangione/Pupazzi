@@ -894,6 +894,7 @@ void client_offer(Rd& r, const sockaddr_in& from) {
   }
   f.used = true;
   f.session = session;
+  gm.session = session;
   f.game = gm;
   f.seen = S.now;
 }

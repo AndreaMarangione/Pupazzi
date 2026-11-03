@@ -440,6 +440,7 @@ struct Game {
   // the slot where it would go (the one that already has it, or the first free one; -1 all full).
   bool lobby_pop;
   uint64_t join_id;
+  uint32_t join_session;
   int join_slot;
   bool join_linked;
   bool pause_help;            // the controls box is open in the pause
@@ -501,6 +502,7 @@ struct Game {
   int cards_due;                // zone just cleared: frames before the choice opens
   unsigned cards_seq;           // choices opened so far (for the bots)
   int boss_thirds;              // (0.5.6) thirds of the gladiator's health already rewarded with a choice in this map
+  int boss_card_due;            // (0.5.6) thirds it has just lost: the choice opens at the end of the step (0 none)
   CardOffer offer[MAX_PLAYERS];
   // Hidden capsule with the explorer, and stars of the current map.
   bool explorer_free;           // capsule opened in this map
@@ -687,7 +689,7 @@ bool cards_enabled(Game& g);
 void cards_map_start(Game& g);           // new map (or map restarted from the start): all the cards go away
 void cards_offer(Game& g);               // opens the choice (if the cards are enabled) for whoever still has lives
 void cards_zone_cleared(Game& g);        // zone cleared and another one follows: the choice opens shortly
-// (0.5.6) The gladiator has lost thirds (1 or 2) thirds of its health: if one of them has not been
+// (0.5.6) The gladiator has lost `thirds` thirds of its health (1 or 2): if one of them has not been
 // rewarded yet in this map, opens the choice for it. True if the choice is now open.
 bool cards_boss_third(Game& g, int thirds);
 void cards_zone_start(Game& g);          // start (or new start) of a zone: the shields recharge

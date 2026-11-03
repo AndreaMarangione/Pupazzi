@@ -447,6 +447,21 @@ TEST_CASE("5b) carte al boss (0.5.6): a 2/3 e a 1/3 della vita, una volta per te
   step();
   snprintf(buf, sizeof(buf), "zona rifatta: la carta resta (%d), di nuovo a 2/3 ruggisce subito senza carte", ncards(0));
   EXPECT(ok && !g.cards_open && g.boss.stage == 1 && g.boss.roar > 0, buf);
+  // The hero falls in the same step in which the gladiator loses the third: no choice (the zone is
+  // replayed), and the third still gives it when it is lost again.
+  arena_cards(1, "0");
+  g.boss.hp = g.boss.hp_max * 0.6f;
+  g.pl[0].invuln = 0;
+  hurt_player(g, 0, 1e6f, g.pl[0].pos + v3(1, 0, 0), 0.0f);
+  step();
+  ok = !g.cards_open && g.boss_thirds == 0 && g.phase == PH_WIPE;
+  step(WIPE_ZONE_FRAMES);
+  quiet();
+  g.boss.cd = 1000000;
+  g.boss.hp = g.boss.hp_max * 0.6f;
+  step();
+  EXPECT(ok && g.cards_open && g.boss_thirds == 1, "l'eroe cade nello stesso passo: niente carte; rifatta la zona, a 2/3 arrivano");
+  choose_cards();
   // Last life lost: the map starts again from the start, without cards, and the thirds count again.
   for (int k = 0; k < 400 && (g.boss.roar > 0 || g.boss.act != BA_NONE); ++k) step();
   g.pl[0].lives = 1;

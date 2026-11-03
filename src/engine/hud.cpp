@@ -654,8 +654,8 @@ void hud_draw_sw(const Hud* h, uint32_t* fb, int W, int H, int ry0, int ry1) {
         }
       }
     } else if (c.idx < HUD_NGLYPHS) {
-      // Glyph or icon: every screen pixel takes the nearest point of the atlas
-      // (at 640x480 one atlas pixel per screen pixel).
+      // Glyph or icon: every screen pixel takes the nearest point of the atlas (at 640x480 one
+      // atlas pixel per screen pixel); with the TV margin (0.5.6) the four nearest, see below.
       const HudGlyph& G = HUD_GLYPHS[c.idx];
       const int qw = x1 - x0, qh = y1 - y0;
       if (qw <= 0 || qh <= 0) continue;

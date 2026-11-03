@@ -306,7 +306,7 @@ const float GX = 32.0f, GW = 576.0f, GH = 176.0f, GROW = 28.0f;
 void gfx_value(const Game& g, Hud* h, int r, float rx, float cy, bool sel) {
   const SaveData* sd = save_data();
   const uint32_t vc = O(sel ? ui::ON : ui::MU);
-  char v[32];
+  char v[96];
   v[0] = 0;
   int notches = 0, filled = 0;
   bool off = false;

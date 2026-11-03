@@ -171,7 +171,9 @@ struct GLOpt {
 
 enum { AA_NONE = 0, AA_EXT, AA_ES3 };
 // max: maximum samples (from GL_MAX_SAMPLES, up to 8); samples: those of the current target.
-struct AAState { int mode, max, samples, w, h; GLuint fbo, tex, color_rb, depth_rb; GLenum depth_fmt; bool discard; };
+// mode0, max0: as at the start; fail_area: pixels of the frame at which the GPU refused a target
+// (0.5.6: the resolution changes during the game, a smaller frame tries again).
+struct AAState { int mode, max, samples, w, h; GLuint fbo, tex, color_rb, depth_rb; GLenum depth_fmt; bool discard; int mode0, max0; long fail_area; };
 
 struct WV { float x, y, z; uint8_t r, g, b, a; };          // world vertex, 16 bytes
 struct HV { float x, y, u, v; uint8_t r, g, b, a; };       // 2D vertex (sky, antialiasing copy), 20 bytes
@@ -764,15 +766,24 @@ void aa_init(glr_get_proc_t get_proc, const char* ext, const char* version) {
   g_aa.max = max_samples >= 8 ? 8 : (max_samples >= 4 ? 4 : (int)max_samples);
   g_aa.depth_fmt = (major >= 3 || has_ext(ext, "GL_OES_depth24")) ? GL_DEPTH_COMPONENT24 : GL_DEPTH_COMPONENT16;
   g_aa.discard = g_aa.mode == AA_EXT && glo.DiscardFramebufferEXT && has_ext(ext, "GL_EXT_discard_framebuffer");
+  g_aa.mode0 = g_aa.mode;
+  g_aa.max0 = g_aa.max;
   plat_log("GL: antialias fino a %dx disponibile (%s, profondita' %d bit)", g_aa.max,
            g_aa.mode == AA_EXT ? "EXT_multisampled_render_to_texture" : "OpenGL ES 3, renderbuffer e blit",
            g_aa.depth_fmt == GL_DEPTH_COMPONENT24 ? 24 : 16);
 }
 
-// Target with want samples per pixel (at most g_aa.max) of the size of the image; if the GPU
-// refuses it with 8 it retries with 4, with 4 antialiasing is turned off for the whole session;
-// this is written to the log.
+// Target with want samples per pixel (at most g_aa.max) of the size of the frame; if the GPU
+// refuses it with 8 it retries with 4, with 4 antialiasing is turned off; this is written to the
+// log. It holds for that size and bigger ones: with a smaller frame (resolution lowered in
+// GRAFICA, 0.5.6) it starts again from what the GPU said at the start.
 bool aa_ready(int w, int h, int want) {
+  if (g_aa.fail_area > 0 && (long)w * h < g_aa.fail_area) {
+    g_aa.mode = g_aa.mode0;
+    g_aa.max = g_aa.max0;
+    g_aa.fail_area = 0;
+    plat_log("GL: immagine piu' piccola (%dx%d): si riprova l'antialias", w, h);
+  }
   if (g_aa.mode == AA_NONE) return false;
   const int s = want > g_aa.max ? g_aa.max : want;
   if (s < 2) return false;
@@ -812,6 +823,7 @@ bool aa_ready(int w, int h, int want) {
   if (status != GL_FRAMEBUFFER_COMPLETE || err) {
     aa_free(true);
     while (gl.GetError() != 0) {}
+    g_aa.fail_area = (long)w * h;
     if (s > 4) {
       plat_log("GL: antialias %dx rifiutato dalla GPU (stato 0x%04x, errore 0x%04x): si prova con 4", s, (unsigned)status, (unsigned)err);
       g_aa.max = 4;
@@ -909,7 +921,8 @@ bool glr_init(glr_get_proc_t get_proc) {
 
   // Atlas of the interface glyphs and icons (alpha only, feathered edges, glows) with the solid
   // block for rectangles. Linear filter: at 640x480 the glyphs fall pixel for pixel and come out
-  // identical to the software renderer; at other resolutions (tests only) they stay smooth.
+  // identical to the software renderer; at other resolutions (GRAFICA, 0.5.6) and with the TV
+  // margin they stay smooth.
   int aw = 0, ah = 0;
   const uint8_t* atlas = hud_atlas(&aw, &ah);
   hud_solid_uv(&SOLID_U, &SOLID_V);
@@ -1099,7 +1112,8 @@ void glr_render(const FrameDesc* f, unsigned fbo, RenderStats* st, bool finish) 
     st->draw_calls++;
   }
 
-  // Clean state for the frontend.
+  // Clean state for the frontend (also the viewport: the whole frame).
+  gl.Viewport(0, 0, fw, fh);
   gl.Disable(GL_BLEND);
   gl.DisableVertexAttribArray(0);
   gl.DisableVertexAttribArray(1);

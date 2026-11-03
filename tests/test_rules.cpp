@@ -1,7 +1,8 @@
 // Rules tests (0.5): lives (alone: zone replayed, out of lives: map restarted; with more players:
 // back in after 5 seconds, out of lives: out, all down together: map restarted), who leaves and
 // comes back, VITA EXTRA, third star, planet rounds unlocked with the stars, difficulty of the
-// round, maps unlocked per planet and the 0.4 save; since 0.5.4 the power-ups in the crates. Uses
+// round, maps unlocked per planet and the 0.4 save; since 0.5.4 the power-ups in the crates; since
+// 0.5.6 the game chosen when two consoles offer the same saved game in the LAN. Uses
 // the game without a frontend (like test_aim) and a save in a temporary directory.
 //   make build/native/test_rules && ./build/native/test_rules [--immagini DIR]
 // With --immagini it also writes the HUD screens (PPM at 640x480, software renderer): player
@@ -902,6 +903,68 @@ TEST_CASE("14c) cancelli a battente (0.5.4): si aprono verso chi aspetta e lo sp
   snprintf(buf, sizeof(buf), "a cancello chiuso, chi e' nella zona di prima torna nella zona in corso (zona %d, %s)",
            level_zone_at(&g.L, g.pl[1].pos.x, g.pl[1].pos.z) + 1, g_lastmsg);
   EXPECT(in2 && g.zone == 1 && level_zone_at(&g.L, g.pl[1].pos.x, g.pl[1].pos.z) == 1 && dist2d(g.pl[1].pos, g.L.zones[1].start[1]) < 1.0f, buf);
+}
+
+TEST_CASE("14d) (0.5.6) rete: la stessa partita offerta da due console, si entra in quella scelta") {
+  // A game saved on two consoles (one joined it saving it too) can be hosted by both at the same
+  // time: the list shows it twice, with the same identity. The joining console must enter the one
+  // chosen (identity and LAN game), even if the list changes order while the question is open.
+  open_game(save_dir("rete_doppia"));
+  game_init(g);
+  memset(g_pads, 0, sizeof(g_pads));
+  NetView nv;
+  memset(&nv, 0, sizeof(nv));
+  nv.mode = NV_SEARCH;
+  nv.save = -1;
+  nv.ngames = 2;
+  const uint64_t id = 0x0123456789ABCDEFull;
+  const char* names[2] = { "PRIMA", "SECONDA" };
+  for (int k = 0; k < 2; ++k) {
+    NetGame& gm = nv.games[k];
+    snprintf(gm.name, sizeof(gm.name), "%s", names[k]);
+    snprintf(gm.version, sizeof(gm.version), "%s", PUPAZZI_VERSION);
+    gm.state = NG_OPEN;
+    gm.players = 1;
+    gm.id = id;
+    gm.session = 0x2222u + 0x1111u * (uint32_t)k;
+  }
+  game_net_view(g, &nv);
+  go_screen(g, SC_LOBBY);
+  step(30);
+  int arg = 0;
+  game_net_request(g, &arg);
+  g.lobby_sel = 1;
+  press(0, PAD_A);
+  const int slot = g.join_slot;
+  snprintf(buf, sizeof(buf), "A sulla seconda: la domanda, con la partita della seconda console (posto %d)", slot + 1);
+  EXPECT(g.lobby_pop && g.join_id == id && g.join_session == 0x3333u && slot >= 0, buf);
+  press(0, PAD_A);
+  int req = game_net_request(g, &arg);
+  snprintf(buf, sizeof(buf), "A (si'): si entra nella partita della seconda console, non nella prima (richiesta %d, %d)", req, arg);
+  EXPECT(req == NR_JOIN && arg == 1 + 256 * (slot + 1), buf);
+  // Again on it; while the question is open the first console stops offering it and comes back:
+  // now the chosen game is the first in the list.
+  press(0, PAD_A);
+  const NetGame first = nv.games[0];
+  nv.games[0] = nv.games[1];
+  nv.games[1] = first;
+  game_net_view(g, &nv);
+  press(0, PAD_A);
+  req = game_net_request(g, &arg);
+  snprintf(buf, sizeof(buf), "con la lista in un altro ordine, ancora in quella della seconda console (richiesta %d, %d)", req, arg);
+  EXPECT(req == NR_JOIN && arg == 0 + 256 * (slot + 1), buf);
+  // Again on it, then it goes away while the question is open: nobody is joined.
+  g.lobby_sel = 0;
+  press(0, PAD_A);
+  const bool asked = g.lobby_pop && g.join_session == 0x3333u;
+  nv.games[0] = first;
+  nv.ngames = 1;
+  game_net_view(g, &nv);
+  press(0, PAD_B);
+  req = game_net_request(g, &arg);
+  snprintf(buf, sizeof(buf), "se la partita scelta non c'e' piu', non si entra nell'altra con la stessa identita' (richiesta %d)", req);
+  EXPECT(asked && req == NR_NONE && !g.lobby_pop, buf);
+  go_screen(g, SC_TITLE);
 }
 
 int main(int argc, char** argv) {

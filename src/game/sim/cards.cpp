@@ -170,7 +170,7 @@ void cards_map_start(Game& g) {
   memset(g.offer, 0, sizeof(g.offer));
   g.cards_open = false;
   g.cards_t = g.cards_due = 0;
-  g.boss_thirds = 0;
+  g.boss_thirds = g.boss_card_due = 0;
 }
 
 bool cards_boss_third(Game& g, int thirds) {

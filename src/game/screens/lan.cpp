@@ -19,6 +19,7 @@ void net_update(Game& g) {
       net_req(g, NR_SEARCH, 0);
       go_screen(g, SC_LOBBY);
       g.lobby_sel = 0;
+      g.lobby_pop = false;
       g.session.lobby_join = true;
     }
   } else if (any_back(g)) {
@@ -27,18 +28,19 @@ void net_update(Game& g) {
   }
 }
 
-// Position of the game with identity id in the list of those found, -1 if it is no longer there.
-int net_game_index(const Game& g, uint64_t id) {
+// Position of the chosen game (identity and LAN game: two consoles can host the same saved game) in
+// the list of those found, -1 if it is no longer there.
+int net_game_index(const Game& g) {
   const NetView& v = net_view(g);
   for (int k = 0; k < v.ngames; ++k)
-    if (v.games[k].id == id) return k;
+    if (v.games[k].id == g.join_id && v.games[k].session == g.join_session) return k;
   return -1;
 }
 
-// Joins the chosen game (g.join_id), saving it on this console too in slot slot (-1 not); the game
-// may have gone in the meantime.
+// Joins the chosen game, saving it on this console too in slot slot (-1 not); the game may have
+// gone in the meantime.
 void net_join(Game& g, int slot) {
-  const int k = net_game_index(g, g.join_id);
+  const int k = net_game_index(g);
   if (k < 0) {
     ev_sound_ui(g, SND_UI_BACK);
     info(g, tr("la partita non risponde"));
@@ -105,10 +107,11 @@ void lobby_update(Game& g) {
       if (ok && v.ngames > 0) {
         ev_sound_ui(g, SND_UI_OK);
         const NetGame& gm = v.games[g.lobby_sel];
-        if (gm.state == NG_OPEN && gm.id) {
+        if (gm.state == NG_OPEN && gm.id && save_path()[0]) {     // (with nowhere to save, no question)
           // 0.5.6: first the question; the slot: the one that already has this game, or the first free one.
           g.lobby_pop = true;
           g.join_id = gm.id;
+          g.join_session = gm.session;
           slots_refresh(g);
           g.join_slot = save_slot_with_id(gm.id);
           g.join_linked = g.join_slot >= 0;
@@ -246,7 +249,7 @@ void join_question(const Game& g, Hud* h) {
   const int n = ui::wrap(tr("SALVARE LA PARTITA ANCHE SU QUESTA CONSOLE?"), W - 44.0f, HF_B16, 1.0f, L, 2);
   for (int k = 0; k < n; ++k) ui::text(h, 320.0f, Y + 30.0f + 22.0f * (float)k - (n > 1 ? 0.0f : -11.0f), HF_B16, O(ui::TX), L[k], 1.0f, 0);
   char buf[256], t[256], nm[64], where[128];
-  const int k = net_game_index(g, g.join_id);
+  const int k = net_game_index(g);
   if (k >= 0) {
     const NetGame& gm = net_view(g).games[k];
     net_game_where(gm, where, sizeof(where));

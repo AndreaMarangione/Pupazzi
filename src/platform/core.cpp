@@ -508,6 +508,16 @@ static void log_stick_stats(void) {
   }
 }
 
+// Right stick with the camera pitch chosen in GRAFICA (0.5.6): the game aims "as on the screen" for
+// the pitch of 0.98; with another one the direction is corrected here, keeping how far the stick is
+// tilted, before the game and the network see it (so every console plays the same game).
+static void aim_tilt(Pad& p, float k) {
+  if (k == 1.0f || (p.rx == 0.0f && p.ry == 0.0f)) return;
+  const float m = sqrtf(p.rx * p.rx + p.ry * p.ry), ry = p.ry * k, m2 = sqrtf(p.rx * p.rx + ry * ry);
+  p.rx = p.rx * m / m2;
+  p.ry = ry * m / m2;
+}
+
 // Console pad (frontend) and network inputs together: buttons pressed on either one; for each
 // axis the value farthest from the center (a pad on the console and a controller console can act
 // as the same player). Dead zones and sticks then as for a single pad.
@@ -543,6 +553,7 @@ static void read_input(void) {
     if (rx * rx + ry * ry < 0.2f * 0.2f) rx = ry = 0.0f;
     A.pads[p].rx = rx;
     A.pads[p].ry = ry;
+    aim_tilt(A.pads[p], view_aim_tilt(*A.view));
     // The first time something arrives from a stick it is written to the log: if aiming does not
     // work on a controller, the log shows whether the right stick reaches the game.
     if (!A.stick_seen[p][0] && (A.pads[p].lx != 0.0f || A.pads[p].ly != 0.0f)) {
@@ -716,18 +727,28 @@ static double draw_gpu(FrameDesc& fd, RenderStats* st) {
 }
 
 // TV margin with the software renderer: the picture (drawn at its size) in the middle of the frame,
-// black around it. The frame is cleared only when the size or the margin changes.
+// black around it. The frame is cleared only when the size or the margin changes; allocated the
+// first time a margin is used, freed in retro_deinit.
+static struct { uint32_t* buf; int w, h, x, y; } g_framed;
+
 static const uint32_t* framed(const uint32_t* pic, const FrameDesc& fd) {
-  static uint32_t* buf;
-  static int bw, bh, bx, by;
-  if (!buf) buf = (uint32_t*)calloc((size_t)MAX_W * MAX_H, sizeof(uint32_t));
-  if (!buf) return pic;
-  if (bw != fd.fw || bh != fd.fh || bx != fd.ox || by != fd.oy) {
+  if (!g_framed.buf) {
+    g_framed.buf = (uint32_t*)calloc((size_t)MAX_W * MAX_H, sizeof(uint32_t));
+    if (!g_framed.buf) return pic;
+    g_framed.w = g_framed.h = 0;
+  }
+  uint32_t* buf = g_framed.buf;
+  if (g_framed.w != fd.fw || g_framed.h != fd.fh || g_framed.x != fd.ox || g_framed.y != fd.oy) {
     memset(buf, 0, (size_t)fd.fw * fd.fh * sizeof(uint32_t));
-    bw = fd.fw; bh = fd.fh; bx = fd.ox; by = fd.oy;
+    g_framed.w = fd.fw; g_framed.h = fd.fh; g_framed.x = fd.ox; g_framed.y = fd.oy;
   }
   for (int y = 0; y < fd.h; ++y) memcpy(buf + (size_t)(fd.oy + y) * fd.fw + fd.ox, pic + (size_t)y * fd.w, (size_t)fd.w * sizeof(uint32_t));
   return buf;
+}
+
+static void framed_free(void) {
+  free(g_framed.buf);
+  g_framed.buf = NULL;
 }
 
 static double draw_software(FrameDesc& fd, RenderStats* st) {
@@ -913,6 +934,7 @@ RETRO_API void retro_deinit(void) {
   save_write();      // what the game changed and has not written yet (if nothing changed it does not touch the file)
   glr_shutdown();
   swr_shutdown();
+  framed_free();
   game_shutdown(*A.game);
   game_destroy(A.game);
   view_destroy(A.view);

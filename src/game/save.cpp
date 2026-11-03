@@ -58,6 +58,11 @@ File g_scratch;                     // trial reads (save_slot_peek) and copies
 int g_active = -1;
 bool g_marker;                      // salvataggi=1: nothing (more) to take from the 0.5.2 file; 0 if that failed
 bool g_full_logged;                 // too many maps: logged only once
+// LAN game saved on a console that joins (0.5.6): the slot as it was, when it held the same game
+// (what it has more is kept at every write), and the planet of a map.
+SaveData g_base;
+bool g_guest_slot, g_base_on;
+int (*g_world_of)(const char*);
 char g_out[OUT_LEN];
 char g_slot_paths[SAVE_SLOTS][300];
 
@@ -670,6 +675,7 @@ void migrate(void) {
 int save_open(const char* dir) {
   defaults(&g_data);
   g_init = true;
+  g_guest_slot = g_base_on = false;
   reset_file(&g_set, K_SETTINGS);
   reset_file(&g_game, K_GAME);
   g_active = -1;
@@ -752,9 +758,6 @@ const char* save_lang_id(int l) { return l >= 0 && l < SAVE_LANGS ? LANG_ID[l] :
 
 // LAN game saved on a console that joins (0.5.6): the slot as it was, when it held the same game
 // (what it has more is kept at every write), and the planet of a map.
-SaveData g_base;
-bool g_guest_slot, g_base_on;
-int (*g_world_of)(const char*);
 
 // The game in memory (the host's progress) with, planet by planet, what g_base has more (see
 // save_guest_slot_begin).
@@ -785,6 +788,12 @@ const SaveData& merged(const SaveData& d) {
   return m;
 }
 
+// The active game into its file (merged, for a LAN game saved also here).
+bool write_active(void) { return write_file(&g_game, g_base_on ? const_cast<SaveData&>(merged(data())) : data()); }
+
+// Another game becomes the active one (or none): the LAN game saved also here is over.
+void guest_slot_off(void) { g_guest_slot = g_base_on = false; }
+
 uint64_t new_game_id(void) {
   uint64_t x = 0;
   FILE* f = fopen("/dev/urandom", "rb");
@@ -805,14 +814,7 @@ uint64_t new_game_id(void) {
 bool save_write(void) {
   if (!g_set.path[0]) return false;
   bool ok = write_file(&g_set, data());
-  if (g_active >= 0) {
-    if (g_base_on) {
-      SaveData& m = const_cast<SaveData&>(merged(data()));
-      ok &= write_file(&g_game, m);
-    } else {
-      ok &= write_file(&g_game, data());
-    }
-  }
+  if (g_active >= 0) ok &= write_active();
   return ok;
 }
 
@@ -833,7 +835,8 @@ int save_slot_peek(int i, SaveData* out) {
 
 bool save_slot_load(int i) {
   if (!slot_ok(i)) return false;
-  if (g_active >= 0) write_file(&g_game, data());   // the previous one loses nothing
+  if (g_active >= 0) write_active();   // the previous one loses nothing
+  guest_slot_off();
   SaveData& d = data();
   defaults_game(&d);
   reset_file(&g_game, K_GAME);
@@ -853,7 +856,8 @@ bool save_slot_load(int i) {
 
 bool save_slot_new(int i, const char* name) {
   if (!slot_ok(i)) return false;
-  if (g_active >= 0 && g_active != i) write_file(&g_game, data());
+  if (g_active >= 0 && g_active != i) write_active();
+  guest_slot_off();
   SaveData& d = data();
   defaults_game(&d);
   if (name) clean_name(d.name, name);
@@ -872,7 +876,7 @@ bool save_slot_rename(int i, const char* name) {
   bool ok;
   if (i == g_active) {
     memcpy(data().name, nm, sizeof(nm));
-    ok = write_file(&g_game, data());
+    ok = write_active();
   } else {
     // Another game: it is read again (unknown keys included) and rewritten with the new name.
     static SaveData tmp;
@@ -897,7 +901,7 @@ bool save_name_char(char c) {
 
 bool save_slot_copy(int from, int to) {
   if (!slot_ok(from) || !slot_ok(to) || from == to) return false;
-  if (from == g_active) write_file(&g_game, data());
+  if (from == g_active) write_active();
   FILE* fp = fopen(g_slot_paths[from], "rb");
   if (!fp) return false;
   static char buf[OUT_LEN * 2];
@@ -919,6 +923,7 @@ bool save_slot_copy(int from, int to) {
     if (read_file(&g_scratch, &tmp, st, sizeof(st), true) == SAVE_LETTO && tmp.id) {
       tmp.id = new_game_id();
       ok = write_file(&g_scratch, tmp);
+      if (!ok) remove(g_slot_paths[to]);        // never two games with the same identity
     }
   }
   if (ok) {
@@ -937,6 +942,7 @@ bool save_slot_delete(int i) {
     g_active = -1;
     g_game.path[0] = 0;
     defaults_game(&data());
+    guest_slot_off();
   }
   char tmp[310];
   snprintf(tmp, sizeof(tmp), "%s.tmp", g_slot_paths[i]);
@@ -951,11 +957,11 @@ bool save_slot_delete(int i) {
 }
 
 void save_guest_begin(void) {
-  g_guest_slot = g_base_on = false;
   if (g_active >= 0) {
-    write_file(&g_game, data());       // the active one loses nothing
+    write_active();                    // the active one loses nothing
     plat_log("salvataggio: partita %d messa da parte (si gioca con i progressi di chi ha creato la partita in rete)", g_active + 1);
   }
+  guest_slot_off();
   g_active = -1;
   g_game.path[0] = 0;
   defaults_game(&data());
@@ -977,7 +983,8 @@ void save_guest_slot_begin(int i, uint64_t id, int (*world_of)(const char* map_i
     save_guest_begin();
     return;
   }
-  if (g_active >= 0) write_file(&g_game, data());     // the active one loses nothing
+  if (g_active >= 0) write_active();     // the active one loses nothing
+  guest_slot_off();
   g_world_of = world_of;
   // The slot as it is: the same game (with its unknown keys) or another one, overwritten.
   reset_file(&g_game, K_GAME);

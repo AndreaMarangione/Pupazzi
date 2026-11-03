@@ -672,6 +672,8 @@ triangoli a 60 fps fissi; con la visuale larga della 0.3.2 se ne inquadrano circ
     Contro) compaiono al posto del piede. Scelta degli eroi: sopra le teste due righe con chi è,
     colpo (R1) e speciale (L1). Carte e fine mappa nello stesso stile, dentro il margine; in pausa e
     durante le carte la riga in alto della partita si nasconde.
+  - *0.5.6*: nella pausa GRAFICA al posto di ANTIALIAS (capitolo 5): RIPRENDI, COMANDI, MIRA,
+    GRAFICA, MUSICA, EFFETTI, LASCIA LA PARTITA, TORNA AL MENU.
 - [deciso 20/10] **Prima schermata**: NUOVA PARTITA, CARICA SALVATAGGIO, GESTISCI SALVATAGGI (una
   schermata a parte per duplicare ed eliminare i salvataggi), LINGUA; resta ESCI. Salvataggi nel
   capitolo 12.

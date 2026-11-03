@@ -20,10 +20,11 @@
 #define LV_MAX_WAVE_KINDS 4
 #define LV_MAX_DYN 480          // bushes, tall grass, breakable crates, trampolines
 // Scenery drawn around the map (0.5.1): how much the play camera can show beyond the border
-// walls, at 30 m with the players at the corners (see game.cpp, CAM_OVER_*): sideways up to 14 m
-// (at the top the framing is wider), 13 m to the north, 10 m to the south. Beyond that there is
+// walls, at 30 m with the players at the corners (see view/camera.cpp, CAM_OVER_*): sideways up to
+// 14 m (at the top the framing is wider), 13 m to the north, 10 m to the south. Beyond that there is
 // only flat ground and, towards the south (menus) and the north (end of map), a few far-off
-// silhouettes.
+// silhouettes. Sized for the pitch of 0.98; with the camera more from the side chosen in GRAFICA
+// (0.5.6) and the group spread out, a little flat ground can show at the top corners.
 #define LV_MARGIN_X 14          // scenery cells to the west and to the east
 #define LV_MARGIN_N 13          // ...to the north
 #define LV_MARGIN_S 10          // ...to the south

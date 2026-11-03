@@ -6,6 +6,8 @@ Le note di ogni release su GitHub si prendono da qui (la sezione con il numero d
 
 ## [Non rilasciato]
 
+## [0.5.6] - 2026-11-03
+
 ### Aggiunto
 
 - GRAFICA nella pausa: le impostazioni di questa console in un riquadro in basso, con il gioco che

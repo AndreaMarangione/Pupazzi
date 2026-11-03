@@ -39,6 +39,9 @@ void view_set_hdmi(View& v, bool on);
 // Graphics settings of this console (0.5.6): steps of the play camera's distance and pitch (from
 // -2 to 2) and low details (no shadows, no distant landscape, half the particles).
 void view_set_gfx(View& v, int dist, int pitch, bool low);
+// The game aims the right stick "as on the screen" for the pitch of 0.98 (AIM_FORESHORTEN): by how
+// much the vertical of the stick is to be multiplied with the pitch chosen in GRAFICA (1 at 0.98).
+float view_aim_tilt(const View& v);
 // Camera move announced by the game (CAM_*); also used by the tests to frame a scene.
 void view_camera(View& v, const Game& g, int how);
 // After every game_update: the music that goes with what is on screen.

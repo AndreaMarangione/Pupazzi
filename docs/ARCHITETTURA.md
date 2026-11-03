@@ -65,10 +65,14 @@ disegnare. `view_build_frame` legge la partita e prepara il fotogramma; quando l
 un'altra mappa, la vista ne costruisce la geometria (`LevelMeshes`). In rete ogni console ha la sua
 vista della stessa partita.
 
-Le impostazioni di questa console (pausa: mira, volumi, GRAFICA) stanno in `save_data()`: la pausa,
-che in rete gira uguale su tutte le console, le cambia solo sulla console di chi la comanda; il core
-le legge a ogni fotogramma e le passa alla vista (`view_set_gfx`), al renderer e a RetroArch (la
-risoluzione con `SET_GEOMETRY`). La partita non le legge mai: non cambiano il gioco.
+La GRAFICA e i volumi di questa console stanno in `save_data()`: la pausa, che in rete gira uguale
+su tutte le console, li cambia solo sulla console di chi la comanda; il core li legge a ogni
+fotogramma e li passa alla vista (`view_set_gfx`), al renderer e a RetroArch (la risoluzione con
+`SET_GEOMETRY`). La partita non li legge: non cambiano il gioco. La mira invece fa parte della
+partita (ogni giocatore la sua; in rete ogni console manda la sua all'inizio); e con
+un'inclinazione della telecamera diversa da quella di partenza il core corregge la direzione della
+levetta destra prima che la vedano la partita e la rete, così tutte le console fanno la stessa
+partita.
 
 **Observer.** La partita non chiama la vista: annuncia gli eventi con `GameEvents` (`game.h`):
 un suono in un punto del mondo, un suono dell'interfaccia, un cambio di telecamera. La vista si

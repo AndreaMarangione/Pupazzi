@@ -69,6 +69,7 @@ gioco si vede sopra il riquadro.
   console, 22 con la TV); quando il gruppo si allarga si arriva sempre fino a 30 m.
 - **INCLINAZIONE**: la telecamera più di lato o più dall'alto, in cinque tacche di 4,6 gradi (in
   mezzo 56 gradi, come prima); più dall'alto si allontana fino a 35 m, per vedere la stessa zona.
+  La mira con la levetta destra resta "come sullo schermo" a ogni inclinazione.
 - **ANTIALIAS** (prima era una voce della pausa): con la GPU i bordi vengono lisciati. **8X** (8
   campioni per pixel, quello di partenza), **4X** o **NO**; il riquadro delle prestazioni (SELECT)
   scrive "GPU+8X" o "GPU+4X". Se con 8 campioni la partita non sta nei 60 fotogrammi al secondo
@@ -661,16 +662,35 @@ Fatto senza console, anche sui file veri del firmware (immagine della MOD 4.0.3)
   tra x86 e ARM a 32 e 64 bit in emulazione, partite uguali; AddressSanitizer e UBSan puliti; voce
   di menu nel RetroArch a 32 bit in emulazione con i salvataggi della 0.4, della 0.5.2 e della
   0.5.3; archivio della release uguale rifatto due volte, ricompilato da zero con binari identici.
+- 0.5.6: GRAFICA provata dal core vero con comandi scritti, con il software e con la GPU (le quattro
+  risoluzioni, margine TV fino a 4 tacche, telecamera alle tacche estreme, dettagli bassi); testi
+  nuovi misurati in tutte e 7 le lingue; con le impostazioni di serie immagini (anche della GPU),
+  sonoro e registri identici alla 0.5.5 in 10 scenari fotogramma per fotogramma, tranne la pausa
+  (che ha GRAFICA al posto di ANTIALIAS), il numero della versione e il gladiatore dopo le carte
+  nuove; carte al gladiatore a 2/3 e a 1/3 (anche due terzi persi insieme e l'ultimo eroe che cade
+  nello stesso fotogramma); salvataggio di chi si unisce con 2, 3 e 4 copie del gioco in rete
+  (primo posto libero, posti pieni con la scelta, la stessa partita aggiornata nel suo posto con
+  mappe e stelle unite) e con la stessa partita offerta da due console; prove (470 controlli),
+  sonoro, GPU, rete (13 prove) e comandi dalla rete passate; stessa partita su gcc, clang, PC,
+  ARM32 e ARM64; gioco in rete tra x86 e ARM a 32 e 64 bit in emulazione, partite uguali;
+  AddressSanitizer e UBSan puliti, anche con GRAFICA a 1280×960 e con il salvataggio di chi si
+  unisce; voce di menu nel RetroArch a 32 bit in emulazione, anche a 1280×960 e con i salvataggi
+  della 0.4, della 0.5.3 e della 0.5.5; revisione indipendente: nessun difetto grave, 3 piccoli e
+  le rifiniture segnalate corretti.
 
-Si può sapere solo sulla console: il gioco in rete sul Wi-Fi vero (messaggi persi e ritardi veri,
-la scritta "rete lenta", il tempo di andata e ritorno nel riquadro di SELECT, 3 e 4 console
-insieme); se la Mali regge 8 campioni a 60 fotogrammi al secondo (se no si passa da soli a 4 e lo
-dice il registro); la batteria letta dalla console e il carico della CPU; i cancelli e i bonus
-giocati davvero. E, come prima: le lingue sullo schermo e sulla TV (cinese e giapponese da 14
-pixel, hindi da 15), la visuale vicina e il cambio attaccando e staccando l'HDMI, l'interfaccia
-sulla TV, la fluidità con la Mali sulle mappe (fino a 46 mila triangoli inviati, a Chichén Itzá e
-nel Colosseo con 4 giocatori), quanto dura il gladiatore con giocatori veri, il sonoro sulla TV e
-i comandi dalle altre console sul Wi-Fi vero.
+Si può sapere solo sulla console: se la Mali regge 960×720 e 1280×960 a 60 fotogrammi al secondo
+(con e senza antialias) e se il RetroArch della console cambia risoluzione al volo; quale margine
+serve alla TV di casa; come ci si trova con la telecamera alle varie tacche; il salvataggio di chi
+si unisce su console vere (anche spegnendone una a metà); le carte al gladiatore con giocatori
+veri. E, come prima: il gioco in rete sul Wi-Fi vero (messaggi persi e ritardi veri, la scritta
+"rete lenta", il tempo di andata e ritorno nel riquadro di SELECT, 3 e 4 console insieme); se la
+Mali regge 8 campioni a 60 fotogrammi al secondo (se no si passa da soli a 4 e lo dice il
+registro); la batteria letta dalla console e il carico della CPU; i cancelli e i bonus giocati
+davvero; le lingue sullo schermo e sulla TV (cinese e giapponese da 14 pixel, hindi da 15), la
+visuale vicina e il cambio attaccando e staccando l'HDMI, l'interfaccia sulla TV, la fluidità con
+la Mali sulle mappe (fino a 46 mila triangoli inviati, a Chichén Itzá e nel Colosseo con 4
+giocatori), quanto dura il gladiatore con giocatori veri, il sonoro sulla TV e i comandi dalle
+altre console sul Wi-Fi vero.
 
 ## Note tecniche
 

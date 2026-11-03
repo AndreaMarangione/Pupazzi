@@ -137,11 +137,13 @@ void view_camera(View& v, const Game& g, int how) {
     for (int k = 0; k < v.gfx_dist; ++k) dmin *= DIST_STEP;
     for (int k = 0; k > v.gfx_dist; --k) dmin /= DIST_STEP;
     dmin = fminf(dmin, dmax);
-    // near_view (game_draw.cpp): a rectangle around the framed point that contains the ground seen.
-    v.cull_x = f.w * (1.0f + f.k * f.n) + 0.05f;
-    v.cull_s = f.s + 0.125f;
-    v.cull_n = f.n + 0.19f;
-    if (pitch == PITCH_PLAY) {
+    // near_view (game_draw.cpp): a rectangle around the framed point that contains the ground seen,
+    // also while the camera moves to another pitch (the lower one sees more).
+    const Framing fc = v.cam_pitch < pitch ? framing(v.cam_pitch) : f;
+    v.cull_x = fc.w * (1.0f + fc.k * fc.n) + 0.05f;
+    v.cull_s = fc.s + 0.125f;
+    v.cull_n = fc.n + 0.19f;
+    if (pitch == PITCH_PLAY && v.cam_pitch >= PITCH_PLAY) {
       v.cull_x = 0.95f;
       v.cull_s = 0.55f;
       v.cull_n = 1.0f;
@@ -201,6 +203,8 @@ void view_camera(View& v, const Game& g, int how) {
     v.cam_pitch += (pitch - v.cam_pitch) * 0.08f;
   }
 }
+
+float view_aim_tilt(const View& v) { return v.gfx_pitch ? sinf(PITCH_PLAY) / sinf(play_pitch(v)) : 1.0f; }
 
 void view_set_gfx(View& v, int dist, int pitch, bool low) {
   v.gfx_dist = dist < -2 ? -2 : (dist > 2 ? 2 : dist);
