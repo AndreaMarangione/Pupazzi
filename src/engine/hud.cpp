@@ -199,10 +199,11 @@ inline uint32_t blend(uint32_t dst, uint32_t src, unsigned a) {
   return 0xFF000000u | rb | (g << 8);
 }
 
-// From pixels at 640x480 to output pixels with scale k (rounding down, also for negatives).
-inline int to_px(int v, int k) {
-  const int p = v * k;
-  return p >= 0 ? p / 2 : -((-p + 1) / 2);
+// From pixels at 640x480 to the pixels of a picture ph tall: v ph / 480, rounding down (also for
+// negatives). Before 0.5.6 the scale was k = ph / 240 and the result v k / 2: the same numbers.
+inline int to_px(int v, int ph) {
+  const int p = v * ph;
+  return p >= 0 ? p / 480 : -((-p + 479) / 480);
 }
 
 float ellipse_sdf(float qx, float qy, float rx, float ry) {
@@ -319,13 +320,13 @@ inline float soft_cover(float t) {
 // the gradient. For rectangles and parallelograms the distance changes by at most 1 from one pixel
 // to the next: where the shape is solid (or empty) for n pixels in a row, those pixels are done
 // without recomputing it.
-void draw_shape(const HudShape& sh, uint32_t* fb, int W, int H, int k, const HudCmd& c, int ry0, int ry1) {
-  const int x0 = to_px(c.x, k), y0 = to_px(c.y, k);
-  const int x1 = to_px(c.x + c.w, k) + 1, y1 = to_px(c.y + c.h, k) + 1;
+void draw_shape(const HudShape& sh, uint32_t* fb, int W, int H, const HudCmd& c, int ry0, int ry1) {
+  const int x0 = to_px(c.x, H), y0 = to_px(c.y, H);
+  const int x1 = to_px(c.x + c.w, H) + 1, y1 = to_px(c.y + c.h, H) + 1;
   const int xa = x0 < 0 ? 0 : x0, ya = y0 < ry0 ? ry0 : y0;
   const int xb = x1 > W ? W : x1, yb = y1 > (ry1 < H ? ry1 : H) ? (ry1 < H ? ry1 : H) : y1;
   if (xa >= xb || ya >= yb) return;
-  const float s = (float)k * 0.5f, soft = sh.soft * s, isoft = soft > 0.0f ? 1.0f / soft : 0.0f;
+  const float s = (float)H / 480.0f, soft = sh.soft * s, isoft = soft > 0.0f ? 1.0f / soft : 0.0f;
   const float cx = (sh.x + sh.w * 0.5f) * s, cy = (sh.y + sh.h * 0.5f) * s;
   const bool runs = sh.type == HS_BOX || sh.type == HS_PARA;
   const float edge = soft > 0.0f ? 2.0f * soft : 0.5f;   // beyond this distance: solid or empty
@@ -623,18 +624,18 @@ void hud_prepare(void) {
   }
 }
 
-void hud_draw_sw(const Hud* h, uint32_t* fb, int W, int H, int k, int ry0, int ry1) {
+void hud_draw_sw(const Hud* h, uint32_t* fb, int W, int H, int ry0, int ry1) {
   hud_prepare();
   if (ry1 < 0 || ry1 > H) ry1 = H;
   if (ry0 < 0) ry0 = 0;
   for (int i = 0; i < h->n; ++i) {
     const HudCmd& c = h->cmd[i];
     if (c.kind == HUD_SHAPE) {
-      if (c.idx < h->ns) draw_shape(h->shape[c.idx], fb, W, H, k, c, ry0, ry1);
+      if (c.idx < h->ns) draw_shape(h->shape[c.idx], fb, W, H, c, ry0, ry1);
       continue;
     }
-    const int x0 = to_px(c.x, k), y0 = to_px(c.y, k);
-    const int x1 = to_px(c.x + c.w, k), y1 = to_px(c.y + c.h, k);
+    const int x0 = to_px(c.x, H), y0 = to_px(c.y, H);
+    const int x1 = to_px(c.x + c.w, H), y1 = to_px(c.y + c.h, H);
     const int xa = x0 < 0 ? 0 : x0, ya = y0 < ry0 ? ry0 : y0;
     const int xb = x1 > W ? W : x1, yb = y1 > ry1 ? ry1 : y1;
     if (xa >= xb || ya >= yb) continue;
@@ -667,6 +668,28 @@ void hud_draw_sw(const Hud* h, uint32_t* fb, int W, int H, int k, int ry0, int r
             const unsigned v = src[x];
             if (!v) continue;
             const unsigned a = ca == 255u ? v : (v * ca + 127u) / 255u;
+            if (a) p[x] = a >= 255u ? color : blend(p[x], color, a);
+          }
+        }
+        continue;
+      }
+      if (H % 240 != 0) {
+        // Scale that is not a multiple of a half (TV margin, 0.5.6): bilinear between the four
+        // nearest points of the atlas (with the nearest one the letters would lose whole rows and
+        // columns). Positions in 1/256 of an atlas pixel.
+        for (int y = ya; y < yb; ++y) {
+          const int fv = (int)(((long)(y - y0) * 2 + 1) * G.h * 128 / qh) - 128, iv = fv >> 8, wv = fv & 255;
+          const uint8_t* r0 = iv >= 0 && iv < G.h ? g_atlas + (long)(G.y + iv) * HUD_ATLAS_W + G.x : 0;
+          const uint8_t* r1 = iv + 1 >= 0 && iv + 1 < G.h ? g_atlas + (long)(G.y + iv + 1) * HUD_ATLAS_W + G.x : 0;
+          uint32_t* p = fb + (long)y * W;
+          for (int x = xa; x < xb; ++x) {
+            const int fu = (int)(((long)(x - x0) * 2 + 1) * G.w * 128 / qw) - 128, iu = fu >> 8, wu = fu & 255;
+            const bool in0 = iu >= 0 && iu < G.w, in1 = iu + 1 >= 0 && iu + 1 < G.w;
+            const int a00 = r0 && in0 ? r0[iu] : 0, a01 = r0 && in1 ? r0[iu + 1] : 0;
+            const int a10 = r1 && in0 ? r1[iu] : 0, a11 = r1 && in1 ? r1[iu + 1] : 0;
+            const int top = a00 * (256 - wu) + a01 * wu, bot = a10 * (256 - wu) + a11 * wu;
+            const unsigned v = (unsigned)((top * (256 - wv) + bot * wv + 32768) >> 16);
+            const unsigned a = (v * ca + 127u) / 255u;
             if (a) p[x] = a >= 255u ? color : blend(p[x], color, a);
           }
         }

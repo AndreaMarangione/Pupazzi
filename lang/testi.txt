@@ -1647,6 +1647,17 @@ zh 瞄准
 ja エイム
 hi निशाना
 
+# voce della pausa (S16) e titolo del riquadro della grafica (B24), dalla 0.5.6
+@B22
+it GRAFICA
+en GRAPHICS
+es GRÁFICOS
+pt GRÁFICOS
+zh 画面
+ja グラフィック
+hi ग्राफ़िक्स
+
+# voci del riquadro della grafica (S15, circa 150 pixel fino al valore); ANTIALIAS anche li'
 it ANTIALIAS
 en ANTIALIASING
 es ANTIALIASING
@@ -1654,6 +1665,121 @@ pt ANTIALIASING
 zh 抗锯齿
 ja アンチエイリアス
 hi एंटी-एलियासिंग
+
+it DISTANZA
+en DISTANCE
+es DISTANCIA
+pt DISTÂNCIA
+zh 镜头距离
+ja カメラ距離
+hi दूरी
+
+it INCLINAZIONE
+en ANGLE
+es INCLINACIÓN
+pt INCLINAÇÃO
+zh 镜头角度
+ja カメラ角度
+hi झुकाव
+
+it RISOLUZIONE
+en RESOLUTION
+es RESOLUCIÓN
+pt RESOLUÇÃO
+zh 分辨率
+ja 解像度
+hi रेज़ोल्यूशन
+
+it DETTAGLI
+en DETAIL
+es DETALLES
+pt DETALHES
+zh 细节
+ja ディテール
+hi डिटेल
+
+it MARGINE TV
+en TV MARGIN
+es MARGEN TV
+pt MARGEM TV
+zh 电视边距
+ja テレビ余白
+hi टीवी मार्जिन
+
+# valori dei DETTAGLI (S13)
+it ALTI
+en HIGH
+es ALTOS
+pt ALTOS
+zh 高
+ja 高
+hi ज़्यादा
+
+it BASSI
+en LOW
+es BAJOS
+pt BAIXOS
+zh 低
+ja 低
+hi कम
+
+# in fondo al riquadro della grafica, cosa fa la voce scelta (S13, al massimo due righe di 532 pixel)
+it la telecamera più vicina o più lontana dai personaggi
+en the camera closer to or farther from the heroes
+es la cámara más cerca o más lejos de los personajes
+pt a câmara mais perto ou mais longe das personagens
+zh 镜头离角色更近或更远
+ja カメラをキャラクターに近づける・遠ざける
+hi कैमरा किरदारों के ज़्यादा पास या ज़्यादा दूर
+
+it la telecamera più di lato o più dall'alto
+en the camera more from the side or more from above
+es la cámara más de lado o más desde arriba
+pt a câmara mais de lado ou mais de cima
+zh 镜头更偏侧面或更偏俯视
+ja カメラをより横から・より上から
+hi कैमरा ज़्यादा बगल से या ज़्यादा ऊपर से
+
+it bordi più lisci; la scheda grafica lavora di più
+en smoother edges; the graphics chip works harder
+es bordes más suaves; la tarjeta gráfica trabaja más
+pt contornos mais suaves; a placa gráfica trabalha mais
+zh 边缘更平滑；显卡负担更重
+ja 輪郭がなめらかに。グラフィックの負荷が増えます
+hi किनारे ज़्यादा चिकने; ग्राफ़िक्स पर ज़्यादा भार
+
+it più nitida, ma la scheda grafica lavora di più: lo schermo della console è 640×480
+en sharper, but the graphics chip works harder: the console's screen is 640×480
+es más nítida, pero la tarjeta gráfica trabaja más: la pantalla de la consola es de 640×480
+pt mais nítida, mas a placa gráfica trabalha mais: o ecrã da consola é de 640×480
+zh 画面更清晰，但显卡负担更重：游戏机的屏幕是640×480
+ja より鮮明に。ただし負荷が増えます。ゲーム機の画面は640×480です
+hi ज़्यादा साफ़, पर ग्राफ़िक्स पर ज़्यादा भार: कंसोल की स्क्रीन 640×480 है
+
+it bassi: niente ombre né paesaggio lontano, metà delle particelle
+en low: no shadows or distant scenery, half the particles
+es bajos: sin sombras ni paisaje lejano, la mitad de las partículas
+pt baixos: sem sombras nem paisagem distante, metade das partículas
+zh 低：没有阴影和远景，粒子减半
+ja 低：影と遠景なし、パーティクル半分
+hi कम: न परछाइयाँ, न दूर का नज़ारा, आधे कण
+
+it se la TV taglia i bordi: rimpicciolisci finché vedi i quattro angoli
+en if your TV cuts off the edges: shrink until you see all four corners
+es si la tele corta los bordes: reduce hasta ver las cuatro esquinas
+pt se a TV corta as margens: reduz até veres os quatro cantos
+zh 如果电视裁掉了边缘：缩小画面，直到看见四个角
+ja テレビで端が切れるときは、四隅が見えるまで縮小
+hi अगर टीवी किनारे काटता है: तब तक छोटा करो जब तक चारों कोने न दिखें
+
+# nelle altre console di una partita in rete, dopo il gettone di chi comanda la pausa (S13)
+it sta cambiando la grafica della sua console
+en is changing the graphics on their console
+es está cambiando los gráficos de su consola
+pt está a mudar os gráficos da sua consola
+zh 正在调整自己游戏机的画面
+ja が自分のゲーム機の画面を設定中
+hi अपने कंसोल के ग्राफ़िक्स बदल रहा है
 
 it MUSICA
 en MUSIC
@@ -2448,6 +2574,58 @@ pt o jogo em rede é guardado aqui, nesta consola
 zh 联机游戏的进度保存在这台游戏机上
 ja 通信プレイの記録はこのゲーム機に保存されます
 hi लैन गेम यहीं, इसी कंसोल पर सेव होगा
+
+# (0.5.6) sotto il titolo dei salvataggi, quando ci si unisce con i posti pieni (S14, 576 pixel)
+it i posti sono pieni: la partita in rete prende il posto di quella scelta
+en all slots are full: the LAN game replaces the one you choose
+es los espacios están llenos: la partida en red ocupa el lugar de la que elijas
+pt os espaços estão cheios: o jogo em rede fica no lugar do que escolheres
+zh 存档位已满：联机游戏将替换你选择的存档
+ja スロットがいっぱいです。選んだデータに通信プレイを上書きします
+hi सारे स्लॉट भरे हैं: लैन गेम आपके चुने हुए सेव की जगह लेगा
+
+# (0.5.6) finestra dopo aver scelto la partita in UNISCITI: la domanda (B16, due righe di 396 pixel)
+it SALVARE LA PARTITA ANCHE SU QUESTA CONSOLE?
+en SAVE THE GAME ON THIS CONSOLE TOO?
+es ¿GUARDAR LA PARTIDA TAMBIÉN EN ESTA CONSOLA?
+pt GUARDAR O JOGO TAMBÉM NESTA CONSOLA?
+zh 也在这台游戏机上保存这局游戏吗？
+ja このゲーム機にもデータを保存しますか？
+hi क्या यह गेम इस कंसोल पर भी सेव करें?
+
+# ...e dove andrebbe (S13, 396 pixel)
+it c'è già nel salvataggio %d: si aggiorna
+en it's already in save %d: it will be updated
+es ya está en la partida %d: se actualizará
+pt já está no jogo %d: vai ser atualizado
+zh 已在存档%d中：将会更新
+ja すでにデータ%dにあります：更新されます
+hi यह पहले से सेव %d में है: अपडेट हो जाएगा
+
+it va nel salvataggio %d, che è libero
+en it goes into save %d, which is empty
+es irá a la partida %d, que está libre
+pt vai para o jogo %d, que está livre
+zh 将保存到空的存档%d
+ja 空いているデータ%dに保存します
+hi यह खाली सेव %d में जाएगा
+
+it i posti sono pieni: poi scegli quale sostituire
+en all slots are full: next, choose which one to replace
+es los espacios están llenos: luego elige cuál reemplazar
+pt os espaços estão cheios: depois escolhe qual substituir
+zh 存档位已满：接下来选择要替换的存档
+ja スロットがいっぱいです。次に上書きするデータを選びます
+hi सारे स्लॉट भरे हैं: फिर चुनो कि किसकी जगह लेनी है
+
+# (0.5.6) nella sala d'attesa di chi si e' unito salvandola anche qui (S13)
+it si salva anche qui, nel salvataggio %d
+en also saved here, in save %d
+es también se guarda aquí, en la partida %d
+pt também é guardado aqui, no jogo %d
+zh 也会保存在这里的存档%d
+ja このゲーム機のデータ%dにも保存されます
+hi यहाँ भी सेव %d में सेव होगा
 
 # Sala d'attesa: titolo, i 4 posti (B16; accanto TU, a destra in S13 com'e' il posto), sotto una
 # riga (S14) e i tasti.

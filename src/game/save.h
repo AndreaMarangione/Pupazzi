@@ -1,6 +1,7 @@
 // Saves on the console, text files with key=value lines (several files since 0.5.3):
 //
-//   pupazzi.sav             settings of this console: aim of each slot, antialiasing, volumes, language
+//   pupazzi.sav             settings of this console: aim of each slot, antialiasing, volumes, language,
+//                           graphics (0.5.6)
 //   partita1.sav .. partita4.sav    the games (the four saves of the first screen)
 //
 //   save_open(directory)    once at startup (the core calls it in retro_load_game): reads the
@@ -26,12 +27,24 @@
 //   volume_musica=6        from 0 to 10 (up to 0.4 default 7)
 //   volume_effetti=8       from 0 to 10
 //   lingua=it              it, en, es, pt, zh, ja, hi (since 0.5.3)
+//   (since 0.5.6, GRAFICA in the pause)
+//   telecamera_distanza=0  play camera, in steps: from -2 (closer) to 2 (farther), 0 as before
+//   telecamera_inclinazione=0  from -2 (more from the side) to 2 (more from above), 0 as before
+//   risoluzione=640        width of the picture: 320, 640, 960 or 1280 (height 3/4: 240 ... 960); the
+//                          other numbers go to the nearest one
+//   dettagli=1             1 high, 0 low (no shadows and no distant landscape, half the particles)
+//   margine_tv=0           from 0 to 4: the picture shrinks by 2.5% of its size on every side per step,
+//                          with black around it (TVs that crop the edges)
 //   salvataggi=1           (since 0.5.3) nothing to take from the 0.5.2 file (already turned into
 //                          partita1.sav, or there was none); 0 if that failed: retried at startup
 // partitaN.sav:
 //   versione=2
 //   nome=ANDREA            (since 0.5.4) name of the game: up to 12 of A-Z 0-9 space - ' ! ? .
 //                          (lowercase becomes uppercase); without it, "PARTITA N" is shown
+//   id=0123456789abcdef    (since 0.5.6) identity of the game, 16 hexadecimal digits: given the first
+//                          time the game is played on the network; a console that joins and saves it
+//                          too writes the same one (then, next time, it updates the same slot); a copy
+//                          (DUPLICA) gets a new one
 //   mappe.terra=1          open maps of the planet, in campaign order: finishing a map opens the
 //                          next one (they stay open in later rounds too); Earth has at least 1, another
 //                          planet opens (1) by beating the boss of the previous one. From 0 to 99.
@@ -70,6 +83,8 @@
 #define SAVE_SLOTS 4                // games
 #define SAVE_LANGS 7                // languages (lang.h)
 #define SAVE_NAME_LEN 13            // name of a game: at most 12 characters (save_name_char)
+#define SAVE_CAM_STEPS 2            // camera distance and pitch: from -2 to 2
+#define SAVE_MARGIN_MAX 4           // TV margin: from 0 to 4
 
 // Stars of a map: finished, explorer rescued, without restarting the map from the start.
 enum { SAVE_STAR_DONE = 1, SAVE_STAR_EXPLORER = 2, SAVE_STAR_NO_WIPE = 4 };
@@ -87,8 +102,14 @@ struct SaveData {
   uint8_t antialias;                // 0, 1 (the best, default), 4 or 8 samples
   uint8_t music_vol, sfx_vol;       // from 0 to 10 (defaults 6 and 8)
   uint8_t lang;                     // LANG_* (lang.h), default Italian
+  // Graphics (0.5.6).
+  int cam_dist, cam_pitch;          // play camera: steps from -2 to 2 (default 0)
+  int res;                          // width of the picture: 320, 640 (default), 960 or 1280
+  uint8_t detail;                   // 1 high (default), 0 low
+  uint8_t margin;                   // TV margin: from 0 (default) to SAVE_MARGIN_MAX
   // Game (partitaN.sav).
   char name[SAVE_NAME_LEN];         // nome=: "" until it is given one (PARTITA N is shown)
+  uint64_t id;                      // id=: 0 until it is played on the network (0.5.6)
   uint8_t maps_open[SAVE_WORLDS];   // mappe.<planet>: open maps in order (Earth from 1, the others from 0)
   uint8_t giro[SAVE_WORLDS];        // giro.<planet>: from 1 to SAVE_GIRO_MAX
   int nmaps;                        // maps with stars (those not listed have 0 stars)
@@ -153,6 +174,18 @@ bool save_slot_delete(int i);
 // is chosen from the title).
 void save_guest_begin(void);
 void save_guest_end(void);
+// (0.5.6) As save_guest_begin, but the game is saved on this console too, in slot i, with identity
+// id (the host's): slot i becomes the active game (the caller puts the host's progress in memory,
+// then save_write). If slot i already holds the same game (the same id), at every write the planets
+// where it had got further (played here alone) stay as they were: a later round wins whole (maps,
+// round, stars of that planet's maps, which world_of tells), in the same round the open maps are
+// the most and the stars add up; its play time goes on. Otherwise slot i is overwritten.
+// save_guest_end writes it one last time.
+void save_guest_slot_begin(int i, uint64_t id, int (*world_of)(const char* map_id));
+// (0.5.6) Identity of the active game (it gets one, and is written, if it has none); 0 without an
+// active game. The slot holding the game with identity id, -1 if none (the first one, if more).
+uint64_t save_game_id(void);
+int save_slot_with_id(uint64_t id);
 // How the last read of a game went, for the log.
 const char* save_slot_status(void);
 // Code of language l in the file ("it", "en"...; "" out of range).

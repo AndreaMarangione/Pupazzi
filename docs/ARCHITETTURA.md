@@ -59,10 +59,16 @@ verso solo.
 
 **Model-View.** La partita (`Game`, in `game/sim`) è il modello: dati semplici, deterministici,
 uguali su ogni console. La vista (`View`, in `game/view`) è di questa console: telecamera,
-inquadratura (televisore o schermo della console), da dove arriva un suono, quale musica, la
-geometria della mappa e i modelli da disegnare. `view_build_frame` legge la partita e prepara il
-fotogramma; quando la partita carica un'altra mappa, la vista ne costruisce la geometria
-(`LevelMeshes`). In rete ogni console ha la sua vista della stessa partita.
+inquadratura (televisore o schermo della console, e dalla 0.5.6 distanza, inclinazione e dettagli
+scelti in GRAFICA), da dove arriva un suono, quale musica, la geometria della mappa e i modelli da
+disegnare. `view_build_frame` legge la partita e prepara il fotogramma; quando la partita carica
+un'altra mappa, la vista ne costruisce la geometria (`LevelMeshes`). In rete ogni console ha la sua
+vista della stessa partita.
+
+Le impostazioni di questa console (pausa: mira, volumi, GRAFICA) stanno in `save_data()`: la pausa,
+che in rete gira uguale su tutte le console, le cambia solo sulla console di chi la comanda; il core
+le legge a ogni fotogramma e le passa alla vista (`view_set_gfx`), al renderer e a RetroArch (la
+risoluzione con `SET_GEOMETRY`). La partita non le legge mai: non cambiano il gioco.
 
 **Observer.** La partita non chiama la vista: annuncia gli eventi con `GameEvents` (`game.h`):
 un suono in un punto del mondo, un suono dell'interfaccia, un cambio di telecamera. La vista si
@@ -100,9 +106,13 @@ virtuali): oggetti creati con `calloc`, interfacce fatte di puntatori a funzione
    `net_frame_end`);
 3. `game_update`: un passo di 1/60 di secondo della partita (regole, oppure la schermata in corso);
 4. `view_step`: la musica che va con quello che c'è a schermo;
-5. `view_build_frame`: telecamera, oggetti da disegnare e HUD;
-6. il renderer scelto (`VideoOut`) disegna il fotogramma e lo passa a RetroArch;
-7. il sonoro del fotogramma (800 campioni a 48 kHz).
+5. le impostazioni della GRAFICA alla vista e la risoluzione; l'immagine dentro il fotogramma (con
+   il margine TV più piccola, con il nero attorno);
+6. `view_build_frame`: telecamera, oggetti da disegnare e HUD, per l'immagine;
+7. il renderer scelto (`VideoOut`) disegna l'immagine nel fotogramma (`FrameDesc`: `w`, `h`
+   l'immagine, `fw`, `fh`, `ox`, `oy` il fotogramma e dove sta; l'HUD, scritto in pixel a 640×480,
+   in scala con l'altezza dell'immagine) e lo passa a RetroArch;
+8. il sonoro del fotogramma (800 campioni a 48 kHz).
 
 ## Partita identica su ogni console
 

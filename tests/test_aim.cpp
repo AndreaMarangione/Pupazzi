@@ -614,6 +614,97 @@ TEST_CASE("7) voce Mira nella pausa") {
   EXPECT(g.aim_level[0] == AIM_SOFT && !strcmp(game_aim_name(g, 0), "morbida"), "all'avvio la mira e' morbida");
 }
 
+TEST_CASE("7b) GRAFICA nella pausa (0.5.6): le impostazioni di questa console") {
+  fresh(AIM_MEDIUM, "0");
+  auto press = [](int b) {
+    step(0, 0, (uint16_t)(1u << b));
+    step(0, 0);
+  };
+  SaveData* sd = save_data();
+  sd->cam_dist = sd->cam_pitch = 0;
+  sd->res = 640;
+  sd->detail = 1;
+  sd->margin = 0;
+  game_set_aa_available(g, 8);
+  game_set_aa_level(g, 1);
+  game_start_tap(g, 0);
+  step(0, 0);
+  press(PAD_DOWN);
+  press(PAD_DOWN);
+  press(PAD_DOWN);
+  bool ok = g.pause_sel == PS_GFX;
+  press(PAD_A);
+  ok &= g.pause_gfx && g.gfx_sel == GF_DIST;
+  for (int k = 0; k < 3; ++k) press(PAD_RIGHT);       // stops at +2
+  ok &= sd->cam_dist == 2;
+  press(PAD_A);                                       // A: the next one, after +2 back to -2
+  ok &= sd->cam_dist == -2;
+  press(PAD_DOWN);
+  press(PAD_LEFT);
+  ok &= g.gfx_sel == GF_PITCH && sd->cam_pitch == -1;
+  press(PAD_DOWN);
+  press(PAD_LEFT);                                    // antialiasing: the best (8X) -> 4X
+  ok &= g.gfx_sel == GF_AA && game_aa_wanted(g) == 4 && sd->antialias == 4;
+  press(PAD_DOWN);
+  for (int k = 0; k < 3; ++k) press(PAD_RIGHT);
+  ok &= g.gfx_sel == GF_RES && sd->res == 1280;
+  press(PAD_DOWN);
+  press(PAD_LEFT);
+  ok &= g.gfx_sel == GF_DETAIL && sd->detail == 0;
+  press(PAD_DOWN);
+  press(PAD_RIGHT);
+  ok &= g.gfx_sel == GF_MARGIN && sd->margin == 1;
+  press(PAD_DOWN);
+  ok &= g.gfx_sel == GF_DIST;                         // after the last one, the first
+  press(PAD_UP);
+  ok &= g.gfx_sel == GF_MARGIN && g.paused;
+  press(PAD_B);
+  ok &= g.paused && !g.pause_gfx && g.pause_sel == PS_GFX;
+  EXPECT(ok, "A su GRAFICA apre il riquadro; su/giu' tra le 6 voci, destra/sinistra cambiano (fermandosi in fondo), A va avanti; B torna alla pausa");
+  press(PAD_A);
+  ok = g.pause_gfx;
+  game_start_tap(g, 0);
+  step(0, 0);
+  EXPECT(ok && !g.paused && !g.pause_gfx, "START chiude la pausa con il riquadro aperto");
+  // LAN game: the pause opened by a player of another console, with the popup open: the values of
+  // this console do not change.
+  g.net = true;
+  g.session.net_local = 1;
+  game_start_tap(g, 0);
+  step(0, 0);
+  press(PAD_DOWN);
+  press(PAD_DOWN);
+  press(PAD_DOWN);
+  press(PAD_A);
+  const int before = sd->cam_dist;
+  press(PAD_RIGHT);
+  ok = g.pause_gfx && sd->cam_dist == before;
+  game_start_tap(g, 0);
+  step(0, 0);
+  g.net = false;
+  g.session.net_local = -1;
+  EXPECT(ok, "in rete, pausa di un giocatore di un'altra console: il riquadro si apre ma qui non cambia niente");
+  sd->cam_dist = sd->cam_pitch = 0;
+  sd->res = 640;
+  sd->detail = 1;
+  sd->margin = 0;
+  sd->antialias = 1;
+}
+
+TEST_CASE("7c) GRAFICA e salvataggio in rete (0.5.6): i testi stanno al loro posto in ogni lingua") {
+  for (int l = 0; l < NLANGS; ++l) {
+    lang_set(l);
+    char why[160], what[200];
+    bool ok = gfx_layout_ok(g, why, sizeof(why));
+    snprintf(what, sizeof(what), "%s: %s", save_lang_id(l), ok ? "riquadro GRAFICA" : why);
+    EXPECT(ok, what);
+    ok = join_layout_ok(why, sizeof(why));
+    snprintf(what, sizeof(what), "%s: %s", save_lang_id(l), ok ? "domanda, salvataggi e sala d'attesa di chi si unisce" : why);
+    EXPECT(ok, what);
+  }
+  lang_set(LANG_IT);
+}
+
 TEST_CASE("8) inclinazione a meta' che trema (+-0,04) mentre si gira a 90 gradi al secondo") {
   for (int lv = 0; lv < NAIMLEVELS; ++lv) {
     float lag[2] = { 0, 0 };

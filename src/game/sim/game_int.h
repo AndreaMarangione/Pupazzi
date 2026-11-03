@@ -128,16 +128,20 @@ enum { TI_NEW = 0, TI_LOAD, TI_NET, TI_MANAGE, TI_LANG, TI_QUIT, TITLE_ITEMS };
 // Saves screen: to load one, to manage them (duplicate, delete) or, with a new game and the slots
 // full, to choose which one to overwrite; on the network (0.5.4), which one to host the game with.
 // Popups on top: actions, confirmation.
-enum { SL_LOAD = 0, SL_MANAGE, SL_OVERWRITE, SL_NET };
+// SL_JOIN (0.5.6): joining a LAN game to save it here too, with all the slots full: which one to replace.
+enum { SL_LOAD = 0, SL_MANAGE, SL_OVERWRITE, SL_NET, SL_JOIN };
 enum { SP_NONE = 0, SP_ACTIONS, SP_DELETE, SP_OVERWRITE };
 // Items of the actions popup (0.5.4: also RINOMINA).
 enum { SA_COPY = 0, SA_RENAME, SA_DELETE, SA_COUNT };
 // Keyboard for the game's name (0.5.4): new game (before creating it), new name, new game to be
 // created on the network.
 enum { NM_NEW = 0, NM_RENAME, NM_NET };
-// Pause items: resume, controls (0.5.2: opens the box with the buttons), aim, antialiasing, music,
-// sound effects, leave the game, back to the menu.
-enum { PS_RESUME = 0, PS_CONTROLS, PS_AIM, PS_AA, PS_MUSIC, PS_SFX, PS_LEAVE, PS_MENU, PAUSE_ITEMS };
+// Pause items: resume, controls (0.5.2: opens the box with the buttons), aim, graphics (0.5.6: opens
+// the GRAFICA popup; antialiasing before), music, sound effects, leave the game, back to the menu.
+enum { PS_RESUME = 0, PS_CONTROLS, PS_AIM, PS_GFX, PS_MUSIC, PS_SFX, PS_LEAVE, PS_MENU, PAUSE_ITEMS };
+// Items of the GRAFICA popup (0.5.6), settings of this console: camera distance and pitch,
+// antialiasing, resolution, details, TV margin.
+enum { GF_DIST = 0, GF_PITCH, GF_AA, GF_RES, GF_DETAIL, GF_MARGIN, GFX_ITEMS };
 
 struct Player {
   bool active, alive, grounded, frozen, hidden;
@@ -432,7 +436,15 @@ struct Game {
   uint8_t net_consoles;
   bool net_pop;
   int lobby_sel;
+  // (0.5.6) "Salvare la partita anche su questa console?" over the games found: the chosen game and
+  // the slot where it would go (the one that already has it, or the first free one; -1 all full).
+  bool lobby_pop;
+  uint64_t join_id;
+  int join_slot;
+  bool join_linked;
   bool pause_help;            // the controls box is open in the pause
+  bool pause_gfx;             // (0.5.6) the GRAFICA popup is open in the pause...
+  int gfx_sel;                // ...with this item selected (GF_*)
   uint8_t aim_level[MAX_PLAYERS];   // aim chosen by each player in the pause (AIM_XSOFT...)
   int aa_max, aa_level, aa_cap;     // antialiasing (graphics only): the renderer's maximum samples (0: none) /
                                     // pause choice (0, 1 the best, 4, 8) / session cap (8 or 4)
@@ -691,3 +703,7 @@ void card_burn_tick(Game& g, int k);                  // burning monster: damage
 bool card_shield_hit(Game& g, int i);                 // SCUDO: true if the hit is stopped
 void card_special_used(Game& g, int i);               // SPECIALE GENEROSO
 bool cards_layout_ok(Game& g, char* why, int n, bool all = false);   // tests: names and descriptions fit in the boxes (all: writes them all)
+// Tests (0.5.6), in the current language: the texts of GRAFICA (pause item, popup) and of the LAN
+// game saved also on the console that joins (question, slots, waiting room) fit in their places.
+bool gfx_layout_ok(Game& g, char* why, int n);
+bool join_layout_ok(char* why, int n);

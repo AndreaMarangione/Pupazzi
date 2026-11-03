@@ -1,7 +1,8 @@
 // Text, icons and shapes over the image (HUD and menus).
 //
 // Since 0.5.2 (Orbita style) everything is given in pixels of the 640x480 reference resolution,
-// decimals included; each renderer multiplies by its scale (hud_scale / 2: 1 at 640x480).
+// decimals included; each renderer multiplies by its scale, the height of the picture / 480 (1 at
+// 640x480; since 0.5.6 also not a whole multiple of a half, with the TV margin).
 //
 // Text: in UTF-8, with the glyphs of src/font_hud.h already at the right size (faces HF_*, for
 // example HF_S16 = SemiBold 16 pixels). It is positioned on the baseline; track is the extra
@@ -107,11 +108,11 @@ void hud_para(Hud* h, float x, float y, float w, float hh, float skew, uint32_t 
 float hud_shape_sdf(const HudShape& sh, float s, float px, float py);
 float hud_shape_cover(float d, float soft_px);
 
-// Drawing into the software renderer's framebuffer (XRGB8888, stride = W pixels); k = hud_scale.
-// Only the rows from y0 to y1 excluded (y1 < 0: to the bottom): the renderer does it in strips, in
-// parallel, after calling hud_prepare once.
+// Drawing into the software renderer's framebuffer (XRGB8888, stride = W pixels), the picture W x H:
+// scale H / 480. Only the rows from y0 to y1 excluded (y1 < 0: to the bottom): the renderer does it
+// in strips, in parallel, after calling hud_prepare once.
 void hud_prepare(void);
-void hud_draw_sw(const Hud* h, uint32_t* fb, int W, int H, int k, int y0 = 0, int y1 = -1);
+void hud_draw_sw(const Hud* h, uint32_t* fb, int W, int H, int y0 = 0, int y1 = -1);
 
 // For the GPU renderer: atlas (8-bit alpha, HUD_ATLAS_W x HUD_ATLAS_H, glows included).
 const uint8_t* hud_atlas(int* w, int* h);

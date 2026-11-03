@@ -6,6 +6,28 @@ Le note di ogni release su GitHub si prendono da qui (la sezione con il numero d
 
 ## [Non rilasciato]
 
+### Aggiunto
+
+- GRAFICA nella pausa: le impostazioni di questa console in un riquadro in basso, con il gioco che
+  si vede sopra mentre cambiano. Distanza e inclinazione della telecamera (cinque tacche, in mezzo
+  come prima), antialias (spostato qui dalla pausa), risoluzione 320×240, 640×480, 960×720 o
+  1280×960 (cambia al volo), dettagli alti o bassi (bassi: niente ombre né paesaggio lontano, metà
+  delle particelle), margine TV per le TV che tagliano i bordi (l'immagine si rimpicciolisce, con
+  dei segni ai quattro angoli mentre lo si sceglie). Restano salvate; in rete ognuno ha le sue.
+- Carte al gladiatore: ogni volta che perde un terzo della vita (a 2/3 e a 1/3), prima del ruggito
+  si sceglie una carta; una volta per terzo nella mappa (rifare la zona non le ridà).
+- Gioco in rete: chi si unisce può salvare la partita anche sulla sua console ("Salvare la partita
+  anche su questa console?"), nel primo posto libero o, se sono pieni, in quello scelto; le volte
+  dopo si aggiorna lo stesso posto, e quello che la console aveva in più (la stessa partita giocata
+  da sola) resta.
+
+### Cambiato
+
+- Nella pausa la voce ANTIALIAS è diventata GRAFICA; in pausa la telecamera segue le impostazioni.
+- Ogni partita ha un'identità (`id=` nel suo file) dalla prima volta che si gioca in rete; DUPLICA
+  ne dà una nuova alla copia.
+- In rete gioca solo con altre console alla 0.5.6.
+
 ## [0.5.5] - 2026-11-03
 
 Stesso gioco della 0.5.4: cambiano il codice e il modo di pubblicarlo. In rete gioca solo con

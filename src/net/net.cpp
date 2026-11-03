@@ -161,8 +161,11 @@ struct State {
   float rtt;
   int rtt_max;
   unsigned stalls, catchup;
+  int join_save;                    // (0.5.6) joining: slot where the game is saved on this console too (-1 no)
   // Tests.
   int auto_mode;                    // 0 none, 1 crea, 2 unisciti
+  bool auto_save;                   // unisciti+salva: save it here too...
+  int auto_save_full;               // ...in this slot when all are full (-1: then not)
   int auto_wait;                    // crea: how many other consoles to wait for
   bool force;                       // unisciti: even to an incompatible game (refusal test)
   int auto_delay;                   // frames before crea/unisciti (before that you play alone)
@@ -448,6 +451,7 @@ void offer(const sockaddr_in& to, uint32_t nonce) {
   w.u8((uint32_t)S.summary.world);
   w.u8((uint32_t)S.summary.giro);
   w.str(S.summary.name, NET_NAME_LEN);
+  w.u64(S.summary.id);                         // 0.5.6
   send_to(to, w);
 }
 
@@ -661,6 +665,7 @@ void start_msg(const Peer& p) {
   w.u8((uint32_t)S.st_nm);
   for (int i = 0; i < S.st_nm; ++i) w.u8(S.st_stars[i]);
   w.str(S.summary.name, NET_NAME_LEN);
+  w.u64(S.summary.id);                         // 0.5.6: whoever joins can save it too
   send_to(p.addr, w);
 }
 
@@ -814,6 +819,7 @@ void search_reset(void) {
   memset(S.found, 0, sizeof(S.found));
   S.discover_t = 0.0;
   S.role = R_SEARCH;
+  S.join_save = -1;
 }
 
 void search_start(void) {
@@ -869,6 +875,7 @@ void client_offer(Rd& r, const sockaddr_in& from) {
   gm.giro = (int)r.u8();
   r.str(gm.name, NET_NAME_LEN);
   if (r.bad || nonce != S.my_id) return;
+  gm.id = r.pos + 8 <= r.n ? r.u64() : 0;     // since 0.5.6
   if (gm.state == NG_OPEN || gm.state == NG_FULL) {
     if (strcmp(gm.version, S.version)) gm.state = NG_VERSION;
     else if (content != S.content) gm.state = NG_MAPS;
@@ -904,8 +911,9 @@ void join_send(void) {
   send_to(S.host, w);
 }
 
-// k: position in the menu list (the games found, in order, without the empty slots).
-void join(int k) {
+// k: position in the menu list (the games found, in order, without the empty slots); save: slot
+// where it is saved on this console too (0.5.6), -1 not.
+void join(int k, int save) {
   if (S.role != R_SEARCH || k < 0) return;
   int idx = -1;
   for (int i = 0, n = 0; i < NET_MAX_GAMES && idx < 0; ++i)
@@ -923,7 +931,27 @@ void join(int k) {
   S.role = R_JOINING;
   S.join_t = 0.0;
   S.join_first = S.now;
+  S.join_save = save >= 0 && save < SAVE_SLOTS && f.game.id ? save : -1;
   plat_log("rete: mi unisco alla partita \"%s\" su %s", f.game.name, addr_text(f.addr));
+  if (S.join_save >= 0) plat_log("rete: la partita si salvera' anche qui, nel posto %d", S.join_save + 1);
+}
+
+// Planet of a map (stars of a LAN game saved also here, save_guest_slot_begin).
+int world_of_map(const char* id) {
+  for (int i = 0; i < maps_count(); ++i)
+    if (!strcmp(maps_id(i), id)) return maps_world(i);
+  return -1;
+}
+
+// Tests (unisciti+salva[:N]): the slot that already has the game, or the first free one, or slot N.
+int auto_save_slot(uint64_t id) {
+  if (!S.auto_save || !id) return -1;
+  const int s = save_slot_with_id(id);
+  if (s >= 0) return s;
+  static SaveData d;
+  for (int i = 0; i < SAVE_SLOTS; ++i)
+    if (save_slot_peek(i, &d) == SAVE_NUOVO) return i;
+  return S.auto_save_full;
 }
 
 void client_lobby(Rd& r, const sockaddr_in& from) {
@@ -980,6 +1008,7 @@ void client_begin(Rd& r) {
   char name[NET_NAME_LEN];
   r.str(name, NET_NAME_LEN);
   if (r.bad || id != S.my_id || player < 1 || player >= MAX_PLAYERS || !((st.consoles >> player) & 1)) return;
+  const uint64_t game_id = r.pos + 8 <= r.n ? r.u64() : S.view.game.id;   // since 0.5.6
   if (S.role != R_JOINED && S.role != R_JOINING) return;     // repeated START: already started
   if (nm != maps_count()) {
     plat_log("rete: la partita ha %d mappe, qui %d: non si puo' giocare", nm, maps_count());
@@ -988,8 +1017,10 @@ void client_begin(Rd& r) {
   S.session = session;
   S.player = player;
   st.local = player;
-  // The host's progress, only in memory (save_guest_begin).
-  save_guest_begin();
+  // The host's progress: only in memory (save_guest_begin) or, if chosen when joining (0.5.6), saved
+  // here too in a slot of this console (save_guest_slot_begin), updated with it from now on.
+  if (S.join_save >= 0 && game_id) save_guest_slot_begin(S.join_save, game_id, world_of_map);
+  else save_guest_begin();
   SaveData* sd = save_data();
   for (int k = 0; k < SAVE_WORLDS; ++k) {
     sd->maps_open[k] = open[k];
@@ -997,6 +1028,7 @@ void client_begin(Rd& r) {
   }
   for (int i = 0; i < nm; ++i) save_set_stars(maps_id(i), stars[i]);
   memcpy(sd->name, name, NET_NAME_LEN);
+  if (save_slot() >= 0) save_write();
   S.role = R_CLIENT_PLAY;
   S.host_over = false;
   S.contig = S.next = S.cseq = S.acked = 0;
@@ -1119,7 +1151,7 @@ void client_tick(void) {
       if (S.auto_mode == 2 && S.now - S.join_first > JOIN_GIVEUP_MS) {   // after a refusal, retry in a while
         for (int k = 0, n = 0; k < NET_MAX_GAMES && S.role == R_SEARCH; ++k) {
           if (!S.found[k].used) continue;
-          if (S.found[k].game.state == NG_OPEN || S.force) join(n);
+          if (S.found[k].game.state == NG_OPEN || S.force) join(n, auto_save_slot(S.found[k].game.id));
           n++;
         }
       }
@@ -1328,6 +1360,9 @@ void parse_env(void) {
   } else if (v && !strncmp(v, "unisciti", 8)) {
     S.auto_mode = 2;
     S.force = v[8] == '!';
+    S.auto_save = !strncmp(v + 8, "+salva", 6);
+    S.auto_save_full = S.auto_save && v[14] == ':' ? atoi(v + 15) - 1 : -1;
+    if (S.auto_save_full >= SAVE_SLOTS) S.auto_save_full = -1;
   }
   v = getenv("PUPAZZI_RETE_DOPO");
   S.auto_delay = S.auto_mode && v && *v ? atoi(v) : 0;
@@ -1357,6 +1392,7 @@ void net_init(Game& game) {
   memset(&S, 0, sizeof(S));
   g_game = &game;
   S.fd = -1;
+  S.join_save = -1;
   g_inited = true;
   S.now = plat_now_ms();
   S.rnd = (uint32_t)getpid() * 2654435761u ^ (uint32_t)time(NULL);
@@ -1414,6 +1450,7 @@ void net_frame_begin(void) {
     v.game = S.summary;
     v.game.players = 1 + count_peers();
   }
+  v.save = S.role == R_JOINING || S.role == R_JOINED ? S.join_save : -1;
   v.ngames = 0;
   if (S.role == R_SEARCH)
     for (int k = 0; k < NET_MAX_GAMES; ++k)
@@ -1562,7 +1599,7 @@ void net_request(int req, int arg) {
       search_start();
       break;
     case NR_JOIN:
-      join(arg);
+      join(arg & 255, (arg >> 8) - 1);
       break;
     case NR_LEAVE:
       if (S.role == R_JOINING || S.role == R_JOINED) {

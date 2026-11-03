@@ -58,14 +58,33 @@ per il suo controller: **extra morbida** (la più calma: filtra di più e serve 
 **morbida** (quella di partenza), **media**, **rapida** (segue la levetta quasi subito). Resta
 salvata, per ogni controller (giocatore 1, 2, 3, 4).
 
-**Antialias**: con la GPU i bordi vengono lisciati. Dalla pausa, voce **ANTIALIAS**: **8X** (8
-campioni per pixel, quello di partenza), **4X** o **NO**, per tutti, e resta salvato; il riquadro
-delle prestazioni (SELECT) scrive "GPU+8X" o "GPU+4X". Se con 8 campioni la partita non sta nei 60
-fotogrammi al secondo (meno di 55 per un secondo e mezzo) si passa da soli a 4 per il resto della
-sessione (riga "antialias:" nel registro); dalla pausa si può rimettere 8X. Se la GPU non lo
-permette la voce dice ASSENTE e si gioca senza. Se il gioco si chiudesse da solo nei primi secondi con l'antialias, alla partenza
-dopo riparte senza e lo salva spento (file `out/aa_in_prova.txt` e riga "antialias spento
-all'avvio" nel registro); dalla pausa si riaccende.
+**Grafica** (dalla 0.5.6): dalla pausa, voce **GRAFICA**, si apre in basso un riquadro con le
+impostazioni di questa console, che restano salvate (in una partita in rete ognuno ha le sue: sulle
+altre console il riquadro dice chi le sta cambiando). Su e giù scelgono la voce, ← → cambiano il
+valore (fermandosi in fondo), A passa al valore dopo, B torna alla pausa; mentre si cambiano, il
+gioco si vede sopra il riquadro.
+
+- **DISTANZA**: la telecamera più vicina o più lontana dai personaggi, in cinque tacche (quella in
+  mezzo è come prima): ogni tacca cambia del 15% la distanza minima (15 m sullo schermo della
+  console, 22 con la TV); quando il gruppo si allarga si arriva sempre fino a 30 m.
+- **INCLINAZIONE**: la telecamera più di lato o più dall'alto, in cinque tacche di 4,6 gradi (in
+  mezzo 56 gradi, come prima); più dall'alto si allontana fino a 35 m, per vedere la stessa zona.
+- **ANTIALIAS** (prima era una voce della pausa): con la GPU i bordi vengono lisciati. **8X** (8
+  campioni per pixel, quello di partenza), **4X** o **NO**; il riquadro delle prestazioni (SELECT)
+  scrive "GPU+8X" o "GPU+4X". Se con 8 campioni la partita non sta nei 60 fotogrammi al secondo
+  (meno di 55 per un secondo e mezzo) si passa da soli a 4 per il resto della sessione (riga
+  "antialias:" nel registro); dalla GRAFICA si può rimettere 8X. Se la GPU non lo permette la voce
+  dice ASSENTE e si gioca senza. Se il gioco si chiudesse da solo nei primi secondi con
+  l'antialias, alla partenza dopo riparte senza e lo salva spento (file `out/aa_in_prova.txt` e
+  riga "antialias spento all'avvio" nel registro); dalla GRAFICA si riaccende.
+- **RISOLUZIONE**: 320×240, **640×480** (quella di partenza: lo schermo della console), 960×720 o
+  1280×960; più alta è più nitida (sul PC, o in una TV che la mostra) ma la GPU lavora di più.
+  Cambia subito, senza riavviare.
+- **DETTAGLI**: **alti** o **bassi** (niente ombre, niente paesaggio lontano, metà delle
+  particelle), per alleggerire.
+- **MARGINE TV**: per le TV che tagliano i bordi dell'immagine. A ogni tacca (fino a 4)
+  l'immagine si rimpicciolisce del 2,5% per lato, con il nero attorno; mentre la si sceglie, ai
+  quattro angoli compaiono dei segni arancioni: con il margine giusto sulla TV si vedono tutti.
 
 Tenere premuto START due secondi apre il menu di RetroArch come negli altri giochi.
 
@@ -98,10 +117,10 @@ successiva, le altre dicono "chiusa"; A su una mappa chiusa dice come si apre), 
 con le tacche e quante ne servono per il giro dopo ("★ 4/12 ... 10 → GIRO 2") e i pianeti in arrivo.
 
 Durante la partita chi preme un tasto entra con una piccola finestra per scegliere l'eroe, mentre
-gli altri continuano a giocare. Dalla pausa (RIPRENDI, COMANDI, MIRA, ANTIALIAS, MUSICA, EFFETTI,
+gli altri continuano a giocare. Dalla pausa (RIPRENDI, COMANDI, MIRA, GRAFICA, MUSICA, EFFETTI,
 LASCIA LA PARTITA, TORNA AL MENU) ognuno può rivedere i tasti (COMANDI: un riquadro con tutti i
-comandi, A o B lo chiudono), scegliere la sua mira, accendere o spegnere l'antialias, cambiare i
-volumi, lasciare la partita o tornare al menu delle mappe.
+comandi, A o B lo chiudono), scegliere la sua mira, regolare la grafica di questa console
+(GRAFICA, vedi sopra), cambiare i volumi, lasciare la partita o tornare al menu delle mappe.
 
 ## Come si gioca
 
@@ -124,9 +143,11 @@ volumi, lasciare la partita o tornare al menu delle mappe.
   - Se il boss va giù nello stesso momento in cui cade l'ultimo giocatore, la mappa è vinta.
 - **Carte**: all'inizio della mappa e dopo la prima e la seconda zona il gioco si ferma, compare il
   banner **RITIRA LE TUE CARTE** e ognuno, con A sul suo riquadro, vede le sue 3 carte e ne sceglie
-  una (su/giù e A, oppure START breve). La carta vale fino alla
-  fine della mappa, anche se una zona si rifà; in fondo al riquadro le carte già prese. Elenco
-  più sotto.
+  una (su/giù e A, oppure START breve). Dalla 0.5.6 anche contro il gladiatore, ogni volta che
+  perde un terzo della vita (a due terzi e a un terzo, subito prima del ruggito); una volta per
+  terzo nella mappa: rifacendo la zona non si riprendono, ricominciando la mappa sì. La carta vale
+  fino alla fine della mappa, anche se una zona si rifà; in fondo al riquadro le carte già prese.
+  Elenco più sotto.
 - **Stelle**: ogni mappa ne dà 3: mappa finita; **esploratore** salvato; mappa finita senza
   ricominciarla da capo. La capsula dell'esploratore è nascosta fuori strada (tra i papiri, tra i
   bambù, dietro le felci della giungla, dietro le colonne cadute dell'arena): quando ci si
@@ -222,14 +243,15 @@ Il boss non brucia e non rallenta.
     chi ci resta; se finisce contro un muro o un ostacolo resta **stordito** e prende più danni;
   - **giavellotti** da lontano (cerchi rossi dove cadono), da 1 a 3;
   - **spaccaterra**: la spada a terra, la crepa corre verso chi mira.
-  A due terzi e a un terzo della vita ruggisce, chiama scorpioni e scarabei dalle botole e diventa
-  più rapido.
+  A due terzi e a un terzo della vita (dalla 0.5.6 dopo la scelta delle carte) ruggisce, chiama
+  scorpioni e scarabei dalle botole e diventa più rapido.
 
 ## Cosa si vede a schermo
 
 La telecamera va da 15 a 30 m sullo schermo della console e da 22 a 30 m con l'HDMI collegato
 (0.5.1-0.5.2: da 22 a 30 sempre; 0.5: da 15 a 30): quando il gruppo si allarga si vede una zona
-intera, e i giocatori non si possono allontanare più di quanto si vede. L'HDMI si controlla ogni
+intera, e i giocatori non si possono allontanare più di quanto si vede. Distanza e inclinazione si
+regolano nella pausa, voce GRAFICA. L'HDMI si controlla ogni
 secondo (`/sys/class/extcon/hdmi/state`): attaccarlo o staccarlo in partita cambia solo la visuale
 minima; il registro lo dice (righe "HDMI:" e "schermo:").
 
@@ -267,11 +289,13 @@ seconda scheda), dove stanno anche i salvataggi degli altri giochi, fuori da APP
 aggiornamento della MOD svuota); se non si potesse usare, in `pupazzi/out/`. Il percorso esatto è
 nella riga "salvataggio:" del registro. Dalla 0.5.3 i file sono due tipi:
 
-- `pupazzi.sav`: le impostazioni di questa console (mira di ogni controller, antialias, volumi,
-  lingua);
+- `pupazzi.sav`: le impostazioni di questa console (mira di ogni controller, volumi, lingua e,
+  dalla 0.5.6, la GRAFICA: distanza e inclinazione della telecamera, antialias, risoluzione,
+  dettagli, margine TV);
 - `partita1.sav` ... `partita4.sav`: le quattro partite (nome, mappe aperte e giro di ogni
-  pianeta, stelle di ogni mappa nel giro in corso, tempo di gioco). Un posto libero è un file che
-  non c'è.
+  pianeta, stelle di ogni mappa nel giro in corso, tempo di gioco e, dalla 0.5.6, l'identità della
+  partita, `id=`, che prende la prima volta che si gioca in rete). Un posto libero è un file che
+  non c'è. DUPLICA dà alla copia un'identità nuova: da lì è una partita a sé.
 
 Si scrive a fine mappa, quando si chiude la pausa dopo aver cambiato qualcosa, quando si cambia
 lingua o nome e all'uscita, sempre in modo sicuro (prima un file a parte, poi lo scambio:
@@ -286,7 +310,8 @@ in `pupazzi.sav` i dati vecchi restano (una 0.5.2 rimessa sulla console li ritro
 `salvataggi=1` dice che sono già stati presi: se poi si eliminano tutte le partite non tornano.
 Se la partita 1 non si riesce a scrivere resta `salvataggi=0` e si riprova all'avvio dopo.
 Con un salvataggio della 0.4 restano mira, antialias e volumi e la Terra riparte dalla prima
-mappa. Nel gioco in rete scrive solo la console che ha creato la partita (vedi **Gioco in rete**).
+mappa. Nel gioco in rete scrive la console che ha creato la partita e, se lo sceglie, chi si unisce
+(vedi **Gioco in rete**).
 
 ## Lingue
 
@@ -325,15 +350,23 @@ sul suo eroe, nella **stessa rete Wi-Fi** (il router non deve isolare i disposit
 - Su una console: **GIOCO IN RETE → CREA UNA PARTITA**, poi il salvataggio con cui giocarla (uno
   vuoto: NUOVA PARTITA, con il nome). Si apre la **sala d'attesa** con i quattro posti.
 - Sulle altre: **GIOCO IN RETE → UNISCITI A UNA PARTITA**: compaiono le partite trovate (nome,
-  pianeta e giro, console già dentro); A su quella giusta. Ognuna prende il primo posto libero e
-  il suo colore.
+  pianeta e giro, console già dentro); A su quella giusta. Dalla 0.5.6 il gioco chiede
+  **SALVARE LA PARTITA ANCHE SU QUESTA CONSOLE?** (A sì, B no) e dice dove andrebbe: nel
+  salvataggio che ce l'ha già (le volte dopo si aggiorna sempre quello), oppure nel primo posto
+  libero; con i quattro posti pieni, dopo il sì si sceglie quale sostituire (con conferma). Nella
+  sala d'attesa una riga ricorda dove si salva. Ognuna prende il primo posto libero tra i giocatori
+  e il suo colore.
 - Chi ha creato la partita la fa cominciare con A (B la annulla). Da lì è come sullo stesso
   schermo: Come si gioca?, la mappa, gli eroi (ognuno col suo pad), le carte, la pausa (la apre e
   la chiude chiunque, per tutti). Un giocatore per console; il riquadro bianco attorno alla tessera
   è il proprio eroe, e ai bordi dello schermo le frecce dicono dove sono i compagni.
-- I **progressi** (mappe, stelle, giri) si salvano solo sulla console che ha creato la partita, sul
-  salvataggio scelto; le altre giocano con quelli e tengono i loro salvataggi com'erano. Le
-  impostazioni della pausa (mira, antialias, volumi) restano di ogni console.
+- I **progressi** (mappe, stelle, giri) si salvano sulla console che ha creato la partita, sul
+  salvataggio scelto. Le altre giocano con quelli; chi ha risposto no tiene i suoi salvataggi
+  com'erano, chi ha risposto sì ha la partita anche nel suo posto, aggiornata insieme (a fine mappa,
+  all'uscita). Se nel frattempo su quella console la stessa partita è andata più avanti da sola
+  (per esempio ha raggiunto la Luna), quello che ha in più resta: per ogni pianeta un giro più
+  avanti vince tutto, nello stesso giro valgono le mappe aperte più avanti e le stelle di tutte e
+  due. Le impostazioni della pausa (mira, GRAFICA, volumi) restano di ogni console.
 - Se una console esce o si spegne, il suo eroe lascia la partita e gli altri continuano ("GIOCATORE
   N È USCITO"); se esce quella che l'ha creata, le altre tornano al titolo. Chi ha creato la
   partita, se resta solo, continua da solo. In COME SI GIOCA? B chiede se finire la partita in rete
@@ -397,7 +430,9 @@ e perché, il giro che si apre, e i comandi arrivati dalle altre console. Dalla 
 nel cenote ("giocatore N caduto nel cenote") e le mosse del gladiatore. Dalla 0.5.4: il gioco in
 rete (righe "rete:": partite trovate, chi entra ed esce, ogni 150 fotogrammi andata e ritorno,
 comandi ripetuti o saltati, scorta e volte rimasti senza fotogrammi), i bonus presi e il passaggio
-dell'antialias da 8 a 4 campioni.
+dell'antialias da 8 a 4 campioni. Dalla 0.5.6: i cambi della GRAFICA (righe "grafica:") e della
+risoluzione, le carte al gladiatore ("boss: perso un terzo della vita"), l'identità della partita
+in rete e, su chi si unisce, dove la salva ("si salvera' anche qui, nel posto N").
 
 ## Sul PC
 
@@ -506,7 +541,7 @@ Le cartelle, i livelli e gli schemi usati (Model-View, Observer, State, Strategy
 | `console/`, `deploy.sh` | voce di menu, script di avvio, icona; installazione dal PC |
 
 Variabili d'ambiente del core, per le prove: `PUPAZZI_RENDERER` (`gpu`, `software`), `PUPAZZI_RES`
-(`320`, `640`, `960`), `PUPAZZI_BOT=n` (i primi n giocatori li guida il computer),
+(`320`, `640`, `960`, `1280`: fissa la risoluzione al posto di quella della GRAFICA), `PUPAZZI_BOT=n` (i primi n giocatori li guida il computer),
 `PUPAZZI_MAPPA=n` (si parte subito dalla mappa n, 1-4), `PUPAZZI_GIOCATORI`, `PUPAZZI_PERSONAGGI`
 (per esempio `0123`), `PUPAZZI_FRAMES=n`, `PUPAZZI_PERF=1`, `PUPAZZI_HUD` (`0`, `fisso`),
 `PUPAZZI_TRACE` (stato della partita a ogni fotogramma), `PUPAZZI_MAPS` (cartella delle mappe
@@ -519,8 +554,8 @@ per forzare un modo; `prova` percorso della Mali con un solo campione, per le pr
 `PUPAZZI_LINGUA` (`it`, `en`, `es`, `pt`, `zh`, `ja`, `hi`: la lingua al posto di quella salvata),
 `PUPAZZI_HDMI` (`1` o `0`: come con l'HDMI collegato o staccato, al posto di guardarlo),
 `PUPAZZI_AA_ADATTA=0` (niente passaggio da solo da 8 a 4 campioni), `PUPAZZI_BATTERIA` (per esempio
-`40` o `80c` in carica, al posto di leggerla), e per il gioco in rete `PUPAZZI_RETE` (`crea[:N]` o
-`unisciti`), `PUPAZZI_RETE_DOPO`, `PUPAZZI_RETE_PORTA`, `PUPAZZI_RETE_PERDITA`, `PUPAZZI_RETE_RITARDO`,
+`40` o `80c` in carica, al posto di leggerla), e per il gioco in rete `PUPAZZI_RETE` (`crea[:N]`,
+`unisciti`, `unisciti+salva[:N]`), `PUPAZZI_RETE_DOPO`, `PUPAZZI_RETE_PORTA`, `PUPAZZI_RETE_PERDITA`, `PUPAZZI_RETE_RITARDO`,
 `PUPAZZI_RETE_ATTESA`, `PUPAZZI_RETE_VERSIONE` (spiegate in `src/net/net.h`).
 
 ## Stato delle verifiche

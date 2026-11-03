@@ -10,6 +10,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <time.h>
 #include <unistd.h>
 
 static_assert(NLANGS == SAVE_LANGS, "save.h e lang.h devono avere le stesse lingue");
@@ -66,7 +67,14 @@ void defaults_settings(SaveData* d) {
   d->music_vol = 6;   // 0.5: new, lighter music, below the sound effects
   d->sfx_vol = 8;
   d->lang = 0;
+  d->cam_dist = d->cam_pitch = 0;
+  d->res = 640;
+  d->detail = 1;
+  d->margin = 0;
 }
+
+// Width of the picture: the nearest of 320, 640, 960, 1280.
+int snap_res(long w) { return w < 480 ? 320 : (w < 800 ? 640 : (w < 1120 ? 960 : 1280)); }
 
 void defaults_game(SaveData* d) {
   for (int w = 0; w < SAVE_WORLDS; ++w) {
@@ -74,6 +82,7 @@ void defaults_game(SaveData* d) {
     d->giro[w] = 1;
   }
   d->name[0] = 0;
+  d->id = 0;
   d->maps_open[0] = 1;                       // the first map of Earth
   d->nmaps = 0;
   memset(d->maps, 0, sizeof(d->maps));
@@ -161,7 +170,9 @@ bool clean_name(char* dst, const char* src) {
 // Settings keys (ignored in a game file).
 bool settings_key(const char* k) {
   return !strcmp(k, "antialias") || !strcmp(k, "volume_musica") || !strcmp(k, "volume_effetti") || !strcmp(k, "lingua") ||
-         !strcmp(k, "salvataggi") || (!strncmp(k, "mira.", 5) && k[5] >= '1' && k[5] < '1' + SAVE_PLAYERS && !k[6]);
+         !strcmp(k, "salvataggi") || (!strncmp(k, "mira.", 5) && k[5] >= '1' && k[5] < '1' + SAVE_PLAYERS && !k[6]) ||
+         !strcmp(k, "telecamera_distanza") || !strcmp(k, "telecamera_inclinazione") || !strcmp(k, "risoluzione") ||
+         !strcmp(k, "dettagli") || !strcmp(k, "margine_tv");
 }
 
 // Keys of a game (in the settings file: the 0.5.2 one).
@@ -285,6 +296,19 @@ void read_line(Reader* r, char* s, bool broken) {
       r->ok++;
       return;
     }
+    else if (!strcmp(k, "risoluzione")) {
+      if (!num) {
+        r->bad++;
+        return;
+      }
+      d.res = snap_res(n);
+      r->ok++;
+      return;
+    }
+    else if (!strcmp(k, "telecamera_distanza")) { iv = &d.cam_dist; lo = -SAVE_CAM_STEPS; hi = SAVE_CAM_STEPS; }
+    else if (!strcmp(k, "telecamera_inclinazione")) { iv = &d.cam_pitch; lo = -SAVE_CAM_STEPS; hi = SAVE_CAM_STEPS; }
+    else if (!strcmp(k, "dettagli")) { bv = &d.detail; hi = 1; }
+    else if (!strcmp(k, "margine_tv")) { bv = &d.margin; hi = SAVE_MARGIN_MAX; }
     else if (!strcmp(k, "volume_musica")) { bv = &d.music_vol; hi = 10; }
     else if (!strcmp(k, "volume_effetti")) { bv = &d.sfx_vol; hi = 10; }
     else if (!strncmp(k, "mira.", 5) && k[5] >= '1' && k[5] < '1' + SAVE_PLAYERS && !k[6]) { bv = &d.aim[k[5] - '1']; hi = 3; }
@@ -309,6 +333,23 @@ void read_line(Reader* r, char* s, bool broken) {
     if (!strcmp(k, "nome")) {
       if (clean_name(d.name, v)) r->ok++;
       else r->bad++;
+      return;
+    }
+    if (!strcmp(k, "id")) {
+      uint64_t x = 0;
+      int n16 = 0;
+      for (; v[n16]; ++n16) {
+        const char c = v[n16];
+        const int h = c >= '0' && c <= '9' ? c - '0' : (c >= 'a' && c <= 'f' ? c - 'a' + 10 : (c >= 'A' && c <= 'F' ? c - 'A' + 10 : -1));
+        if (h < 0 || n16 >= 16) break;
+        x = (x << 4) | (uint64_t)h;
+      }
+      if (n16 == 16 && !v[16] && x) {
+        d.id = x;
+        r->ok++;
+      } else {
+        r->bad++;
+      }
       return;
     }
     if (!strcmp(k, "tempo")) { uv = &d.seconds; hi = (long)MAX_SECONDS; }
@@ -365,6 +406,11 @@ int serialize(const File* f, SaveData& d, char* buf, int cap) {
     d.music_vol = (uint8_t)clampi(d.music_vol, 0, 10);
     d.sfx_vol = (uint8_t)clampi(d.sfx_vol, 0, 10);
     if (d.lang >= SAVE_LANGS) d.lang = 0;
+    d.cam_dist = clampi(d.cam_dist, -SAVE_CAM_STEPS, SAVE_CAM_STEPS);
+    d.cam_pitch = clampi(d.cam_pitch, -SAVE_CAM_STEPS, SAVE_CAM_STEPS);
+    d.res = snap_res(d.res);
+    d.detail = (uint8_t)clampi(d.detail, 0, 1);
+    d.margin = (uint8_t)clampi(d.margin, 0, SAVE_MARGIN_MAX);
     put(&o, "%s", SETTINGS_HEADER);
     put(&o, "versione=%d\n", SAVE_VERSION);
     for (int i = 0; i < SAVE_PLAYERS; ++i) put(&o, "mira.%d=%d\n", i + 1, d.aim[i]);
@@ -373,6 +419,11 @@ int serialize(const File* f, SaveData& d, char* buf, int cap) {
     put(&o, "volume_musica=%d\n", d.music_vol);
     put(&o, "volume_effetti=%d\n", d.sfx_vol);
     put(&o, "lingua=%s\n", LANG_ID[d.lang]);
+    put(&o, "telecamera_distanza=%d\n", d.cam_dist);
+    put(&o, "telecamera_inclinazione=%d\n", d.cam_pitch);
+    put(&o, "risoluzione=%d\n", d.res);
+    put(&o, "dettagli=%d\n", d.detail);
+    put(&o, "margine_tv=%d\n", d.margin);
     put(&o, "salvataggi=%d\n", g_marker ? 1 : 0);
   } else {
     for (int w = 0; w < SAVE_WORLDS; ++w) {
@@ -386,6 +437,7 @@ int serialize(const File* f, SaveData& d, char* buf, int cap) {
     d.name[SAVE_NAME_LEN - 1] = 0;
     if (!clean_name(d.name, d.name)) d.name[0] = 0;      // the game writes it by hand: only a valid name
     if (d.name[0]) put(&o, "nome=%s\n", d.name);
+    if (d.id) put(&o, "id=%016llx\n", (unsigned long long)d.id);
     // Earth always, the other planets once they have been reached.
     for (int w = 0; w < SAVE_WORLDS; ++w) {
       if (w > 0 && d.maps_open[w] == 0 && d.giro[w] <= 1) continue;
@@ -698,10 +750,69 @@ void save_set_stars(const char* map_id, uint8_t bits) {
 const char* save_world_id(int w) { return w >= 0 && w < SAVE_WORLDS ? WORLD_ID[w] : ""; }
 const char* save_lang_id(int l) { return l >= 0 && l < SAVE_LANGS ? LANG_ID[l] : ""; }
 
+// LAN game saved on a console that joins (0.5.6): the slot as it was, when it held the same game
+// (what it has more is kept at every write), and the planet of a map.
+SaveData g_base;
+bool g_guest_slot, g_base_on;
+int (*g_world_of)(const char*);
+
+// The game in memory (the host's progress) with, planet by planet, what g_base has more (see
+// save_guest_slot_begin).
+const SaveData& merged(const SaveData& d) {
+  static SaveData m;
+  m = d;
+  if (!g_base_on) return m;
+  for (int w = 0; w < SAVE_WORLDS; ++w) {
+    if (g_base.giro[w] < d.giro[w]) continue;
+    const bool later = g_base.giro[w] > d.giro[w];
+    m.giro[w] = g_base.giro[w];
+    if (later || g_base.maps_open[w] > m.maps_open[w]) m.maps_open[w] = g_base.maps_open[w];
+    // The stars of this planet's maps: those of the file if its round is later, otherwise both.
+    for (int i = 0; i < m.nmaps; ++i)
+      if (g_world_of && g_world_of(m.maps[i].id) == w && later) m.maps[i].stars = 0;
+    for (int i = 0; i < g_base.nmaps; ++i) {
+      if (!g_world_of || g_world_of(g_base.maps[i].id) != w) continue;
+      SaveMap* s = add_map_in(m, g_base.maps[i].id);
+      if (s) s->stars |= g_base.maps[i].stars;
+    }
+  }
+  // Maps that are not on this console now (custom maps taken away): their stars stay.
+  for (int i = 0; i < g_base.nmaps; ++i) {
+    if (g_world_of && g_world_of(g_base.maps[i].id) >= 0) continue;
+    SaveMap* s = add_map_in(m, g_base.maps[i].id);
+    if (s) s->stars |= g_base.maps[i].stars;
+  }
+  return m;
+}
+
+uint64_t new_game_id(void) {
+  uint64_t x = 0;
+  FILE* f = fopen("/dev/urandom", "rb");
+  if (f) {
+    if (fread(&x, sizeof(x), 1, f) != 1) x = 0;
+    fclose(f);
+  }
+  struct timespec ts;
+  clock_gettime(CLOCK_REALTIME, &ts);
+  x ^= (uint64_t)ts.tv_sec * 1000000007ull ^ (uint64_t)ts.tv_nsec * 0x9E3779B97F4A7C15ull ^ ((uint64_t)getpid() << 40);
+  x += 0x9E3779B97F4A7C15ull;                 // splitmix64
+  x = (x ^ (x >> 30)) * 0xBF58476D1CE4E5B9ull;
+  x = (x ^ (x >> 27)) * 0x94D049BB133111EBull;
+  x ^= x >> 31;
+  return x ? x : 1;
+}
+
 bool save_write(void) {
   if (!g_set.path[0]) return false;
   bool ok = write_file(&g_set, data());
-  if (g_active >= 0) ok &= write_file(&g_game, data());
+  if (g_active >= 0) {
+    if (g_base_on) {
+      SaveData& m = const_cast<SaveData&>(merged(data()));
+      ok &= write_file(&g_game, m);
+    } else {
+      ok &= write_file(&g_game, data());
+    }
+  }
   return ok;
 }
 
@@ -798,7 +909,18 @@ bool save_slot_copy(int from, int to) {
   snprintf(g_scratch.path, sizeof(g_scratch.path), "%s", g_slot_paths[to]);
   snprintf(g_scratch.tmp, sizeof(g_scratch.tmp), "%s.tmp", g_slot_paths[to]);
   snprintf(g_scratch.bad, sizeof(g_scratch.bad), "%s.illeggibile", g_slot_paths[to]);
-  const bool ok = write_bytes(&g_scratch, buf, (int)n);
+  bool ok = write_bytes(&g_scratch, buf, (int)n);
+  if (ok) {
+    // 0.5.6: the copy is a game of its own from now on: with an identity it gets a new one (otherwise
+    // whoever joins it on the network would save both in the same slot).
+    static SaveData tmp;
+    defaults(&tmp);
+    char st[200];
+    if (read_file(&g_scratch, &tmp, st, sizeof(st), true) == SAVE_LETTO && tmp.id) {
+      tmp.id = new_game_id();
+      ok = write_file(&g_scratch, tmp);
+    }
+  }
   if (ok) {
     plat_log("salvataggio: partita %d copiata nella %d", from + 1, to + 1);
     if (to == g_active) {                      // does not happen from the menu (copies go to a free slot)
@@ -829,6 +951,7 @@ bool save_slot_delete(int i) {
 }
 
 void save_guest_begin(void) {
+  g_guest_slot = g_base_on = false;
   if (g_active >= 0) {
     write_file(&g_game, data());       // the active one loses nothing
     plat_log("salvataggio: partita %d messa da parte (si gioca con i progressi di chi ha creato la partita in rete)", g_active + 1);
@@ -839,7 +962,62 @@ void save_guest_begin(void) {
 }
 
 void save_guest_end(void) {
+  if (g_guest_slot && g_active >= 0) {
+    save_write();
+    plat_log("salvataggio: partita in rete salvata anche qui, nel posto %d", g_active + 1);
+  }
+  g_guest_slot = g_base_on = false;
   g_active = -1;
   g_game.path[0] = 0;
   defaults_game(&data());
+}
+
+void save_guest_slot_begin(int i, uint64_t id, int (*world_of)(const char* map_id)) {
+  if (!slot_ok(i) || !id) {
+    save_guest_begin();
+    return;
+  }
+  if (g_active >= 0) write_file(&g_game, data());     // the active one loses nothing
+  g_world_of = world_of;
+  // The slot as it is: the same game (with its unknown keys) or another one, overwritten.
+  reset_file(&g_game, K_GAME);
+  const char* file = strrchr(g_slot_paths[i], '/');
+  set_paths(&g_game, file ? file + 1 : g_slot_paths[i]);
+  defaults(&g_base);
+  char st[200];
+  const int r = read_file(&g_game, &g_base, st, sizeof(st), true);
+  g_base_on = r == SAVE_LETTO && g_base.id == id;
+  if (!g_base_on) {
+    reset_file(&g_game, K_GAME);
+    set_paths(&g_game, file ? file + 1 : g_slot_paths[i]);
+  }
+  SaveData& d = data();
+  defaults_game(&d);
+  d.id = id;
+  if (g_base_on) d.seconds = g_base.seconds;
+  g_active = i;
+  g_guest_slot = true;
+  plat_log("salvataggio: la partita in rete si salva anche qui, nel posto %d (%s)", i + 1,
+           g_base_on ? "la stessa partita: si aggiorna" : (r == SAVE_NUOVO ? "posto libero" : "sostituisce quella che c'era"));
+}
+
+uint64_t save_game_id(void) {
+  if (g_active < 0) return 0;
+  SaveData& d = data();
+  if (!d.id) {
+    d.id = new_game_id();
+    plat_log("salvataggio: la partita %d ha ora un'identita' (%016llx)", g_active + 1, (unsigned long long)d.id);
+    save_write();
+  }
+  return d.id;
+}
+
+int save_slot_with_id(uint64_t id) {
+  if (!id) return -1;
+  static SaveData d;
+  for (int i = 0; i < SAVE_SLOTS; ++i) {
+    if (i == g_active && data().id == id) return i;
+    if (save_slot_peek(i, &d) == SAVE_LETTO && d.id == id) return i;
+  }
+  return -1;
 }

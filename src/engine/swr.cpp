@@ -61,7 +61,6 @@ size_t g_bin_cap;
 int g_band_start[SWR_MAX_BANDS + 1];
 int g_band_px[SWR_MAX_BANDS];
 const Hud* g_hud;      // interface of the current frame (or none)
-int g_hud_k;
 uint32_t* g_row_color;
 uint8_t* g_row_band;
 int g_W, g_H, g_band_h, g_nbands;
@@ -220,7 +219,7 @@ void raster_band(int b) {
   }
   g_band_px[b] = px;
   // The interface on top, in the same strip (the strips run in parallel).
-  if (g_hud && !g_count) hud_draw_sw(g_hud, g_color, W, g_H, g_hud_k, y0, y1);
+  if (g_hud && !g_count) hud_draw_sw(g_hud, g_color, W, g_H, y0, y1);
 }
 
 void run_bands(void) {
@@ -462,10 +461,10 @@ void setup_res(int W, int H) {
   for (int y = 0; y < H; ++y) g_row_band[y] = (uint8_t)(y / g_band_h);
 }
 
-void* alloc_aligned(size_t bytes) {
+void* alloc_aligned(size_t bytes, bool clear = true) {
   void* p = 0;
   if (posix_memalign(&p, 64, bytes) != 0) return 0;
-  memset(p, 0, bytes);
+  if (clear) memset(p, 0, bytes);
   return p;
 }
 
@@ -473,8 +472,10 @@ void* alloc_aligned(size_t bytes) {
 
 bool swr_init(int max_w, int max_h) {
   g_maxw = max_w; g_maxh = max_h;
-  g_color = (uint32_t*)alloc_aligned(sizeof(uint32_t) * (size_t)max_w * max_h);
-  g_depth = (float*)alloc_aligned(sizeof(float) * (size_t)max_w * max_h);
+  // Color and depth are written in full at every frame before being read: not cleared here, so the
+  // memory is really taken only by what is drawn (the GPU renderer never uses them; 0.5.6: 1280x960).
+  g_color = (uint32_t*)alloc_aligned(sizeof(uint32_t) * (size_t)max_w * max_h, false);
+  g_depth = (float*)alloc_aligned(sizeof(float) * (size_t)max_w * max_h, false);
   g_tris = (RTri*)alloc_aligned(sizeof(RTri) * SWR_MAX_TRIS);
   g_row_color = (uint32_t*)alloc_aligned(sizeof(uint32_t) * (size_t)max_h);
   g_row_band = (uint8_t*)alloc_aligned((size_t)max_h);
@@ -559,7 +560,6 @@ const uint32_t* swr_render(const FrameDesc* f, RenderStats* st) {
   bin_tris();
   const double t1 = plat_now_ms();
   g_hud = f->hud;
-  g_hud_k = f->hud_scale;
   if (g_hud) hud_prepare();
   raster_all();      // with the interface, strip by strip
   g_hud = 0;

@@ -69,6 +69,8 @@ void title_update(Game& g);
 void title_hud(const Game& g, Hud* h);
 void net_update(Game& g);
 void lobby_update(Game& g);
+int net_game_index(const Game& g, uint64_t id);
+void net_join(Game& g, int slot);
 void net_ip_line(const Game& g, Hud* h, float cx, float cy);
 void subtitle(Hud* h, float cy, const char* s);
 void net_game_where(const NetGame& gm, char* buf, int n);

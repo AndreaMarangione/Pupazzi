@@ -14,12 +14,15 @@ struct DrawItem { const Mesh* mesh; Xform xf; uint32_t flags; uint8_t flash = 0;
 struct Camera { Vec3 eye; Mat4 view, proj, vp; float znear, zfar; };
 
 struct FrameDesc {
-  int w, h;
+  int w, h;                      // the picture: camera (4:3) and HUD (scaled by h / 480)
+  // (0.5.6) The frame it goes into, if bigger (TV margin): fw x fh, with the picture's top-left
+  // corner at (ox, oy) and black around it. 0: as big as the picture.
+  int fw = 0, fh = 0, ox = 0, oy = 0;
   Camera cam;
   const DrawItem* items; int nitems;
   Vec3 light;                    // unit direction from the surface toward the light
   uint32_t sky_top, sky_bot;     // sky gradient
-  const Hud* hud; int hud_scale;
+  const Hud* hud;                // HUD and menus, in pixels at 640x480 (hud.h)
   int aa = 0;                    // antialiasing samples: 0 (none), 4 or 8 (GPU renderer only, as far as the GPU goes)
 };
 

@@ -18,11 +18,10 @@ DrawItem g_items[MAX_ITEMS];
 int g_n;
 Vec3 g_view;          // center of the framing: far objects are not even sent to the renderer
 const LevelMeshes* g_lm;   // geometry of the map of the view being drawn
-
-const float CAM_FOVY = 0.87f;
+bool g_low;           // (0.5.6) low details: no shadows, no distant landscape, half the particles
 
 void push(const Mesh* m, const Xform& xf, uint8_t flash = 0, uint8_t dim = 0, uint32_t flags = 0) {
-  if (g_n >= MAX_ITEMS || !m->nt) return;
+  if (g_n >= MAX_ITEMS || !m || !m->nt) return;
   DrawItem& it = g_items[g_n++];
   it.mesh = m;
   it.xf = xf;
@@ -41,18 +40,19 @@ Xform ground_at(Vec3 p, float s) { return xf_mul(xf_translate(p), xf_scale(s, 1.
 
 // Rough culling of the moving objects far from the framing (then the renderers cull the ones
 // outside the field of view): a rectangle around the framed point that contains the ground
-// visible with the play camera at distance d (pitch 0.98, field of view 0.87): sideways about
-// 0.93 d, towards the camera 0.45 d, at the far end 0.86 d (at 21 m: 19.5 - 9.2 - 18.1).
+// visible with the play camera at distance d (v.cull_*, from view_camera; at the pitch of 0.98:
+// sideways about 0.93 d, towards the camera 0.45 d, at the far end 0.86 d, at 21 m 19.5 - 9.2 - 18.1).
 bool near_view(const View& v, const Game& g, Vec3 p, float margin) {
   const float d = fmaxf(v.cam_dist, 17.0f);
-  return fabsf(p.x - g_view.x) < 0.95f * d + margin && p.z - g_view.z < 0.55f * d + margin && g_view.z - p.z < d + margin;
+  return fabsf(p.x - g_view.x) < v.cull_x * d + margin && p.z - g_view.z < v.cull_s * d + margin && g_view.z - p.z < v.cull_n * d + margin;
 }
 
 float ground_under(const Game& g, Vec3 p) { return level_ground(&g.L, p.x, p.z, p.y, PL_STEP); }
 
 // Disc shadow of size k (small, medium, large, boss) in the tone of the map's ground: grass,
-// sand or stone, chosen once per map from the average color of the floor.
+// sand or stone, chosen once per map from the average color of the floor. None with low details.
 const Mesh* shadow(const Game& g, int k) {
+  if (g_low) return 0;
   static uint32_t seen = 0;
   static int tone = -1;
   if (g_lm->nchunks > 0 && g_lm->chunk[0].id != seen) {
@@ -894,7 +894,7 @@ void push_capsule(const Game& g, const DynCell& dc, int d, Vec3 c) {
 
 void push_world(const View& v, const Game& g) {
   for (int i = 0; i < v.lm.nchunks; ++i) push(&v.lm.chunk[i], xf_identity(), 0, 0, ITEM_STATIC);
-  for (int i = 0; i < v.lm.nscenery; ++i) push(&v.lm.scenery[i], xf_identity(), 0, 0, ITEM_STATIC);   // distant scenery
+  for (int i = g_low ? v.lm.scenery_ground : 0; i < v.lm.nscenery; ++i) push(&v.lm.scenery[i], xf_identity(), 0, 0, ITEM_STATIC);   // distant scenery
   // Swing gates (0.5.4): each leaf turns around its hinge, starting from the closed position.
   for (int i = 0; i < g.L.ngates; ++i)
     for (int side = 0; side < 2; ++side) {
@@ -1160,7 +1160,7 @@ void push_markers(const Game& g) {
 void push_particles(const Game& g) {
   for (int i = 0; i < MAX_PARTICLES; ++i) {
     const Particle& q = g.pa[i];
-    if (!q.alive) continue;
+    if (!q.alive || (g_low && (i & 1))) continue;
     const float f = (float)q.life / (float)(q.life0 > 0 ? q.life0 : 1);
     switch (q.kind) {
       case PK_CUBE: {
@@ -1625,6 +1625,7 @@ void view_build_frame(View& v, const Game& g, FrameDesc* fd, int w, int h, Hud* 
     else level_meshes_free(&v.lm);
   }
   g_lm = &v.lm;
+  g_low = v.low_detail;
   g_n = 0;
   g_view = v.cam_target;
   if (g.level_ok) {
@@ -1658,7 +1659,6 @@ void view_build_frame(View& v, const Game& g, FrameDesc* fd, int w, int h, Hud* 
   fd->sky_top = 0x6FB8F0;
   fd->sky_bot = 0xDCF0FF;
   fd->hud = hud;
-  fd->hud_scale = h / 240 > 0 ? h / 240 : 1;
   if (!hud) return;
   hud_reset(hud);
   if (g.screen == SC_PLAY) build_play_hud(g, hud, fd->cam);

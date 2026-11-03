@@ -2504,7 +2504,7 @@ void level_meshes_free(LevelMeshes* m) {
   for (int i = 0; i < m->nchunks; ++i) mesh_free(&m->chunk[i]);
   m->nchunks = 0;
   for (int i = 0; i < m->nscenery; ++i) mesh_free(&m->scenery[i]);
-  m->nscenery = 0;
+  m->nscenery = m->scenery_ground = 0;
   for (int i = 0; i < DM_COUNT; ++i) mesh_free(&m->dyn[i]);
   for (int i = 0; i < LV_MAX_GATES; ++i) {
     mesh_free(&m->gate_leaf[i][0]);
@@ -2566,6 +2566,7 @@ void level_build_mesh(const Level& level, LevelMeshes* out) {
     }
     out->chunk[out->nchunks++] = mb_finish(&mb);
   }
+  out->scenery_ground = out->nscenery;
   build_far_ground();
   build_dyn_meshes();
   for (int gi = 0; gi < L->ngates; ++gi) {

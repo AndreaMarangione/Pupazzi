@@ -19,14 +19,17 @@
 // on a console, that console leaves the game (it only happens with versions of the game that do
 // not run the same game). A console that disconnects (or does not answer for 10 seconds) leaves:
 // its hero leaves the game, the others carry on. If the host leaves, the others go back to the
-// title. Progress is saved only on the host; the others play with the host's progress
-// (save_guest_begin) and keep their own saves as they are.
+// title. The others play with the host's progress (save_guest_begin) and keep their own saves as
+// they are; since 0.5.6 whoever joins can also save the game in a slot of their own
+// (save_guest_slot_begin): OFFER and START carry the identity of the host's game (save_game_id).
 //
 // Environment variables for tests:
 //   PUPAZZI_RETE=crea[:N]      creates the game right away (save 1) and starts when there are N
 //                              other consoles (1 if omitted)
 //   PUPAZZI_RETE=unisciti      searches and joins the first game it finds (unisciti!: even an
-//                              incompatible one, to test the refusals)
+//                              incompatible one, to test the refusals); unisciti+salva[:N] (0.5.6)
+//                              also saves it here: in the slot that already has it, or in the first
+//                              free one, or (all full) in slot N
 //   PUPAZZI_RETE_DOPO=n        create or join after n frames (before that you play alone: with
 //                              PUPAZZI_MAPPA and PUPAZZI_BOT the quick game)
 //   PUPAZZI_RETE_PORTA=n       first port instead of 55410

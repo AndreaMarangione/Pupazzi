@@ -27,8 +27,30 @@ void net_update(Game& g) {
   }
 }
 
+// Position of the game with identity id in the list of those found, -1 if it is no longer there.
+int net_game_index(const Game& g, uint64_t id) {
+  const NetView& v = net_view(g);
+  for (int k = 0; k < v.ngames; ++k)
+    if (v.games[k].id == id) return k;
+  return -1;
+}
+
+// Joins the chosen game (g.join_id), saving it on this console too in slot slot (-1 not); the game
+// may have gone in the meantime.
+void net_join(Game& g, int slot) {
+  const int k = net_game_index(g, g.join_id);
+  if (k < 0) {
+    ev_sound_ui(g, SND_UI_BACK);
+    info(g, tr("la partita non risponde"));
+    return;
+  }
+  ev_sound_ui(g, SND_UI_OK);
+  net_req(g, NR_JOIN, k + (slot >= 0 ? 256 * (slot + 1) : 0));
+}
+
 // Waiting room: the host starts the game (A, with at least one other console) or cancels it (B);
-// whoever is searching picks a game (A) or goes back (B); whoever has joined waits (B leaves).
+// whoever is searching picks a game (A: since 0.5.6 first "save it here too?") or goes back (B);
+// whoever has joined waits (B leaves).
 void lobby_update(Game& g) {
   const NetView& v = net_view(g);
   if (v.error_seq != g.session.net_err_seen) {
@@ -61,6 +83,19 @@ void lobby_update(Game& g) {
       break;
     }
     case NV_SEARCH: {
+      if (g.lobby_pop) {
+        // Save it here too? A yes (with all the slots full: first which one to replace), B no.
+        if (ok || no) {
+          g.lobby_pop = false;
+          if (ok && g.join_slot < 0) {
+            ev_sound_ui(g, SND_UI_OK);
+            enter_slots(g, SL_JOIN);
+          } else {
+            net_join(g, ok ? g.join_slot : -1);
+          }
+        }
+        break;
+      }
       const int nav = any_nav(g);
       if (v.ngames > 0) {
         if (nav == NAV_UP) g.lobby_sel = (g.lobby_sel + v.ngames - 1) % v.ngames;
@@ -69,7 +104,18 @@ void lobby_update(Game& g) {
       if (g.lobby_sel >= v.ngames) g.lobby_sel = v.ngames > 0 ? v.ngames - 1 : 0;
       if (ok && v.ngames > 0) {
         ev_sound_ui(g, SND_UI_OK);
-        net_req(g, NR_JOIN, g.lobby_sel);
+        const NetGame& gm = v.games[g.lobby_sel];
+        if (gm.state == NG_OPEN && gm.id) {
+          // 0.5.6: first the question; the slot: the one that already has this game, or the first free one.
+          g.lobby_pop = true;
+          g.join_id = gm.id;
+          slots_refresh(g);
+          g.join_slot = save_slot_with_id(gm.id);
+          g.join_linked = g.join_slot >= 0;
+          if (!g.join_linked) g.join_slot = first_free_slot(g);
+        } else {
+          net_req(g, NR_JOIN, g.lobby_sel);    // it cannot be joined: the reason comes back as a notice
+        }
       } else if (ok) {
         ev_sound_ui(g, SND_UI_BACK);
       } else if (no) {
@@ -88,6 +134,7 @@ void lobby_update(Game& g) {
       }
       break;
     default:      // the network did not open (or it closed): back to GIOCO IN RETE
+      g.lobby_pop = false;
       if (g.screen_t > 3) {
         go_screen(g, SC_NET);
         g.menu_sel = g.session.lobby_join ? 1 : 0;
@@ -188,6 +235,31 @@ void lobby_places(Hud* h, const NetView& v, float PX, float PY, float PW) {
   }
 }
 
+// "Salvare la partita anche su questa console?" (0.5.6), over the games found: the game, where it
+// would go (the slot that already has it, a free one, or the choice when they are all full), A yes
+// / B no.
+void join_question(const Game& g, Hud* h) {
+  ui::overlay(h, 0.5f);
+  const float W = 440.0f, X = 320.0f - W * 0.5f, Y = 140.0f, H = 176.0f;
+  ui::panel(h, X, Y, W, H, 16.0f, ui::SOLID, true);
+  char L[2][ui::WRAP_LEN];
+  const int n = ui::wrap(tr("SALVARE LA PARTITA ANCHE SU QUESTA CONSOLE?"), W - 44.0f, HF_B16, 1.0f, L, 2);
+  for (int k = 0; k < n; ++k) ui::text(h, 320.0f, Y + 30.0f + 22.0f * (float)k - (n > 1 ? 0.0f : -11.0f), HF_B16, O(ui::TX), L[k], 1.0f, 0);
+  char buf[256], t[256], nm[64], where[128];
+  const int k = net_game_index(g, g.join_id);
+  if (k >= 0) {
+    const NetGame& gm = net_view(g).games[k];
+    net_game_where(gm, where, sizeof(where));
+    snprintf(buf, sizeof(buf), "%s · %s", net_game_name(gm, nm, sizeof(nm)), where);
+    ui::text(h, 320.0f, Y + 84.0f, HF_S14, O(ui::L1), ui::fit(t, sizeof(t), buf, HF_S14, 1.0f, W - 44.0f), 1.0f, 0);
+  }
+  if (g.join_linked) snprintf(buf, sizeof(buf), tr("c'è già nel salvataggio %d: si aggiorna"), g.join_slot + 1);
+  else if (g.join_slot >= 0) snprintf(buf, sizeof(buf), tr("va nel salvataggio %d, che è libero"), g.join_slot + 1);
+  else snprintf(buf, sizeof(buf), "%s", tr("i posti sono pieni: poi scegli quale sostituire"));
+  ui::text(h, 320.0f, Y + 108.0f, HF_S13, O(ui::MU), ui::fit(t, sizeof(t), buf, HF_S13, 0.5f, W - 44.0f), 0.5f, 0);
+  yes_no(h, Y + 146.0f);
+}
+
 void lobby_hud(const Game& g, Hud* h) {
   const NetView& v = net_view(g);
   ui::scrim_top(h);
@@ -235,6 +307,10 @@ void lobby_hud(const Game& g, Hud* h) {
       }
       net_ip_line(g, h, 320.0f, NET_IP_Y);
     }
+    if (g.lobby_pop) {
+      join_question(g, h);
+      return;
+    }
     if (g.session.info_t > 0) {
       toast(h, g.session.info, ui::L1);
       ui::version(h, PUPAZZI_VERSION);
@@ -254,6 +330,14 @@ void lobby_hud(const Game& g, Hud* h) {
   subtitle(h, 80.0f, buf);
   const float PX = 120.0f, PW = 400.0f, PY = 102.0f;
   lobby_places(h, v, PX, PY, PW);
+  if (v.save >= 0) {
+    // 0.5.6: where this console saves the game too.
+    snprintf(buf, sizeof(buf), tr("si salva anche qui, nel salvataggio %d"), v.save + 1);
+    char t[256];
+    ui::fit(t, sizeof(t), buf, HF_S13, 0.5f, 576.0f);
+    ui::text(h, 321, 337.0f, HF_S13, A(ui::SCRIM, 0.9f), t, 0.5f, 0);
+    ui::text(h, 320, 336.0f, HF_S13, O(ui::FTX), t, 0.5f, 0);
+  }
   const char* hint;
   if (v.mode == NV_HOST) hint = tr("sulle altre console: GIOCO IN RETE, poi UNISCITI");
   else if (v.mode == NV_JOINING) hint = tr("mi unisco alla partita...");
@@ -278,6 +362,36 @@ void lobby_hud(const Game& g, Hud* h) {
 }  // namespace screens
 
 using namespace screens;
+
+bool join_layout_ok(char* why, int n) {
+  why[0] = 0;
+  char L[2][ui::WRAP_LEN], buf[256];
+  bool cut = false;
+  ui::wrap(tr("SALVARE LA PARTITA ANCHE SU QUESTA CONSOLE?"), 440.0f - 44.0f, HF_B16, 1.0f, L, 2, &cut);
+  if (cut) {
+    snprintf(why, (size_t)n, "domanda piu' lunga di due righe");
+    return false;
+  }
+  const char* sub[3] = { tr("c'è già nel salvataggio %d: si aggiorna"), tr("va nel salvataggio %d, che è libero"),
+                         tr("i posti sono pieni: poi scegli quale sostituire") };
+  for (int k = 0; k < 3; ++k) {
+    snprintf(buf, sizeof(buf), sub[k], 4);
+    if (hud_text_w(HF_S13, buf, 0.5f) > 440.0f - 44.0f) {
+      snprintf(why, (size_t)n, "riga %d della domanda troppo lunga", k + 1);
+      return false;
+    }
+  }
+  if (hud_text_w(HF_S14, tr("i posti sono pieni: la partita in rete prende il posto di quella scelta"), 0.5f) > 576.0f) {
+    snprintf(why, (size_t)n, "sottotitolo dei salvataggi troppo lungo");
+    return false;
+  }
+  snprintf(buf, sizeof(buf), tr("si salva anche qui, nel salvataggio %d"), 4);
+  if (hud_text_w(HF_S13, buf, 0.5f) > 576.0f) {
+    snprintf(why, (size_t)n, "riga della sala d'attesa troppo lunga");
+    return false;
+  }
+  return true;
+}
 
 const char* net_error_text(Game& g, int e, char* buf, int n) {
   const char* s = "";

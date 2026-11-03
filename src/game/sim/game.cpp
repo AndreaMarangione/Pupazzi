@@ -502,7 +502,10 @@ void play_update(Game& g, const Pad pads[MAX_PLAYERS]) {
   if (g.cards_open) cards_update(g);
   else play_menus_update(g);
   if (g.screen != SC_PLAY) return;
-  if (g.paused || g.cards_open) return;
+  if (g.paused || g.cards_open) {
+    if (g.paused) ev_camera(g, CAM_FOLLOW);   // 0.5.6: from GRAFICA the camera changes while the game stands still
+    return;
+  }
   g.tick++;
   for (int i = 0; i < MAX_PLAYERS; ++i) player_update(g, i, pads[i]);
   monsters_update(g);
@@ -1039,6 +1042,7 @@ void game_net_summary(NetGame* out) {
   out->players = 1;
   out->state = NG_OPEN;
   snprintf(out->version, sizeof(out->version), "%s", PUPAZZI_VERSION);
+  out->id = save_game_id();      // 0.5.6: whoever joins can save it too (the first time the game gets one)
 }
 
 void game_net_lobby(Game& g) { go_screen(g, SC_LOBBY); }
@@ -1083,7 +1087,8 @@ static void net_reset_sim(Game& g) {
   g.name_overwrite = false;
   g.name_buf[0] = 0;
   g.pause_owner = g.pause_sel = 0;
-  g.paused = g.pause_help = false;
+  g.paused = g.pause_help = g.pause_gfx = false;
+  g.gfx_sel = 0;
   g.loop = g.map_idx = g.map_sel = 0;
   g.kills = g.deaths = g.wipes = g.maps_done = g.restarts = 0;
   g.boss_seq = 0;

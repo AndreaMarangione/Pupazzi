@@ -21,7 +21,7 @@
 #include <time.h>
 #include "platform/libretro.h"
 
-#define MAXW 1024
+#define MAXW 1280   // 0.5.6: up to 1280x960
 #define MAXH 1024
 
 struct Core {

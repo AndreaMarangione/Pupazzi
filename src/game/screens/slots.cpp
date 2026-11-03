@@ -1,5 +1,5 @@
 // Saves screen (0.5.3): load, manage (copy, rename, delete), choose which game to overwrite or
-// which save to play in a LAN game. Each slot shows the farthest planet reached with its round, the
+// which save to play in a LAN game, or (0.5.6) which one to replace with the LAN game joined. Each slot shows the farthest planet reached with its round, the
 // stars of that round, the open maps and the play time.
 #include "game/screens/screens.h"
 #include <stdio.h>
@@ -60,7 +60,7 @@ void enter_slots(Game& g, int mode) {
     else
       for (int i = SAVE_SLOTS - 1; i >= 0; --i)
         if (g.session.slot_view[i].state != SAVE_NUOVO) g.slots_sel = i;
-  } else if (mode != SL_OVERWRITE) {                // the cursor on the first used slot
+  } else if (mode != SL_OVERWRITE && mode != SL_JOIN) {   // the cursor on the first used slot
     while (g.slots_sel < SAVE_SLOTS - 1 && g.session.slot_view[g.slots_sel].state == SAVE_NUOVO) g.slots_sel++;
   }
 }
@@ -77,7 +77,7 @@ void slots_update(Game& g) {
       if (nav == NAV_UP) g.slots_sel = (sel + SAVE_SLOTS - 1) % SAVE_SLOTS;
       if (nav == NAV_DOWN) g.slots_sel = (sel + 1) % SAVE_SLOTS;
       if (ok) {
-        if (g.slots_mode == SL_OVERWRITE) {
+        if (g.slots_mode == SL_OVERWRITE || g.slots_mode == SL_JOIN) {
           ev_sound_ui(g, SND_UI_OK);
           g.slots_pop = SP_OVERWRITE;
         } else if (g.slots_mode == SL_NET) {
@@ -107,6 +107,7 @@ void slots_update(Game& g) {
       } else if (no) {
         ev_sound_ui(g, SND_UI_BACK);
         if (g.slots_mode == SL_NET) go_screen(g, SC_NET);
+        else if (g.slots_mode == SL_JOIN) go_screen(g, SC_LOBBY);      // back to the games found
         else back_to_title(g, g.slots_mode == SL_LOAD ? TI_LOAD : (g.slots_mode == SL_MANAGE ? TI_MANAGE : TI_NEW));
       }
       break;
@@ -151,6 +152,13 @@ void slots_update(Game& g) {
       break;
     default:   // SP_DELETE, SP_OVERWRITE: A yes, B no
       if (ok) {
+        if (g.slots_pop == SP_OVERWRITE && g.slots_mode == SL_JOIN) {
+          // The LAN game will take this slot when it starts (until then nothing is touched).
+          g.slots_pop = SP_NONE;
+          go_screen(g, SC_LOBBY);
+          net_join(g, sel);
+          break;
+        }
         if (g.slots_pop == SP_OVERWRITE) {
           ev_sound_ui(g, SND_UI_OK);
           enter_name(g, NM_NEW, sel, who, true);
@@ -274,15 +282,17 @@ void slots_popup(const Game& g, Hud* h) {
 void slots_hud(const Game& g, Hud* h) {
   ui::scrim_top(h);
   ui::scrim_bottom(h);
-  static const char* const TITLE[4] = { N_("CARICA SALVATAGGIO"), N_("GESTISCI SALVATAGGI"), N_("DOVE SALVARE?"), N_("CON QUALE SALVATAGGIO?") };
+  static const char* const TITLE[5] = { N_("CARICA SALVATAGGIO"), N_("GESTISCI SALVATAGGI"), N_("DOVE SALVARE?"), N_("CON QUALE SALVATAGGIO?"),
+                                        N_("DOVE SALVARE?") };
   char t[256];
   ui::fit(t, sizeof(t), tr(TITLE[g.slots_mode]), HF_T32, 3.0f, 560.0f, "...");
   ui::title(h, 320, 26, HF_T32, t, 3.0f);
   float PY = 86.0f;
-  if (g.slots_mode == SL_OVERWRITE || g.slots_mode == SL_NET) {
+  if (g.slots_mode == SL_OVERWRITE || g.slots_mode == SL_NET || g.slots_mode == SL_JOIN) {
     ui::fit(t, sizeof(t),
-            g.slots_mode == SL_NET ? tr("la partita in rete si salva qui, su questa console")
-                                   : tr("i posti sono pieni: la partita nuova prende il posto di quella scelta"),
+            g.slots_mode == SL_NET    ? tr("la partita in rete si salva qui, su questa console")
+            : g.slots_mode == SL_JOIN ? tr("i posti sono pieni: la partita in rete prende il posto di quella scelta")
+                                      : tr("i posti sono pieni: la partita nuova prende il posto di quella scelta"),
             HF_S14, 0.5f, 576.0f);
     ui::text(h, 321, 79, HF_S14, A(ui::SCRIM, 0.9f), t, 0.5f, 0);
     ui::text(h, 320, 78, HF_S14, O(ui::FTX), t, 0.5f, 0);
@@ -304,7 +314,7 @@ void slots_hud(const Game& g, Hud* h) {
     ui::version(h, PUPAZZI_VERSION);
     return;
   }
-  static const char* const ACT[4] = { N_("carica"), N_("scegli"), N_("sovrascrivi"), N_("scegli") };
+  static const char* const ACT[5] = { N_("carica"), N_("scegli"), N_("sovrascrivi"), N_("scegli"), N_("sovrascrivi") };
   const char* it[4] = { "A", tr(ACT[g.slots_mode]), "B", tr("indietro") };
   ui::footer(h, it, 4);
   ui::version(h, PUPAZZI_VERSION);

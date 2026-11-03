@@ -12,9 +12,11 @@ Ciò che è indicato come *prototipo* è il comportamento della versione 0.2.0, 
 console l'11/10/2026; *0.3*, *0.4* indicano come quella versione realizza una voce (valori da
 provare sulla console e da confermare).
 
-Ultimo aggiornamento: 30/10/2026 (0.5.4 fatta: gioco in rete nella stessa Wi-Fi, ognuno col suo
-schermo; nomi dei salvataggi, antialias fino a 8 campioni, CPU nel riquadro delle prestazioni, via
-la storia, banner delle carte, bonus nelle casse, batteria, cancelli a battente).
+Ultimo aggiornamento: 3/11/2026 (0.5.6 fatta: GRAFICA nella pausa, carte al gladiatore a ogni terzo
+di vita, partita in rete salvata anche su chi si unisce; prima, 0.5.4: gioco in rete nella stessa
+Wi-Fi, ognuno col suo schermo; nomi dei salvataggi, antialias fino a 8 campioni, CPU nel riquadro
+delle prestazioni, via la storia, banner delle carte, bonus nelle casse, batteria, cancelli a
+battente).
 
 ## 1. Il gioco in breve
 
@@ -115,6 +117,19 @@ la storia, banner delle carte, bonus nelle casse, batteria, cancelli a battente)
     con i progressi di chi ha creato la partita e non scrivono i loro salvataggi; le impostazioni
     della pausa restano di ogni console. In una partita cominciata non si entra; l'indirizzo non si
     scrive a mano.
+- [deciso 3/11] **Salvare la partita in rete anche su chi si unisce**: dopo aver scelto la partita in
+  UNISCITI, "Salvare la partita anche su questa console?" (A sì / B no). Sì: va nel primo posto
+  libero (pieni: si sceglie quale sostituire, con la conferma) e si aggiorna insieme a quella di chi
+  l'ha creata; le volte dopo, unendosi alla stessa partita, si aggiorna lo stesso posto invece di
+  prenderne un altro. No: come prima, non si scrive niente.
+  - *0.5.6*: ogni partita ha un'identità (`id=` nel suo file, 16 cifre esadecimali), che prende la
+    prima volta che si gioca in rete; chi crea la partita la manda con la partita trovata e con
+    l'inizio. La finestra dice dove andrebbe (il salvataggio che ce l'ha già, o il primo libero, o
+    che i posti sono pieni); nella sala d'attesa una riga ricorda dove si salva. In partita si gioca
+    con i progressi di chi l'ha creata, il posto si scrive insieme (a fine mappa, all'uscita); se
+    nel frattempo la stessa partita è andata avanti da sola su questa console, per ogni pianeta
+    resta quello che ha in più (un giro più avanti vince tutto; nello stesso giro le mappe aperte
+    più avanti e le stelle di tutte e due). DUPLICA dà alla copia un'identità nuova.
 - [deciso 17/10] **Vite in più giocatori**: ognuno ha 3 vite per mappa; chi cade rientra dopo 5
   secondi accanto a un compagno e perde una vita; finite le vite non rientra più. Se cadono tutti
   nello stesso momento (anche con vite rimaste) la mappa ricomincia da capo. Da soli: capitolo 4.
@@ -232,6 +247,11 @@ la storia, banner delle carte, bonus nelle casse, batteria, cancelli a battente)
     Colpi gelati (Astro con Zolfo o con Marzio), Schegge roventi e Schegge gelate (Mochi con Zolfo
     o con Marzio), Vapore (Marzio con Zolfo); Seconda vita diventa Vita extra (una vita in più,
     capitolo 4); Merenda vale per ogni mostro sconfitto. Valori invariati.
+  - [deciso 3/11] Al boss le carte a ogni terzo di vita perso: quando il gladiatore scende a due
+    terzi e a un terzo (il ruggito) si sceglie una carta; restano quelle all'inizio della mappa.
+    *0.5.6*: la scelta si apre appena finito l'attacco in corso, prima del ruggito; una volta per
+    terzo nella mappa (rifare la zona non le ridà, ricominciare la mappa sì); se perde due terzi
+    insieme, due scelte di fila e un ruggito solo.
 - [deciso 15/10] Zone non tutte uguali: in ogni mappa una zona con un compito diverso (abbattere i
   pali da cui partono i fili, scortare un carretto, resistere 60 secondi) e un mini-boss alla fine
   di ogni mappa, non solo nell'arena (0.4.1).
@@ -304,6 +324,26 @@ restare leggibile a 640×480.
   - [proposta, fatta nella 0.5.4] In pausa ANTIALIAS: NO, 4X, 8X (di partenza il migliore che la GPU
     regge); se con 8 campioni il gioco non sta nei 60 fotogrammi al secondo torna da solo a 4 e lo
     scrive nel registro.
+- [deciso 3/11] **GRAFICA nella pausa**, perché il gioco girerà su console e schermi diversi: un
+  riquadro con la telecamera da regolare a mano (per lo schermo della console e per la TV) e i
+  parametri principali della grafica, salvati per console (in rete ognuno i suoi):
+  - distanza della telecamera: più vicina o più lontana di ora;
+  - inclinazione: più dall'alto o più di lato;
+  - antialias NO / 4X / 8X (spostato qui dalla pausa);
+  - risoluzione 320×240, 640×480, 960×720 e 1280×960 (chiesta da Andrea "una superiore"): serve sul
+    PC e in TV; lo schermo della console resta 640×480;
+  - dettagli alti / bassi (paesaggio lontano, particelle, ombre);
+  - margine TV, per le TV che tagliano i bordi.
+  - *0.5.6*: voce GRAFICA al posto di ANTIALIAS; il riquadro in basso, sopra il gioco che si vede
+    (la telecamera si muove anche in pausa), due colonne di tre voci e in fondo cosa fa quella
+    scelta; ← → cambiano, A va avanti, B torna alla pausa. Distanza e inclinazione in cinque tacche
+    (in mezzo come prima): la distanza minima del 15% a tacca, la massima resta 30 m; l'inclinazione
+    di 0,08 radianti a tacca (da 47 a 65 gradi, prima 56), più dall'alto fino a 35 m per vedere la
+    stessa zona. La risoluzione cambia al volo (SET_GEOMETRY entro 1280×960, dichiarato all'avvio).
+    Dettagli bassi: niente ombre, niente paesaggio lontano (resta il terreno), metà delle
+    particelle. Margine TV da 0 a 4: l'immagine intera (gioco e scritte) si rimpicciolisce del
+    2,5% per lato a tacca, con il nero attorno, e mentre lo si sceglie ai quattro angoli compaiono
+    dei segni da vedere tutti. Chiavi nuove in `pupazzi.sav`.
 - [deciso 19/10] **Interfaccia nuova**, il meno retrò possibile: grafica di oggi, semplicissima ma
   davvero figa, per tutte le schermate di ora e per le prossime. Tra 4 mockup fatti sulle immagini
   vere del gioco (Caramella, Vetro, Adesivo, Orbita) Andrea ha scelto **Orbita**; tra 4 varianti di
@@ -747,6 +787,8 @@ Il gioco completo si consegna a tappe; ognuna si prova sulla console prima della
 | 0.5.2 | [deciso 19/10] interfaccia nuova (stile Orbita, colori Tramonto) in tutte le schermate e nell'HUD; pausa con la voce COMANDI; mappe al centro — consegnata il 19/10, provata il 20/10 ("molto bella") |
 | 0.5.3 | [deciso 20/10] visuale vicina senza HDMI; più salvataggi (nuova, carica, gestisci: duplica ed elimina); 7 lingue — consegnata il 20/10, da provare |
 | 0.5.4 | [deciso 29/10] gioco in rete nella stessa Wi-Fi con ognuno il suo schermo e la telecamera sul proprio eroe; nomi dei salvataggi; antialias migliore; CPU nel riquadro delle prestazioni; via la storia; banner prima delle carte; bonus nelle casse; batteria in alto a destra; cancelli a battente — consegnata il 30/10, da provare |
+| 0.5.5 | [deciso 3/11] stesso gioco, codice riordinato con schemi noti, commenti in inglese, prove con doctest, release automatiche su GitHub — consegnata il 3/11 |
+| 0.5.6 | [deciso 3/11] GRAFICA nella pausa (distanza e inclinazione della telecamera, antialias, risoluzione fino a 1280×960, dettagli, margine TV); carte al gladiatore a 2/3 e a 1/3 della vita; partita in rete salvata anche su chi si unisce — consegnata il 3/11, da provare |
 | 0.6 e dopo | un pianeta per versione, nell'ordine del viaggio: Luna, Marte, Venere, Mercurio, Giove, Saturno, Urano, Nettuno; compiti nelle zone, mini-boss, livelli e bonus; modalità Contro |
 | dopo | app per le console-controller; gioco via internet (da valutare) |
 
@@ -840,3 +882,9 @@ Il gioco completo si consegna a tappe; ognuna si prova sulla console prima della
   scudo, carica; il simbolo della batteria in alto a destra; cancelli a battente che si chiudono
   bene. Dopo un equivoco (online o in casa) chiarito subito: il gioco in rete nella stessa Wi-Fi,
   ognuno sul suo gameboy, è nella 0.5.4; quello via internet in futuro. Via alla 0.5.4.
+- **3/11/2026**, dopo la prova della 0.5.4 ("è una figata") e il riordino della 0.5.5: lista per la
+  0.5.6, riepilogata da Claude e approvata ("va benissimo così"). GRAFICA nella pausa con distanza e
+  inclinazione della telecamera, antialias (spostato lì), risoluzione 320, 640, 960 e una superiore
+  (1280×960, chiesta da Andrea), dettagli alti/bassi e margine TV, salvati per console; al boss le
+  carte a ogni terzo di vita; per chi si unisce a una partita in rete la domanda "salvare la partita
+  anche su questa console?", con il posto che si aggiorna le volte dopo. Via alla 0.5.6.

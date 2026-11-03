@@ -7,7 +7,7 @@
 #   sh tests/test_net.sh            all the tests (a few minutes)
 #   sh tests/test_net.sh perdite    only that one (tre_console perdite scollegamento caduta
 #                                   chi_crea_esce rifiuto fine_al_titolo quattro_console progressi
-#                                   mappa_intera menu storia_prima)
+#                                   mappa_intera menu storia_prima salva_anche_qui)
 #   TEMPO=60 sh tests/test_net.sh   frames per second of each copy (120: twice the real rate)
 set -u
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
@@ -206,15 +206,16 @@ if want progressi; then
   same "$D/a" "$D/b" 1100
 fi
 
-# 10) A whole map with three consoles: the stars are saved only on the host.
+# 10) A whole map with four consoles: the stars are saved on the host and (0.5.6) on the console
+# that joined saving it too (d: in its first free slot, the 2nd), not on the others.
 if want mappa_intera; then
-  say "10) una mappa intera in tre, poi le stelle"
+  say "10) una mappa intera in quattro, poi le stelle"
   D=$OUT/mappa_intera; P=PUPAZZI_RETE_PORTA=56500
-  start "$D/a" 10000 $P $BOT PUPAZZI_RETE=crea:2
+  start "$D/a" 10000 $P $BOT PUPAZZI_RETE=crea:3
   printf 'versione=2\nnome=CASA\n' > "$D/a/partita1.sav"
-  for x in b c; do
+  for x in b c d; do
     sleep 0.3
-    start "$D/$x" 9800 $P $BOT PUPAZZI_RETE=unisciti
+    if [ $x = d ]; then start "$D/$x" 9800 $P $BOT PUPAZZI_RETE=unisciti+salva; else start "$D/$x" 9800 $P $BOT PUPAZZI_RETE=unisciti; fi
     printf 'versione=2\nnome=MIA\nmappe.terra=1\n' > "$D/$x/partita1.sav"
     cp "$D/$x/partita1.sav" "$D/$x/prima.sav"
   done
@@ -223,12 +224,20 @@ if want mappa_intera; then
   has "$D/c" "mappa 1 (Le Piramidi) completata" "... anche sulle altre console"
   same "$D/a" "$D/b" 9000
   same "$D/a" "$D/c" 9000
+  same "$D/a" "$D/d" 9000
   if grep -q "stelle.terra1=" "$D/a/partita1.sav"; then ok "le stelle si salvano su chi ha creato la partita"
   else bad "nel salvataggio di chi ha creato la partita mancano le stelle della mappa 1"; fi
-  for x in b c; do
-    if cmp -s "$D/$x/partita1.sav" "$D/$x/prima.sav"; then ok "il salvataggio della console $x resta com'era"
-    else bad "il salvataggio della console $x e' cambiato"; fi
+  for x in b c d; do
+    if cmp -s "$D/$x/partita1.sav" "$D/$x/prima.sav"; then ok "il salvataggio 1 della console $x resta com'era"
+    else bad "il salvataggio 1 della console $x e' cambiato"; fi
   done
+  ida=$(sed -n 's/^id=//p' "$D/a/partita1.sav"); sa=$(sed -n 's/^stelle.terra1=//p' "$D/a/partita1.sav")
+  idd=$(sed -n 's/^id=//p' "$D/d/partita2.sav" 2>/dev/null); sd=$(sed -n 's/^stelle.terra1=//p' "$D/d/partita2.sav" 2>/dev/null)
+  if [ -n "$ida" ] && [ "$ida" = "$idd" ] && [ -n "$sa" ] && [ "$sa" = "$sd" ] && grep -q "^nome=CASA" "$D/d/partita2.sav"; then
+    ok "la console d l'ha salvata anche lei, nel posto 2: stessa partita ($ida), stesse stelle ($sa)"
+  else bad "la console d: posto 2 con id '$idd' e stelle '$sd' (chi l'ha creata: '$ida', '$sa')"; fi
+  if [ ! -f "$D/b/partita2.sav" ] && [ ! -f "$D/c/partita2.sav" ]; then ok "le console b e c non l'hanno salvata"
+  else bad "le console b o c hanno un salvataggio 2"; fi
 fi
 
 # 11) From the menus, with the buttons: the host (title, GIOCO IN RETE, CREA, free slot, name, A to
@@ -239,16 +248,31 @@ if want menu; then
   # A to start held for 6 frames: afterwards it must not count in COME SI GIOCA? as well.
   start "$D/a" 700 $P -- --in "0:DOWN@30-31,0:DOWN@40-41,0:A@50-51,0:A@70-71,0:A@90-91,0:START@110-111,0:A@420-425"
   sleep 0.3
-  start "$D/b" 700 $P -- --in "0:DOWN@30-31,0:DOWN@40-41,0:A@50-51,0:DOWN@70-71,0:A@80-81,0:A@220-221"
+  # b: A on the game found, then A to "save it here too?" (0.5.6): the first free slot. c: the same
+  # with the 4 slots full: then down to the 2nd, A, and A to "overwrite?".
+  start "$D/b" 700 $P -- --in "0:DOWN@30-31,0:DOWN@40-41,0:A@50-51,0:DOWN@70-71,0:A@80-81,0:A@220-221,0:A@235-236"
+  for k in 1 2 3 4; do printf 'versione=2\nnome=ALTRA %s\n' $k > "$D/c_partita$k.sav"; done
+  start "$D/c" 700 $P -- --in "0:DOWN@30-31,0:DOWN@40-41,0:A@50-51,0:DOWN@70-71,0:A@80-81,0:A@220-221,0:A@235-236,0:DOWN@250-251,0:A@262-263,0:A@275-276"
+  for k in 1 2 3 4; do mv "$D/c_partita$k.sav" "$D/c/partita$k.sav"; done
   wait_all
   has "$D/a" "partita 1 nuova" "chi crea fa una partita nuova nel posto 1"
   has "$D/a" "partita creata (porta" "e crea la partita in rete"
   has "$D/b" "mi unisco alla partita" "l'altra la trova e si unisce"
-  has "$D/a" "si comincia con 2 console" "A fa cominciare"
+  has "$D/b" "si salvera' anche qui, nel posto 1" "... e la salva anche lei, nel primo posto libero"
+  has "$D/c" "si salvera' anche qui, nel posto 2" "con i posti pieni sceglie quale sostituire (il 2)"
+  has "$D/a" "si comincia con 3 console" "A fa cominciare"
   has "$D/b" "sono il giocatore 2" "l'altra console e' il giocatore 2"
   has "$D/a" "f=600 .*| modalita'" "la A tenuta per cominciare non salta COME SI GIOCA?"
   has "$D/b" "f=600 .*| modalita'" "... nemmeno sull'altra console"
   same "$D/a" "$D/b" 150
+  same "$D/a" "$D/c" 150
+  ida=$(sed -n 's/^id=//p' "$D/a/partita1.sav")
+  if [ -n "$ida" ] && grep -q "^id=$ida" "$D/b/partita1.sav" && grep -q "^id=$ida" "$D/c/partita2.sav"; then
+    ok "b e c hanno la partita di chi l'ha creata ($ida)"
+  else bad "manca la partita di chi l'ha creata ('$ida') in b/partita1.sav o c/partita2.sav"; fi
+  if grep -q "^nome=ALTRA 1" "$D/c/partita1.sav" && grep -q "^nome=ALTRA 3" "$D/c/partita3.sav" && ! grep -q "ALTRA 2" "$D/c/partita2.sav"; then
+    ok "c: sostituito solo il salvataggio scelto"
+  else bad "c: salvataggi sbagliati"; fi
 fi
 
 # 12) First each one plays a different map alone (monsters, shots, cards, random numbers...), then
@@ -264,6 +288,36 @@ if want storia_prima; then
   has "$D/b" "=== mappa 2:" "l'altra la mappa 2"
   has "$D/a" "si comincia con 2 console" "poi la partita in rete"
   same "$D/a" "$D/b" 1300
+fi
+
+# 13) (0.5.6) Joining a game already saved here: the same slot is updated, and what this console
+# had more (the Moon, reached alone) stays. With the slots full: in the slot given (unisciti+salva:3),
+# or not saved at all.
+if want salva_anche_qui; then
+  say "13) la stessa partita salvata anche qui, di nuovo"
+  D=$OUT/salva_anche_qui; P=PUPAZZI_RETE_PORTA=56530; ID=00c0ffee12345678
+  start "$D/a" 1500 $P $BOT PUPAZZI_RETE=crea:3
+  printf 'versione=2\nnome=CASA\nid=%s\nmappe.terra=3\n' $ID > "$D/a/partita1.sav"
+  sleep 0.3
+  start "$D/b" 1400 $P $BOT PUPAZZI_RETE=unisciti+salva
+  printf 'versione=2\nnome=MIA\n' > "$D/b/partita1.sav"
+  printf 'versione=2\nnome=CASA\nid=%s\nmappe.terra=2\nmappe.luna=1\n' $ID > "$D/b/partita2.sav"
+  for x in c d; do
+    sleep 0.3
+    if [ $x = c ]; then start "$D/$x" 1400 $P $BOT PUPAZZI_RETE=unisciti+salva:3; else start "$D/$x" 1400 $P $BOT PUPAZZI_RETE=unisciti+salva; fi
+    for k in 1 2 3 4; do printf 'versione=2\nnome=ALTRA %s\n' $k > "$D/$x/partita$k.sav"; cp "$D/$x/partita$k.sav" "$D/$x/prima$k.sav"; done
+  done
+  wait_all
+  has "$D/a" "si comincia con 4 console" "si comincia in quattro"
+  has "$D/b" "la stessa partita: si aggiorna" "b ce l'ha gia' nel posto 2: si aggiorna quello"
+  if grep -q "^mappe.terra=3" "$D/b/partita2.sav" && grep -q "^mappe.luna=1" "$D/b/partita2.sav" && grep -q "^id=$ID" "$D/b/partita2.sav" && [ ! -f "$D/b/partita3.sav" ]; then
+    ok "b: posto 2 con le mappe di chi l'ha creata e la Luna che aveva gia'; nessun posto nuovo"
+  else bad "b: posto 2 sbagliato ($(grep -v '^#' "$D/b/partita2.sav" | tr '\n' ' '))"; fi
+  if grep -q "^id=$ID" "$D/c/partita3.sav" && cmp -s "$D/c/partita2.sav" "$D/c/prima2.sav"; then ok "c (posti pieni): nel posto 3, come chiesto"
+  else bad "c: la partita non e' nel posto 3"; fi
+  ch=0; for k in 1 2 3 4; do cmp -s "$D/d/partita$k.sav" "$D/d/prima$k.sav" || ch=1; done
+  if [ $ch = 0 ]; then ok "d (posti pieni, nessun posto dato): non la salva"; else bad "d: un salvataggio e' cambiato"; fi
+  for x in b c d; do same "$D/a" "$D/$x" 1100; done
 fi
 
 if [ "$FAILS" -eq 0 ]; then say "tutto bene"; exit 0; fi

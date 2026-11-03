@@ -98,6 +98,7 @@ struct NetGame {
   int players;                   // consoles in the waiting room, the host included
   int state;                     // NG_*
   char version[16];              // version of the game on that console
+  uint64_t id;                   // (0.5.6) identity of the host's game (save.h); 0: an older version
 };
 struct NetView {
   int mode;                      // NV_*
@@ -108,8 +109,11 @@ struct NetView {
   uint8_t present;               // waiting room: slots with a console (bits)
   int local;                     // waiting room: slot of this console
   int error, error_seq;          // last error (NE_*) and how many so far (to notice a new one)
+  int save;                      // (0.5.6) NV_JOINING, NV_JOINED: slot where this console saves the game too (-1 no)
 };
 void game_net_view(Game& g, const NetView* v);
+// NR_JOIN: argument the game in the list of those found, plus 256 times (slot + 1) to save it on this
+// console too, in that slot (0.5.6).
 enum { NR_NONE = 0, NR_HOST, NR_SEARCH, NR_JOIN, NR_LEAVE, NR_START };
 int game_net_request(Game& g, int* arg);                     // after game_update: what the menus ask for (NR_*, one at a time)
 void game_net_summary(NetGame* out);                // the active game: name, slot, planet and round

@@ -88,6 +88,7 @@ static bool worlds_default(const SaveData* d) {
 
 static bool settings_default(const SaveData* d) {
   bool ok = d->antialias && d->music_vol == 6 && d->sfx_vol == 8 && d->lang == 0;
+  ok &= d->cam_dist == 0 && d->cam_pitch == 0 && d->res == 640 && d->detail == 1 && d->margin == 0;
   for (int i = 0; i < SAVE_PLAYERS; ++i) ok &= d->aim[i] == 1;
   return ok;
 }
@@ -107,6 +108,11 @@ static const char* const FULL_SET =
     "volume_musica=0\n"
     "volume_effetti=10\n"
     "lingua=ja\n"
+    "telecamera_distanza=-1\n"
+    "telecamera_inclinazione=2\n"
+    "risoluzione=1280\n"
+    "dettagli=0\n"
+    "margine_tv=3\n"
     "salvataggi=1\n";
 
 static const char* const FULL_GAME =
@@ -125,7 +131,7 @@ static const char* const FULL_GAME =
 
 static bool settings_full(const SaveData* d) {
   return d->aim[0] == 0 && d->aim[1] == 2 && d->aim[2] == 3 && d->aim[3] == 1 && !d->antialias && d->music_vol == 0 &&
-         d->sfx_vol == 10 && d->lang == 5;
+         d->sfx_vol == 10 && d->lang == 5 && d->cam_dist == -1 && d->cam_pitch == 2 && d->res == 1280 && d->detail == 0 && d->margin == 3;
 }
 
 static bool game_full(const SaveData* d) {
@@ -182,6 +188,11 @@ TEST_CASE("2) andata e ritorno") {
   d->music_vol = 0;
   d->sfx_vol = 10;
   d->lang = 5;
+  d->cam_dist = -1;
+  d->cam_pitch = 2;
+  d->res = 1280;
+  d->detail = 0;
+  d->margin = 3;
   save_add_stars("terra1", SAVE_STAR_DONE);
   save_add_stars("terra1", SAVE_STAR_EXPLORER);
   save_add_stars("terra_boss", SAVE_STAR_NO_WIPE);
@@ -723,6 +734,38 @@ TEST_CASE("17) antialias: 0, 1 (il migliore), 4 o 8") {
   EXPECT(ok && count_of(buf, "\nantialias=1\n") == 1, "scritto 8; un valore che non va diventa 1");
 }
 
+TEST_CASE("17b) grafica (0.5.6): telecamera, risoluzione, dettagli, margine") {
+  const char* W = dir_of("gr", true);
+  put_text(file_in(W, "pupazzi.sav"), "versione=2\nlingua=en\n");
+  save_open(W);
+  const SaveData* d = save_data();
+  EXPECT(d->cam_dist == 0 && d->cam_pitch == 0 && d->res == 640 && d->detail == 1 && d->margin == 0 && d->lang == 1,
+         "file della 0.5.5 (senza le chiavi): come prima, 640x480, dettagli alti, senza margine");
+  static const char* const IN[8] = { "100", "320", "479", "480", "799", "960", "1119", "5000" };
+  static const int OUT[8] = { 320, 320, 320, 640, 640, 960, 960, 1280 };
+  bool ok = true;
+  for (int k = 0; k < 8; ++k) {
+    char t[64];
+    snprintf(t, sizeof(t), "risoluzione=%s\n", IN[k]);
+    put_text(file_in(W, "pupazzi.sav"), t);
+    save_open(W);
+    ok &= d->res == OUT[k];
+  }
+  EXPECT(ok, "risoluzione: alla piu' vicina tra 320, 640, 960 e 1280");
+  put_text(file_in(W, "pupazzi.sav"), "telecamera_distanza=-7\ntelecamera_inclinazione=9\ndettagli=5\nmargine_tv=12\nrisoluzione=alta\n");
+  save_open(W);
+  EXPECT(d->cam_dist == -2 && d->cam_pitch == 2 && d->detail == 1 && d->margin == 4 && d->res == 640 && strstr(save_status(), "righe non valide ignorate: 1"),
+         "fuori dai limiti: riportati dentro (-2..2, 0..1, 0..4); risoluzione=alta ignorata");
+  save_data()->res = 700;               // the game does not do this: the nearest one is written
+  save_data()->margin = 9;
+  save_write();
+  get_file(file_in(W, "pupazzi.sav"), buf, sizeof(buf));
+  EXPECT(count_of(buf, "\nrisoluzione=640\n") == 1 && count_of(buf, "\nmargine_tv=4\n") == 1, "scritti nei limiti");
+  put_text(file_in(W, "partita1.sav"), "risoluzione=320\nmargine_tv=2\ngiro.terra=2\n");
+  save_open(W);
+  EXPECT(save_slot_load(0) && d->res == 640 && d->margin == 4 && d->giro[0] == 2, "in una partita la grafica non conta");
+}
+
 TEST_CASE("18) nome delle partite") {
   const char* N = dir_of("n", true);
   save_open(N);
@@ -772,6 +815,106 @@ TEST_CASE("18) nome delle partite") {
   // A copy has the same name.
   EXPECT(load_text(N, "nome=COPIA\nmappe.terra=2\n") && save_slot_copy(0, 2) && save_slot_peek(2, &peek) == SAVE_LETTO && !strcmp(peek.name, "COPIA"),
          "la copia ha lo stesso nome");
+}
+
+// Planet of a map, as the game says it (here from the name: terra..., luna...).
+static int world_of(const char* id) {
+  if (!strncmp(id, "terra", 5)) return 0;
+  if (!strncmp(id, "luna", 4)) return 1;
+  return -1;
+}
+
+// The host's progress, as the game puts it in memory on the console that joins.
+static void host_progress(int terra_open, int terra_giro, const char* name) {
+  SaveData* d = save_data();
+  d->maps_open[0] = (uint8_t)terra_open;
+  d->giro[0] = (uint8_t)terra_giro;
+  snprintf(d->name, sizeof(d->name), "%s", name);
+}
+
+TEST_CASE("19) partita in rete salvata anche su chi si unisce (0.5.6)") {
+  const char* J = dir_of("j", true);
+  save_open(J);
+  save_slot_new(0, "mia");
+  save_write();
+  const uint64_t ID = 0x0123456789abcdefull;
+  EXPECT(save_slot_with_id(ID) == -1, "nessun posto con quella partita");
+  // First time: a free slot (the 2nd), with the host's progress and identity.
+  save_guest_slot_begin(1, ID, world_of);
+  host_progress(3, 1, "CASA");
+  save_set_stars("terra1", 3);
+  save_write();
+  save_add_stars("terra2", 1);              // a map finished during the game: saved like on the host
+  save_write();
+  save_guest_end();
+  get_file(save_slot_path(1), buf, sizeof(buf));
+  bool ok = strstr(buf, "\nnome=CASA\n") && strstr(buf, "\nid=0123456789abcdef\n") && strstr(buf, "\nmappe.terra=3\n") &&
+            strstr(buf, "\nstelle.terra1=3\n") && strstr(buf, "\nstelle.terra2=1\n");
+  EXPECT(ok && save_slot() == -1 && save_slot_with_id(ID) == 1, "posto libero: la partita in rete con nome e identita', aggiornata durante il gioco");
+  SaveData peek;
+  EXPECT(save_slot_peek(0, &peek) == SAVE_LETTO && !strcmp(peek.name, "MIA") && peek.id == 0, "la partita che c'era resta com'era");
+  // Then played here alone: the Moon reached, Earth at round 2.
+  save_slot_load(1);
+  save_data()->maps_open[1] = 2;
+  save_data()->giro[0] = 2;
+  save_set_stars("terra1", 1);
+  save_set_stars("terra2", 0);
+  save_set_stars("luna1", 3);
+  save_data()->seconds = 500;
+  save_write();
+  // Next time, with the same host (Earth at round 1, more maps): what this console had more stays.
+  save_guest_slot_begin(1, ID, world_of);
+  host_progress(4, 1, "CASA");
+  save_set_stars("terra1", 3);
+  save_set_stars("terra2", 1);
+  save_set_stars("terra3", 7);
+  ok = save_data()->giro[0] == 1 && save_data()->maps_open[1] == 0 && save_data()->seconds == 500;   // the game plays with the host's
+  save_write();
+  save_guest_end();
+  get_file(save_slot_path(1), buf, sizeof(buf));
+  ok &= strstr(buf, "\ngiro.terra=2\n") && strstr(buf, "\nstelle.terra1=1\n") && !strstr(buf, "\nstelle.terra3=7\n") &&
+        strstr(buf, "\nmappe.luna=2\n") && strstr(buf, "\nstelle.luna1=3\n") && strstr(buf, "\ntempo=500\n");
+  EXPECT(ok, "la stessa partita: in memoria i progressi di chi la crea; nel file la Terra al giro 2 e la Luna di questa console restano");
+  if (!ok) printf("--- scritto:\n%s---\n", buf);
+  // In the same round both count: the open maps are the most, the stars add up.
+  save_slot_load(1);
+  save_data()->giro[0] = 1;
+  save_data()->maps_open[0] = 2;
+  save_set_stars("terra1", 4);
+  save_set_stars("terra2", 0);
+  save_write();
+  save_guest_slot_begin(1, ID, world_of);
+  host_progress(3, 1, "CASA");
+  save_set_stars("terra1", 3);
+  save_set_stars("terra2", 1);
+  save_write();
+  save_guest_end();
+  get_file(save_slot_path(1), buf, sizeof(buf));
+  EXPECT(strstr(buf, "\nmappe.terra=3\n") && strstr(buf, "\nstelle.terra1=7\n") && strstr(buf, "\nstelle.terra2=1\n"),
+         "stesso giro: mappe aperte le piu', stelle sommate");
+  // Another game in the same slot (chosen to be overwritten): it replaces it.
+  save_guest_slot_begin(1, 0x1111222233334444ull, world_of);
+  host_progress(1, 1, "ALTRA");
+  save_write();
+  save_guest_end();
+  get_file(save_slot_path(1), buf, sizeof(buf));
+  EXPECT(strstr(buf, "\nnome=ALTRA\n") && strstr(buf, "\nid=1111222233334444\n") && !strstr(buf, "luna") && save_slot_with_id(ID) == -1,
+         "un'altra partita al posto di quella: la sostituisce");
+  // A copy is a game of its own: a new identity.
+  EXPECT(save_slot_copy(1, 2) && save_slot_peek(2, &peek) == SAVE_LETTO && peek.id && peek.id != 0x1111222233334444ull &&
+             save_slot_with_id(0x1111222233334444ull) == 1,
+         "DUPLICA: la copia ha un'identita' nuova");
+  // The host: the game gets an identity the first time (and keeps it).
+  save_slot_load(0);
+  const uint64_t a = save_game_id();
+  get_file(save_slot_path(0), buf, sizeof(buf));
+  char line[64];
+  snprintf(line, sizeof(line), "\nid=%016llx\n", (unsigned long long)a);
+  save_open(J);
+  save_slot_load(0);
+  EXPECT(a && strstr(buf, line) && save_game_id() == a, "chi crea: la partita prende un'identita' e la tiene");
+  put_text(file_in(J, "partita4.sav"), "id=12345\nnome=X\n");
+  EXPECT(save_slot_peek(3, &peek) == SAVE_LETTO && peek.id == 0 && !strcmp(peek.name, "X"), "id non valido: riga ignorata");
 }
 
 int main(int argc, char** argv) {

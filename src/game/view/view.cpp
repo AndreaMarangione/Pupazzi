@@ -37,6 +37,9 @@ static int g_views;   // views alive: the models are shared by all of them
 View* view_create(void) {
   View* v = (View*)calloc(1, sizeof(View));
   v->hdmi = true;
+  v->cull_x = 0.95f;
+  v->cull_s = 0.55f;
+  v->cull_n = 1.0f;
   if (g_views++ == 0) models_build();
   return v;
 }

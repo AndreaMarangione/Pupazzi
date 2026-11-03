@@ -40,8 +40,10 @@
 #define PUPAZZI_ARCH "altro"
 #endif
 
-#define MAX_W 960
-#define MAX_H 720
+// Biggest picture (declared to RetroArch at the start: on the console's Mali the GL context cannot be
+// made again, so the resolution changes only within it, with SET_GEOMETRY). Since 0.5.6 1280x960.
+#define MAX_W 1280
+#define MAX_H 960
 #define AUDIO_RATE 48000
 #define AUDIO_FRAMES (AUDIO_RATE / 60)
 #define STAT_PERIOD 600     // every how many frames a status line is written to the log
@@ -59,7 +61,8 @@ static Hud g_hud;
 static int16_t g_audio[AUDIO_FRAMES * 2];
 
 static struct {
-  int w, h, ncpu;
+  int w, h, ncpu;             // the frame handed to RetroArch (the resolution of GRAFICA, or PUPAZZI_RES)
+  bool res_forced;            // PUPAZZI_RES (tests): the resolution of the settings does not count
   bool aa_adapt;               // PUPAZZI_AA_ADATTA=0: no automatic switch from 8 to 4 samples (tests)
   bool hud_off, hud_fixed;    // PUPAZZI_HUD=0: no HUD; =fisso: performance overlay without timings (comparable images)
   bool want_gl, use_gl, gl_ready;
@@ -712,8 +715,24 @@ static double draw_gpu(FrameDesc& fd, RenderStats* st) {
   return t;
 }
 
+// TV margin with the software renderer: the picture (drawn at its size) in the middle of the frame,
+// black around it. The frame is cleared only when the size or the margin changes.
+static const uint32_t* framed(const uint32_t* pic, const FrameDesc& fd) {
+  static uint32_t* buf;
+  static int bw, bh, bx, by;
+  if (!buf) buf = (uint32_t*)calloc((size_t)MAX_W * MAX_H, sizeof(uint32_t));
+  if (!buf) return pic;
+  if (bw != fd.fw || bh != fd.fh || bx != fd.ox || by != fd.oy) {
+    memset(buf, 0, (size_t)fd.fw * fd.fh * sizeof(uint32_t));
+    bw = fd.fw; bh = fd.fh; bx = fd.ox; by = fd.oy;
+  }
+  for (int y = 0; y < fd.h; ++y) memcpy(buf + (size_t)(fd.oy + y) * fd.fw + fd.ox, pic + (size_t)y * fd.w, (size_t)fd.w * sizeof(uint32_t));
+  return buf;
+}
+
 static double draw_software(FrameDesc& fd, RenderStats* st) {
   const uint32_t* fb = swr_render(&fd, st);
+  if (fd.fw > fd.w || fd.fh > fd.h) fb = framed(fb, fd);
   const double t = plat_now_ms();
   video_cb(fb, (unsigned)A.w, (unsigned)A.h, (size_t)A.w * 4);
   return t;
@@ -722,6 +741,38 @@ static double draw_software(FrameDesc& fd, RenderStats* st) {
 static const VideoOut VIDEO_GPU = { "gpu", draw_gpu };
 static const VideoOut VIDEO_SOFTWARE = { "software", draw_software };
 static const VideoOut* g_video = &VIDEO_SOFTWARE;
+
+// --- graphics settings (0.5.6, GRAFICA in the pause) ------------------------------------------
+
+// Every frame: the settings of this console (in save_data, changed from the pause) go to the view
+// (camera, details) and to the frame. The resolution changes with SET_GEOMETRY within MAX_W x MAX_H.
+static void apply_gfx(void) {
+  const SaveData* sd = save_data();
+  view_set_gfx(*A.view, sd->cam_dist, sd->cam_pitch, sd->detail == 0);
+  if (A.res_forced) return;
+  const int w = sd->res == 320 || sd->res == 960 || sd->res == 1280 ? sd->res : 640;
+  if (w == A.w) return;
+  A.w = w;
+  A.h = w * 3 / 4;
+  struct retro_game_geometry geo;
+  memset(&geo, 0, sizeof(geo));
+  geo.base_width = (unsigned)A.w;
+  geo.base_height = (unsigned)A.h;
+  geo.max_width = MAX_W;
+  geo.max_height = MAX_H;
+  geo.aspect_ratio = 4.0f / 3.0f;
+  const bool ok = env_cb(RETRO_ENVIRONMENT_SET_GEOMETRY, &geo);
+  plat_log("risoluzione %dx%d%s", A.w, A.h, ok ? "" : " (il frontend non accetta SET_GEOMETRY)");
+}
+
+// The picture inside the frame: with the TV margin (0 to 4) 2.5% smaller on every side per step.
+static void picture_rect(int* x, int* y, int* w, int* h) {
+  const int m = save_data()->margin <= SAVE_MARGIN_MAX ? save_data()->margin : SAVE_MARGIN_MAX;
+  *x = m * A.w / 40;
+  *y = m * A.h / 40;
+  *w = A.w - 2 * *x;
+  *h = A.h - 2 * *y;
+}
 
 // --- libretro interface ---------------------------------------------------
 
@@ -822,9 +873,11 @@ RETRO_API void retro_init(void) {
   }
   if (!swr_init(MAX_W, MAX_H)) plat_log("ERRORE: memoria insufficiente per il renderer software");
   A.ncpu = (int)sysconf(_SC_NPROCESSORS_CONF);
-  // Resolution: 640x480 like the console screen; PUPAZZI_RES=320 or 960 for tests.
-  const int res = env_int("PUPAZZI_RES", 640);
-  A.w = res == 320 ? 320 : (res == 960 ? 960 : 640);
+  // Resolution: 640x480 like the console screen until the settings are read (retro_load_game, then
+  // GRAFICA in the pause); PUPAZZI_RES=320, 640, 960 or 1280 fixes it (tests).
+  const int res = env_int("PUPAZZI_RES", 0);
+  A.res_forced = res > 0;
+  A.w = res == 320 ? 320 : (res == 960 ? 960 : (res == 1280 ? 1280 : 640));
   A.h = A.w * 3 / 4;
   const char* hud = getenv("PUPAZZI_HUD");
   A.hud_off = hud && *hud == '0';
@@ -991,6 +1044,12 @@ RETRO_API bool retro_load_game(const struct retro_game_info* info) {
   plat_log("maschere di input: %s; cartella dei risultati: %s", A.bitmasks ? "si" : "no", A.out_dir);
   if (A.bots) plat_log("giocatori automatici: %d", A.bots);
   open_save();
+  if (!A.res_forced) {
+    // The resolution chosen on this console (GRAFICA): RetroArch asks for it after retro_load_game.
+    A.w = save_data()->res;
+    A.h = A.w * 3 / 4;
+    plat_log("risoluzione dalle impostazioni: %dx%d", A.w, A.h);
+  }
   send_descriptors();
   remote_close();    // retro_load_game again without retro_unload_game: the previous ports
   remote_open();
@@ -1093,8 +1152,15 @@ RETRO_API void retro_run(void) {
   if (req != NR_NONE) net_request(req, req_arg);
   net_frame_end();
   if (game_wants_quit(*A.game)) request_shutdown("menu: Esci", "giocatore");
+  apply_gfx();
   FrameDesc fd;
-  view_build_frame(*A.view, *A.game, &fd, A.w, A.h, A.hud_off ? NULL : &g_hud);
+  int px, py, pw, ph;
+  picture_rect(&px, &py, &pw, &ph);
+  view_build_frame(*A.view, *A.game, &fd, pw, ph, A.hud_off ? NULL : &g_hud);
+  fd.fw = A.w;
+  fd.fh = A.h;
+  fd.ox = px;
+  fd.oy = py;
   if (!A.hud_off && A.perf) {
     if (A.hud_fixed) A.fps = A.frame_avg = A.frame_max = A.e_core = 0.0f;
     perf_overlay(&g_hud);

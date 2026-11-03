@@ -954,8 +954,12 @@ void glr_render(const FrameDesc* f, unsigned fbo, RenderStats* st, bool finish) 
   g_frame_no++;
   const double t0 = plat_now_ms();
   const int w = f->w, h = f->h;
-  // With antialiasing the world is drawn into the multisample target, then brought into the
-  // frontend's framebuffer; the HUD always goes directly into the frontend's one.
+  // The frame (0.5.6): bigger than the picture with the TV margin, black around it. vx, vy: the
+  // picture's corner for glViewport (from the bottom).
+  const int fw = f->fw > 0 ? f->fw : w, fh = f->fh > 0 ? f->fh : h;
+  const int vx = f->ox, vy = fh - f->oy - h;
+  // With antialiasing the world is drawn into the multisample target (as big as the frame), then
+  // brought into the frontend's framebuffer; the HUD always goes directly into the frontend's one.
   if (g_depth_bits < 0) {
     // Depth of the frontend's framebuffer (the one that matters without antialiasing).
     gl.BindFramebuffer(GL_FRAMEBUFFER, fbo);
@@ -964,9 +968,9 @@ void glr_render(const FrameDesc* f, unsigned fbo, RenderStats* st, bool finish) 
     g_depth_bits = bits;
     plat_log("GL: buffer di profondita' a %d bit", (int)bits);
   }
-  const bool aa = f->aa > 0 && aa_ready(w, h, f->aa);
+  const bool aa = f->aa > 0 && aa_ready(fw, fh, f->aa);
   gl.BindFramebuffer(GL_FRAMEBUFFER, aa ? g_aa.fbo : fbo);
-  gl.Viewport(0, 0, w, h);
+  gl.Viewport(vx, vy, w, h);
   // The state inherited from the frontend (or from a previous core) is not guaranteed: everything
   // that affects drawing is reset, not only what RetroArch usually touches.
   gl.Disable(GL_SCISSOR_TEST);
@@ -987,7 +991,8 @@ void glr_render(const FrameDesc* f, unsigned fbo, RenderStats* st, bool finish) 
   gl.ClearColor(0.0f, 0.0f, 0.0f, 1.0f);
   gl.ClearDepthf(1.0f);
   gl.ClearStencil(0);
-  // All planes are cleared: on tile-based GPUs this avoids reloading the previous content.
+  // All planes are cleared (the whole framebuffer: the scissor test is off): on tile-based GPUs this
+  // avoids reloading the previous content. In black: the frame around the picture.
   gl.Clear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
 
   // Sky.
@@ -1048,26 +1053,27 @@ void glr_render(const FrameDesc* f, unsigned fbo, RenderStats* st, bool finish) 
     if (g_aa.mode == AA_ES3) {
       gl.BindFramebuffer(GL_READ_FRAMEBUFFER, g_aa.fbo);
       gl.BindFramebuffer(GL_DRAW_FRAMEBUFFER, fbo);
-      glo.BlitFramebuffer(0, 0, w, h, 0, 0, w, h, GL_COLOR_BUFFER_BIT, GL_NEAREST);
+      glo.BlitFramebuffer(0, 0, fw, fh, 0, 0, fw, fh, GL_COLOR_BUFFER_BIT, GL_NEAREST);   // with the black frame
       gl.BindFramebuffer(GL_FRAMEBUFFER, fbo);
     } else {
       gl.BindFramebuffer(GL_FRAMEBUFFER, fbo);
-      gl.Viewport(0, 0, w, h);
+      gl.Viewport(0, 0, fw, fh);
       gl.Clear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
       g_hv_n = 0;
-      hud_quad(0, 0, (float)w, (float)h, 0.0f, 1.0f, 1.0f, 0.0f, 0xFFFFFF, 0xFFFFFF, 255);   // the texture has its origin at the bottom
-      quads_flush(w, h, g_prog_copy, g_u_xf_copy, g_u_tex_copy, g_aa.tex);
+      hud_quad(0, 0, (float)fw, (float)fh, 0.0f, 1.0f, 1.0f, 0.0f, 0xFFFFFF, 0xFFFFFF, 255);   // the texture has its origin at the bottom
+      quads_flush(fw, fh, g_prog_copy, g_u_xf_copy, g_u_tex_copy, g_aa.tex);
       st->draw_calls++;
+      gl.Viewport(vx, vy, w, h);
     }
   }
   const double t1 = plat_now_ms();
 
   // HUD and menus (0.5.2: a single draw with the interface shader, in the order of the commands).
   if (f->hud && !g_prog_ui) {
-    hud_simple(f->hud, (float)f->hud_scale * 0.5f, w, h);
+    hud_simple(f->hud, (float)h / 480.0f, w, h);
     st->draw_calls++;
   } else if (f->hud) {
-    const float k = (float)f->hud_scale * 0.5f;   // the commands are in pixels at 640x480
+    const float k = (float)h / 480.0f;   // the commands are in pixels at 640x480
     const Hud* hd = f->hud;
     g_uv_n = 0;
     for (int i = 0; i < hd->n; ++i) {

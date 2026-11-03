@@ -119,7 +119,6 @@ TEST_CASE("1) stanza chiusa vista dall'interno: ogni pixel una volta sola") {
     f.light = normalize(v3(0.3f, 0.8f, 0.5f));
     f.sky_top = f.sky_bot = 0xFF00FF;
     f.hud = 0;
-    f.hud_scale = 1;
 
     RenderStats st;
     memset(&st, 0, sizeof(st));
