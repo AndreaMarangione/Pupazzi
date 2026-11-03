@@ -1,4 +1,4 @@
-Caratteri dell'interfaccia (src/font_hud.h e src/font_hud_data.h, generati da tools/make_font.py)
+Caratteri dell'interfaccia (src/engine/font_hud.h e src/engine/font_hud_data.h, generati da tools/make_font.py)
 
 Nel core non ci sono i file dei font: solo le immagini dei caratteri gia' disegnate alle misure
 usate dall'interfaccia, con i bordi sfumati; gli aloni dei titoli li calcola il gioco all'avvio.

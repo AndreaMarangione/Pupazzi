@@ -1,5 +1,5 @@
 # Testi del gioco nelle 7 lingue: italiano, inglese, spagnolo, portoghese (del Portogallo), cinese
-# semplificato, giapponese, hindi. Da qui tools/make_lang.py genera src/lang_data.h (e controlla
+# semplificato, giapponese, hindi. Da qui tools/make_lang.py genera src/engine/lang_data.h (e controlla
 # che ci siano tutti i testi del codice, con gli stessi %d e %s); tools/make_font.py prende i
 # caratteri che servono per cinese, giapponese e hindi.
 #
