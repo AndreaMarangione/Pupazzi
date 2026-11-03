@@ -682,6 +682,47 @@ static bool try_hw_render(void) {
   return env_cb(RETRO_ENVIRONMENT_SET_HW_RENDER, &hw);
 }
 
+// --- video output ---------------------------------------------------------
+
+// How a frame reaches RetroArch (Strategy): the GPU renderer draws it straight into the frontend's
+// framebuffer, the software renderer draws it in memory and hands it over as pixels. Both take the
+// same FrameDesc. Chosen once in retro_load_game (g_video); the frame loop always calls draw, which
+// returns when the drawing ended (before handing the frame over: timings of the overlay).
+struct VideoOut {
+  const char* name;                                  // in the log: "gpu" or "software"
+  double (*draw)(FrameDesc& fd, RenderStats* st);
+};
+
+static double draw_gpu(FrameDesc& fd, RenderStats* st) {
+  if (!A.gl_ready) {                       // no context (not yet, or lost): an empty frame
+    const double t = plat_now_ms();
+    video_cb(NULL, (unsigned)A.w, (unsigned)A.h, 0);
+    return t;
+  }
+  fd.aa = game_aa_wanted(*A.game);
+  if (!g_aa_try.passed && (fd.aa > 0) != (g_aa_try.frames >= 0)) aa_try_mark(fd.aa > 0);
+  glr_render(&fd, (unsigned)hw.get_current_framebuffer(), st, false);
+  game_set_aa_available(*A.game, glr_aa_max());   // if the GPU refused antialiasing (or the 8 samples), the pause knows
+  if (g_aa_try.frames >= 0 && ++g_aa_try.frames >= AA_TRY_FRAMES) {
+    aa_try_mark(false);
+    g_aa_try.passed = true;
+  }
+  const double t = plat_now_ms();
+  video_cb(RETRO_HW_FRAME_BUFFER_VALID, (unsigned)A.w, (unsigned)A.h, 0);
+  return t;
+}
+
+static double draw_software(FrameDesc& fd, RenderStats* st) {
+  const uint32_t* fb = swr_render(&fd, st);
+  const double t = plat_now_ms();
+  video_cb(fb, (unsigned)A.w, (unsigned)A.h, (size_t)A.w * 4);
+  return t;
+}
+
+static const VideoOut VIDEO_GPU = { "gpu", draw_gpu };
+static const VideoOut VIDEO_SOFTWARE = { "software", draw_software };
+static const VideoOut* g_video = &VIDEO_SOFTWARE;
+
 // --- libretro interface ---------------------------------------------------
 
 RETRO_API unsigned retro_api_version(void) { return RETRO_API_VERSION; }
@@ -941,7 +982,8 @@ RETRO_API bool retro_load_game(const struct retro_game_info* info) {
   plat_log("glibc in uso %s (compilato per %d.%d)", gnu_get_libc_version(), __GLIBC__, __GLIBC_MINOR__);
 #endif
   plat_log("cpu presenti %d, accese ora %d; risoluzione %dx%d", A.ncpu, (int)sysconf(_SC_NPROCESSORS_ONLN), A.w, A.h);
-  plat_log("renderer richiesto: %s, ottenuto: %s", A.want_gl ? "gpu" : "software", A.use_gl ? "gpu" : "software");
+  g_video = A.use_gl ? &VIDEO_GPU : &VIDEO_SOFTWARE;
+  plat_log("renderer richiesto: %s, ottenuto: %s", A.want_gl ? "gpu" : "software", g_video->name);
   float hz = 0.0f;
   if (env_cb(RETRO_ENVIRONMENT_GET_TARGET_REFRESH_RATE, &hz)) plat_log("frequenza di aggiornamento del frontend: %.3f Hz", (double)hz);
   const char* self = NULL;
@@ -1061,28 +1103,7 @@ RETRO_API void retro_run(void) {
 
   RenderStats st;
   memset(&st, 0, sizeof(st));
-  double t2;
-  if (A.use_gl) {
-    if (A.gl_ready) {
-      fd.aa = game_aa_wanted(*A.game);
-      if (!g_aa_try.passed && (fd.aa > 0) != (g_aa_try.frames >= 0)) aa_try_mark(fd.aa > 0);
-      glr_render(&fd, (unsigned)hw.get_current_framebuffer(), &st, false);
-      game_set_aa_available(*A.game, glr_aa_max());   // if the GPU refused antialiasing (or the 8 samples), the pause knows
-      if (g_aa_try.frames >= 0 && ++g_aa_try.frames >= AA_TRY_FRAMES) {
-        aa_try_mark(false);
-        g_aa_try.passed = true;
-      }
-      t2 = plat_now_ms();
-      video_cb(RETRO_HW_FRAME_BUFFER_VALID, (unsigned)A.w, (unsigned)A.h, 0);
-    } else {
-      t2 = plat_now_ms();
-      video_cb(NULL, (unsigned)A.w, (unsigned)A.h, 0);
-    }
-  } else {
-    const uint32_t* fb = swr_render(&fd, &st);
-    t2 = plat_now_ms();
-    video_cb(fb, (unsigned)A.w, (unsigned)A.h, (size_t)A.w * 4);
-  }
+  const double t2 = g_video->draw(fd, &st);
   const double t3 = plat_now_ms();
   // Sound: always sent (it is what keeps the pace when the frontend's video is on another thread).
   audio_render(g_audio, AUDIO_FRAMES);
