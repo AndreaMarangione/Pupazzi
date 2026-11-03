@@ -206,7 +206,7 @@ void card_backs(Hud* h, float cx, float cy, float w, float alpha = 1.0f) {
 
 // Riquadro di un giocatore: "G1 ASTRO", le tre carte, la descrizione di quella col cursore e in
 // fondo le carte gia' prese; dopo la scelta "PRESA!". Con h NULL misura soltanto (prove).
-PanelFit draw_panel(Game& g, Hud* h, int i, int ch, const CardOffer& o, uint32_t owned, bool others, float px, float pw) {
+PanelFit draw_panel(const Game& g, Hud* h, int i, int ch, const CardOffer& o, uint32_t owned, bool others, float px, float pw) {
   PanelFit fit = { 0.0f, 0, false, false, false };
   const bool narrow = pw < 180.0f;
   const float pad = narrow ? 12.0f : 14.0f;    // nei riquadri stretti (4 giocatori) un po' di posto in piu'
@@ -371,7 +371,7 @@ void cards_offer(Game& g) {
   g.cards_open = true;
   g.cards_t = g.cards_age = 0;
   g.cards_seq++;
-  snd_ui(SND_CARD_OPEN);
+  ev_sound_ui(g, SND_CARD_OPEN);
   plat_log("carte: si sceglie (mappa %d, zona %d)", g.map_idx + 1, (g.phase == PH_CLEAR ? g.zone + 1 : g.zone) + 1);
 }
 
@@ -400,19 +400,19 @@ void cards_update(Game& g) {
     if (!o.shown) {
       if (late || (g.cards_age > CARDS_BANNER_MIN && (pad_pressed(g, i, PAD_A) || g.start_tap[i]))) {
         o.shown = true;
-        snd_ui(SND_CARD_OPEN);
+        ev_sound_ui(g, SND_CARD_OPEN);
       }
       if (!late) {                     // dopo un minuto (late) le vede e prende subito quella col cursore
         all = false;
         continue;
       }
     }
-    if (g.in[i].nav == NAV_UP) { o.sel = (int8_t)((o.sel + o.n - 1) % o.n); snd_ui(SND_UI_MOVE); }
-    if (g.in[i].nav == NAV_DOWN) { o.sel = (int8_t)((o.sel + 1) % o.n); snd_ui(SND_UI_MOVE); }
+    if (g.in[i].nav == NAV_UP) { o.sel = (int8_t)((o.sel + o.n - 1) % o.n); ev_sound_ui(g, SND_UI_MOVE); }
+    if (g.in[i].nav == NAV_DOWN) { o.sel = (int8_t)((o.sel + 1) % o.n); ev_sound_ui(g, SND_UI_MOVE); }
     if (pad_pressed(g, i, PAD_A) || g.start_tap[i] || late) {
       if (late) plat_log("G%d non ha scelto entro un minuto: prende quella col cursore", i + 1);
       o.done = true;
-      snd_ui(SND_CARD_PICK);
+      ev_sound_ui(g, SND_CARD_PICK);
       card_take(g, i, o.card[o.sel]);
     } else {
       all = false;
@@ -431,7 +431,7 @@ void cards_update(Game& g) {
 
 // 0.5.4: prima delle carte, finche' nessuno ha premuto A, un banner al centro con le carte coperte:
 // "RITIRA LE TUE CARTE", sotto A per scegliere. Entra in un attimo, sopra il gioco fermo.
-void cards_banner(Game& g, Hud* h) {
+void cards_banner(const Game& g, Hud* h) {
   // Sopra il centro dello schermo, dove di solito c'e' il gruppo.
   const float a = fminf(1.0f, (float)(g.cards_age + 1) / 10.0f), cy = 160.0f;
   ui::overlay(h, 0.55f * a);
@@ -447,7 +447,7 @@ void cards_banner(Game& g, Hud* h) {
   ui::text(h, x + 30.0f, cy + 30.0f, HF_S15, hud_a(ui::TX, a), sub, 0.5f);
 }
 
-void cards_hud(Game& g, Hud* h) {
+void cards_hud(const Game& g, Hud* h) {
   int who[MAX_PLAYERS], n = 0;
   bool waiting = false, opened = false;
   for (int i = 0; i < MAX_PLAYERS; ++i)
@@ -549,7 +549,7 @@ void card_elem_hit(Game& g, int k, int owner, int elem) {
   puff(g, c + v3(0, 0.3f, 0), PK_PUFF, PC_WHITE, v3(0, 2.6f, 0), 3.4f, 34);
   puff(g, c + v3(0, 0.1f, 0), PK_PUFF, PC_SNOW, v3(0, 1.6f, 0), 3.0f, 30);
   add_shake(g, 0.06f);
-  snd_at(g, SND_EXPLODE_SMALL, at);
+  ev_sound(g, SND_EXPLODE_SMALL, at);
   plat_log("vapore! un mostro scoppia (G%d): %d colpiti", by + 1, hit);
 }
 
@@ -575,7 +575,7 @@ bool card_shield_hit(Game& g, int i) {
   const Vec3 c = player_chest(p);
   burst(g, c, 12, i, 3.5f);
   burst(g, c, 6, PC_WHITE, 2.5f);
-  snd_at(g, SND_CAPSULE_HIT, p.pos);
+  ev_sound(g, SND_CAPSULE_HIT, p.pos);
   plat_log("giocatore %d: lo scudo ferma il colpo (mappa %d, zona %d)", i + 1, g.map_idx + 1, g.zone + 1);
   return true;
 }

@@ -20,9 +20,7 @@
 #   game/screens/ menus and screens
 #   net/          LAN play
 
-# (Link order as up to 0.5.4: it decides where the code goes in the core, so with it a pure move of
-# files gives byte-identical cores.)
-SRC := src/platform/core.cpp src/game/sim/game.cpp src/game/view/game_draw.cpp src/game/sim/player.cpp \
+SRC := src/platform/core.cpp src/game/sim/game.cpp src/game/view/game_draw.cpp src/game/view/view.cpp src/game/view/camera.cpp src/game/sim/player.cpp \
        src/game/sim/combat.cpp src/game/sim/monsters.cpp src/game/sim/flow.cpp src/game/screens/menu.cpp \
        src/game/sim/bot.cpp src/game/sim/cards.cpp src/game/sim/level.cpp src/game/view/level_mesh.cpp \
        src/game/sim/maps.cpp src/game/view/models.cpp src/engine/swr.cpp src/engine/glr.cpp src/engine/hud.cpp \

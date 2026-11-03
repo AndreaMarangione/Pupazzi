@@ -19,7 +19,6 @@ static_assert(std::is_trivially_default_constructible<Game>::value && std::is_tr
 Game* game_create(void) {
   Game* g = (Game*)calloc(1, sizeof(Game));
   g->session.net_local = -1;
-  g->session.hdmi = true;
   g->session.cards_on = true;
   return g;
 }
@@ -33,41 +32,6 @@ static_assert(NET_NAME_LEN == SAVE_NAME_LEN, "game.h e save.h: stessa lunghezza 
 namespace {
 
 bool g_inited;                 // models and maps built (shared by every game in the process)
-// Gioco in rete (0.5.4): solo di questa console, non della partita (che e' uguale su tutte).
-const float PITCH_PLAY = 0.98f, PITCH_MENU = 0.5f;
-// In partita: da CAM_DIST_MIN (gruppo vicino) a CAM_DIST_MAX (gruppo largo); senza HDMI, sullo schermo
-// piccolo della console, si parte piu' vicino (0.5.3). Prima: 0.5.1-0.5.2 da 22 a 30 per tutti; 0.5 da 15
-// a 30; 0.3.2-0.4 da 15 a 21; fino alla 0.3.1 da 11 a 17.
-const float CAM_DIST_MIN = 22.0f, CAM_DIST_MIN_LCD = 15.0f, CAM_DIST_MAX = 30.0f;
-// Terreno inquadrato dalla telecamera di gioco a distanza d (inclinazione 0,98, campo 0,87 in
-// game_draw.cpp, schermo 4:3), in metri per metro di distanza: verso nord (in alto) fino a 0,81 d
-// dal punto inquadrato, verso sud 0,425 d; di lato, s metri a sud del punto inquadrato (s
-// negativo: a nord), fino a 0,62 (d - 0,557 s) dal centro: 0,62 d all'altezza del punto
-// inquadrato, 0,47 d in basso e 0,90 d in alto (l'inquadratura a terra e' un trapezio).
-const float VIEW_N = 0.81f, VIEW_S = 0.425f, VIEW_W = 0.62f, VIEW_K = 0.557f;
-// Chi gioca si deve vedere con le sue barre: di lato entro CAM_SAFE_X della mezza larghezza della
-// sua riga (le barre sono larghe una ventina di punti su 160) meno CAM_MARGIN_X metri, i piedi
-// CAM_MARGIN_S sopra il bordo in basso e in alto non oltre VIEW_NU d - CAM_MARGIN_N (testa e barre
-// sotto la riga in alto).
-const float CAM_SAFE_X = 0.875f, CAM_MARGIN_X = 0.4f, CAM_MARGIN_S = 1.0f, CAM_MARGIN_N = 2.5f, VIEW_NU = 0.6f;
-// Ai bordi della zona la telecamera si ferma mostrando al massimo cosi' tanto oltre (in metri: di
-// lato all'altezza del punto inquadrato, a nord, a sud), purche' si veda ancora chi gioca; quando la
-// zona sta tutta nell'inquadratura a sud si mostra CAM_OVER_S e quello che avanza va a nord (in
-// alto il terreno e' piu' schiacciato e c'e' la zona dopo), di lato si centra la zona.
-const float CAM_OVER_X = 1.8f, CAM_OVER_N = 6.0f, CAM_OVER_S = 3.5f;
-
-// Distanza minima con cui i punti p[] si vedono tutti, inquadrando (cx, cz).
-float cam_need(const Vec3* p, int n, float cx, float cz) {
-  float d = 0.0f;
-  for (int k = 0; k < n; ++k) {
-    const float a = fabsf(p[k].x - cx), s = p[k].z - cz;     // di lato; verso sud (negativo: nord)
-    d = fmaxf(d, (a + CAM_MARGIN_X) / (CAM_SAFE_X * VIEW_W) + VIEW_K * s);
-    d = fmaxf(d, (s + CAM_MARGIN_S) / VIEW_S);
-    d = fmaxf(d, (CAM_MARGIN_N - s) / VIEW_NU);
-  }
-  return d;
-}
-
 // Mostri di un gruppo: piu' giocatori in gioco (chi e' senza vite non conta), piu' mostri; e
 // di piu' a ogni giro.
 int wave_size(Game& g, int base) {
@@ -145,7 +109,7 @@ void restart_zone(Game& g) {
     show_msg(g, tr("SI RIPARTE!"), sub, 0xFFFFFF, 2, 110);
   }
   plat_log("si riparte dalla zona %d della mappa %d (vite %d)", g.zone + 1, g.map_idx + 1, lives);
-  update_camera(g, true);
+  ev_camera(g, CAM_CUT);
 }
 
 // Boss del pianeta battuto: si apre il pianeta dopo e, con almeno GIRO_STARS stelle nel giro in
@@ -228,7 +192,7 @@ void update_spawning(Game& g) {
       begin_wave(g, g.wave + 1);
       g.spawn_wait = 45;
       show_msg(g, tr("ARRIVANO ALTRI!"), "", 0xFF8A5C, 2, 90);
-      snd_ui(SND_WAVE);
+      ev_sound_ui(g, SND_WAVE);
     }
     return;
   }
@@ -239,7 +203,7 @@ void update_spawning(Game& g) {
     const int gi = g.L.zones[g.zone].exit_gate;
     if (gi >= 0) g.gate_want[gi] = 1.0f;          // si apre (e cigola: update_gates)
     show_msg(g, tr("ZONA LIBERA!"), tr("avanti: il cancello è aperto"), 0x7CF29A, 2, 180);
-    snd_ui(SND_ZONE_CLEAR);
+    ev_sound_ui(g, SND_ZONE_CLEAR);
     plat_log("mappa %d, zona %d libera", g.map_idx + 1, g.zone + 1);
     cards_zone_cleared(g);
   } else {
@@ -410,7 +374,7 @@ void gate_slam(Game& g, int gi) {
     const Vec3 vel = m * (0.5f + 0.9f * r1) + eu * (0.8f * (r2 - 0.5f)) + v3(0.0f, 0.35f + 0.35f * r3, 0.0f);
     puff(g, at, PK_PUFF, col, vel, 2.4f + 0.8f * r4, life);
   }
-  snd_at(g, SND_GATE_SHUT, mid);
+  ev_sound(g, SND_GATE_SHUT, mid);
   add_shake(g, 0.1f);
 }
 }  // namespace
@@ -446,7 +410,7 @@ void update_gates(Game& g) {
       }
     }
     if (gt.open == o0) continue;
-    if (rest && gt.vel != 0.0f) snd_at(g, SND_GATE, gate_mid(g, gt));   // comincia a girare: cigola
+    if (rest && gt.vel != 0.0f) ev_sound(g, SND_GATE, gate_mid(g, gt));   // comincia a girare: cigola
     gate_sweep(g, i, o0);
   }
 }
@@ -504,9 +468,8 @@ void begin_map(Game& g, bool again) {
   g.screen = SC_PLAY;
   g.screen_t = 0;
   g.paused = false;
-  g.cam_pitch = PITCH_PLAY;
   map_start_msg(g, again);
-  update_camera(g, true);
+  ev_camera(g, CAM_CUT_PLAY);
   cards_offer(g);     // prima della prima ondata; il messaggio della mappa si vede dopo le carte
 }
 
@@ -619,7 +582,7 @@ void play_update(Game& g, const Pad pads[MAX_PLAYERS]) {
     g.wipe_map = !solo || lives == 0;
     g.phase = PH_WIPE;
     g.phase_t = 0;
-    snd_ui(SND_WIPE);
+    ev_sound_ui(g, SND_WIPE);
     if (g.wipe_map) {
       g.map_wipes++;
       g.restarts++;
@@ -636,7 +599,7 @@ void play_update(Game& g, const Pad pads[MAX_PLAYERS]) {
     }
   }
   g.enemies_left = g.phase == PH_FIGHT ? zone_total_left(g) : count_monsters(g);
-  update_camera(g, false);
+  ev_camera(g, CAM_FOLLOW);
 }
 
 void update_pad_states(Game& g, const Pad pads[MAX_PLAYERS]) {
@@ -677,7 +640,7 @@ int count_in_play(Game& g) {
   for (int i = 0; i < MAX_PLAYERS; ++i) n += g.pl[i].active && !g.pl[i].out;
   return n;
 }
-int count_monsters(Game& g) {
+int count_monsters(const Game& g) {
   int n = 0;
   for (int i = 0; i < MAX_MONSTERS; ++i) n += g.mo[i].alive;
   return n;
@@ -777,7 +740,7 @@ void start_map(Game& g, int idx) {
 
 // Nei menu i personaggi stanno in fila alla partenza della zona 1; la telecamera li guarda da
 // nord, quindi il giocatore 1 sta a est (a sinistra sullo schermo).
-Vec3 menu_spot(Game& g, int i) {
+Vec3 menu_spot(const Game& g, int i) {
   Vec3 c = v3(0, 0, 0);
   for (int k = 0; k < 4; ++k) c = c + g.L.zones[0].start[k] * 0.25f;
   return v3(c.x + (1.5f - (float)i) * 1.25f, 0.0f, c.z);
@@ -799,121 +762,7 @@ void go_screen(Game& g, int s) {
     }
     g.chars_t = 0;
   }
-  update_camera(g, true);
-}
-
-void update_camera(Game& g, bool snap) {
-  Vec3 want;
-  float dist, pitch;
-  bool back = false;
-  if (g.screen != SC_PLAY) {
-    // Menu: inquadratura bassa sui personaggi alla partenza della mappa mostrata, da nord
-    // (dietro di loro la siepe di confine e gli alberi).
-    Vec3 c = v3(0, 0, 0);
-    for (int i = 0; i < 4; ++i) c = c + g.L.zones[0].start[i] * 0.25f;
-    want = v3(c.x, 0.85f, c.z + 0.2f);
-    if (g.screen == SC_TITLE) want.x -= 1.8f;       // 0.5.3: gli eroi a sinistra, le voci a destra
-    dist = g.screen == SC_CHARS ? 5.6f : (g.screen == SC_TITLE ? 7.4f : 6.6f);
-    pitch = g.screen == SC_CHARS ? 0.36f : PITCH_MENU;
-    back = true;
-    if (g.screen == SC_STATS) {
-      // Fine mappa: i personaggi dove sono, che festeggiano rivolti verso la telecamera.
-      float n = 0.0f;
-      Vec3 s = v3(0, 0, 0);
-      for (int i = 0; i < MAX_PLAYERS; ++i)
-        if (g.pl[i].active) { s = s + g.pl[i].pos; n += 1.0f; }
-      if (n > 0.0f) want = v3(s.x / n, 0.85f + s.y / n, s.z / n - 0.2f);
-      dist = 7.0f;
-      back = false;
-    }
-  } else {
-    // Si inquadra chi e' in piedi; se sono tutti a terra chi ha ancora vite, se no tutti. In rete
-    // (0.5.4) ogni console inquadra il suo eroe (anche a terra), finche' ha vite; poi gli altri.
-    Vec3 pts[MAX_PLAYERS + 4];
-    int np = 0;
-    float y = 0.0f;
-    const int me = net_local(g);
-    const bool mine = me >= 0 && g.pl[me].active && !g.pl[me].out;
-    for (int pass = 0; pass < 3 && np == 0; ++pass)
-      for (int i = 0; i < MAX_PLAYERS; ++i) {
-        const Player& p = g.pl[i];
-        if (mine && i != me) continue;
-        if (!p.active || (pass == 0 && !p.alive) || (pass == 1 && p.out)) continue;
-        pts[np++] = p.pos;
-        y += p.pos.y;
-      }
-    if (np == 0) return;
-    const int n = np;
-    float mnx = 1e30f, mxx = -1e30f, mnz = 1e30f, mxz = -1e30f;
-    for (int k = 0; k < np; ++k) {
-      mnx = fminf(mnx, pts[k].x); mxx = fmaxf(mxx, pts[k].x);
-      mnz = fminf(mnz, pts[k].z); mxz = fmaxf(mxz, pts[k].z);
-    }
-    const float gx = 0.5f * (mnx + mxx), gz = 0.5f * (mnz + mxz);
-    if (g.boss.alive && dist2d(g.boss.pos, v3(gx, 0, gz)) < 16.0f) {
-      // Arena: il boss sempre tutto nell'inquadratura insieme ai giocatori.
-      const Vec3 b = g.boss.pos;
-      static const float BOX[4][2] = { { -1.6f, -0.5f }, { 1.6f, -0.5f }, { -1.6f, 1.5f }, { 1.6f, 1.5f } };
-      for (int k = 0; k < 4; ++k) {
-        pts[np++] = v3(b.x + BOX[k][0], 0.0f, b.z + BOX[k][1]);
-        mnx = fminf(mnx, b.x + BOX[k][0]); mxx = fmaxf(mxx, b.x + BOX[k][0]);
-        mnz = fminf(mnz, b.z + BOX[k][1]); mxz = fmaxf(mxz, b.z + BOX[k][1]);
-      }
-    }
-    const ZoneDef& z = g.L.zones[g.zone];
-    float zx0 = z.wx0, zx1 = z.wx1, zz0 = z.wz0, zz1 = z.wz1;
-    auto join = [&](int k) {
-      if (k < 0 || k >= g.L.nzones) return;
-      const ZoneDef& o = g.L.zones[k];
-      zx0 = fminf(zx0, o.wx0); zx1 = fmaxf(zx1, o.wx1);
-      zz0 = fminf(zz0, o.wz0); zz1 = fmaxf(zz1, o.wz1);
-    };
-    if (g.phase == PH_CLEAR) join(g.zone + 1);
-    if (g.phase == PH_ENTER) join(g.zone - 1);
-    // Il punto inquadrato sta un po' a nord del gruppo (si vede di piu' davanti). Distanza: da
-    // 15 m (si vedono circa 19 x 19 m) fino a 30 m quando il gruppo si allarga; se a 30 m non si
-    // vedono ancora tutti, il punto inquadrato scende verso sud quanto basta (in alto
-    // l'inquadratura e' piu' larga: una zona di 31 x 21 m con un giocatore per angolo ci sta).
-    const float cx = 0.5f * (mnx + mxx), cz0 = 0.5f * (mnz + mxz) - 1.2f;
-    float cz = cz0;
-    dist = cam_need(pts, np, cx, cz0);
-    for (int k = 1; k <= 24 && dist > CAM_DIST_MAX; ++k) {
-      const float d = cam_need(pts, np, cx, cz0 + 0.5f * (float)k);
-      if (d < dist) {
-        dist = d;
-        cz = cz0 + 0.5f * (float)k;
-      }
-    }
-    dist = clampf(dist, g.session.hdmi ? CAM_DIST_MIN : CAM_DIST_MIN_LCD, CAM_DIST_MAX);
-    // Ai bordi della zona ci si ferma mostrando poco oltre, a ogni distanza, ma chi gioca resta
-    // nell'inquadratura: prima nord-sud (se il punto fermato al bordo lascerebbe fuori qualcuno,
-    // si torna verso quello voluto quanto basta), poi di lato con la riga in cui si trova ognuno.
-    const float loz = zz0 - CAM_OVER_N + VIEW_N * dist, hiz = zz1 + CAM_OVER_S - VIEW_S * dist;
-    const float czc = loz <= hiz ? clampf(cz, loz, hiz) : hiz;
-    want.z = czc;
-    for (int k = 1; k <= 10 && cam_need(pts, np, cx, want.z) > dist + 0.01f; ++k) want.z = czc + (cz - czc) * 0.1f * (float)k;
-    const float lox = zx0 - CAM_OVER_X + VIEW_W * dist, hix = zx1 + CAM_OVER_X - VIEW_W * dist;
-    const float tx = lox <= hix ? clampf(cx, lox, hix) : 0.5f * (zx0 + zx1);
-    float vlo = -1e30f, vhi = 1e30f;
-    for (int k = 0; k < np; ++k) {
-      const float hw = CAM_SAFE_X * VIEW_W * (dist - VIEW_K * (pts[k].z - want.z)) - CAM_MARGIN_X;
-      vlo = fmaxf(vlo, pts[k].x - hw);
-      vhi = fminf(vhi, pts[k].x + hw);
-    }
-    want.x = vlo <= vhi ? clampf(tx, vlo, vhi) : 0.5f * (vlo + vhi);
-    want.y = 0.6f + y / (float)n * 0.5f;
-    pitch = PITCH_PLAY;
-  }
-  if (snap || back != g.cam_back) {
-    g.cam_target = want;
-    g.cam_dist = dist;
-    g.cam_pitch = pitch;
-    g.cam_back = back;
-  } else {
-    g.cam_target = g.cam_target + (want - g.cam_target) * 0.12f;
-    g.cam_dist += (dist - g.cam_dist) * 0.05f;
-    g.cam_pitch += (pitch - g.cam_pitch) * 0.08f;
-  }
+  ev_camera(g, CAM_CUT);
 }
 
 // --- interfaccia ------------------------------------------------------------------------
@@ -958,7 +807,6 @@ void game_reset(Game& g) {
   bot_reset(g);
   load_map_preview(g, 0);
   go_screen(g, SC_TITLE);
-  g.cam_pitch = PITCH_MENU;
 }
 
 void game_quick_start(Game& g, int map, int players, const char* chars) {
@@ -979,16 +827,6 @@ void game_quick_start(Game& g, int map, int players, const char* chars) {
 
 // Musica secondo la schermata (lo stesso brano continua senza ripartire) e musica piu' bassa
 // mentre la partita e' ferma (pausa, carte).
-static void music_update(Game& g) {
-  int want = MUS_TITLE;
-  static const int STYLE_MUSIC[NSTYLES] = { MUS_PIRAMIDI, MUS_CHICHENITZA, MUS_MURAGLIA, MUS_COLOSSEO };
-  if (g.screen == SC_PLAY)
-    want = g.phase == PH_MAP_DONE ? MUS_VICTORY : STYLE_MUSIC[g.L.style >= 0 && g.L.style < NSTYLES ? g.L.style : 0];
-  else if (g.screen == SC_STATS) want = MUS_VICTORY;     // la fanfara una volta, poi silenzio
-  audio_music(want);
-  audio_duck(g.screen == SC_PLAY && (g.paused || g.cards_open));
-}
-
 // Impostazioni cambiate nella pausa (mira, antialias, volumi; la pausa le mette subito in
 // save_data): il file si scrive quando la pausa si chiude.
 static void settings_save(Game& g) {
@@ -1013,27 +851,14 @@ void game_update(Game& g, const Pad pads[MAX_PLAYERS]) {
   } else {
     menu_update(g);
     effects_update(g);
-    update_camera(g, false);
+    ev_camera(g, CAM_FOLLOW);
   }
   for (int i = 0; i < MAX_PLAYERS; ++i) g.start_tap[i] = false;
-  music_update(g);
   settings_save(g);
 }
 
-// --- sonoro ---------------------------------------------------------------------------------
 
-void snd_at(Game& g, int id, Vec3 pos) {
-  // Inquadratura: circa 0,62 volte la distanza della telecamera per lato. Dentro si sente pieno,
-  // fuori cala fino a zero a una volta e mezza; sinistra/destra dalla posizione sullo schermo.
-  const float dist = fmaxf(g.cam_dist, 8.0f);
-  const float dx = pos.x - g.cam_target.x, dz = pos.z - g.cam_target.z;
-  const float pan = clampf(dx / (0.62f * dist * 1.3f), -0.75f, 0.75f);
-  const float d = sqrtf(dx * dx + dz * dz);
-  const float vol = d < dist ? 1.0f : clampf(1.0f - (d - dist) / (0.5f * dist), 0.0f, 1.0f);
-  if (vol > 0.02f) audio_play(id, pan, vol);
-}
-
-void snd_ui(int id) { audio_play(id, 0.0f, 1.0f); }
+void game_set_events(Game& g, const GameEvents& ev) { g.session.events = ev; }
 
 void game_start_tap(Game& g, int player) {
   if (player >= 0 && player < MAX_PLAYERS) g.start_tap[player] = true;
@@ -1041,18 +866,12 @@ void game_start_tap(Game& g, int player) {
 
 bool game_paused(Game& g) { return g.screen == SC_PLAY && g.paused; }
 
-void game_set_hdmi(Game& g, bool on) {
-  if (on == g.session.hdmi) return;
-  g.session.hdmi = on;
-  plat_log("schermo: %s, visuale da %.0f a %.0f m", on ? "HDMI (TV)" : "della console", (double)(on ? CAM_DIST_MIN : CAM_DIST_MIN_LCD),
-           (double)CAM_DIST_MAX);
-}
 bool game_playing(Game& g) { return g.screen == SC_PLAY && !g.paused && !g.cards_open; }
 void game_set_aa_available(Game& g, int max_samples) { g.aa_max = max_samples > 0 ? max_samples : 0; }
 void game_set_aa_level(Game& g, int level) { g.aa_level = level; }
 int game_aa_level(Game& g) { return g.aa_level; }
 void game_aa_cap(Game& g, int samples) { g.aa_cap = samples; }
-int game_aa_wanted(Game& g) {
+int game_aa_wanted(const Game& g) {
   if (g.aa_max <= 0 || g.aa_level <= 0) return 0;
   int want = g.aa_level == 1 ? g.aa_cap : g.aa_level;     // il migliore: fin dove arriva, salvo il tetto
   if (want > g.aa_max) want = g.aa_max;
@@ -1211,14 +1030,14 @@ void game_info(Game& g, GameInfo* gi) {
 
 // --- gioco in rete (0.5.4) ------------------------------------------------------------------------
 
-const NetView& net_view(Game& g) { return g.session.net_view; }
+const NetView& net_view(const Game& g) { return g.session.net_view; }
 void net_req(Game& g, int req, int arg) {
   g.session.net_req = req;
   g.session.net_req_arg = arg;
 }
-int net_local(Game& g) { return g.net ? g.session.net_local : -1; }
-int net_wait_frames(Game& g) { return g.net ? g.session.net_wait : 0; }
-uint8_t net_silent(Game& g) { return g.net ? g.session.net_silent : 0; }
+int net_local(const Game& g) { return g.net ? g.session.net_local : -1; }
+int net_wait_frames(const Game& g) { return g.net ? g.session.net_wait : 0; }
+uint8_t net_silent(const Game& g) { return g.net ? g.session.net_silent : 0; }
 
 void game_net_view(Game& g, const NetView* v) { g.session.net_view = *v; }
 

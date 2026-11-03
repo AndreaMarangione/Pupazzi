@@ -11,6 +11,18 @@ struct Game;
 Game* game_create(void);
 void game_destroy(Game* g);
 
+// What the game announces while it runs (Observer): sounds and camera moves. The game never reads
+// anything back from whoever listens (the view of this console, game/view/view.h); without a
+// listener (tests) the events are simply dropped. Set once: it outlives game_init.
+enum { CAM_FOLLOW = 0, CAM_CUT, CAM_CUT_PLAY };    // follow the game; jump there at once; ...from the play pitch
+struct GameEvents {
+  void* ctx;
+  void (*sound_at)(void* ctx, int id, Vec3 pos);   // a sound at a point of the world
+  void (*sound_ui)(void* ctx, int id);             // a menu or announcement sound
+  void (*camera)(void* ctx, const Game& g, int how);
+};
+void game_set_events(Game& g, const GameEvents& ev);
+
 // Personaggi disponibili (i 4 iniziali, uno per mondo).
 enum { CH_ASTRO = 0, CH_MOCHI, CH_MARZIO, CH_ZOLFO, NCHARS };
 
@@ -44,8 +56,6 @@ void game_start_tap(Game& g, int player);                    // START premuto e 
 bool game_paused(Game& g);
 bool game_playing(Game& g);                            // (0.5.4) in partita (non nei menu, non in pausa, niente carte)
 bool game_wants_quit(Game& g);                         // scelto "Esci" dal titolo
-// Telecamera, oggetti da disegnare e HUD del gioco (hud puo' essere NULL).
-void game_build_frame(Game& g, FrameDesc* fd, int w, int h, Hud* hud);
 bool game_player_active(Game& g, int i);
 uint32_t game_player_rgb(int i);
 // Quanto e' pronta la mira del giocatore (0 extra morbida, 1 morbida, 2 media, 3 rapida; si sceglie nella pausa).
@@ -56,10 +66,7 @@ void game_set_aa_available(Game& g, int max_samples);        // 0: il renderer n
 void game_set_aa_level(Game& g, int level);                  // come la voce della pausa: 0 spento, 1 il migliore, 4, 8
 int game_aa_level(Game& g);
 void game_aa_cap(Game& g, int samples);                      // (0.5.4) in questa sessione al massimo tanti campioni (8x troppo pesante)
-int game_aa_wanted(Game& g);                           // campioni da usare adesso: 0, 4 o 8
-// Schermo: con l'HDMI (TV) la visuale va da 22 a 30 m, sullo schermo della console da 15 a 30. Il
-// core lo legge dal sistema (all'avvio e' come con l'HDMI). Cambia solo l'inquadratura, non la partita.
-void game_set_hdmi(Game& g, bool on);
+int game_aa_wanted(const Game& g);                           // campioni da usare adesso: 0, 4 o 8
 // Chiamata dal core subito dopo save_open (retro_load_game): il gioco prende le impostazioni dal salvataggio (save.h).
 void game_save_loaded(Game& g);
 // Carte (dalla 0.4): all'avvio attive; spente il gioco va esattamente come prima (prove).

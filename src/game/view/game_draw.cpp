@@ -1,11 +1,13 @@
 // Disegno: oggetti della scena con le loro animazioni, telecamera e HUD della partita.
 #include "game/sim/game_int.h"
+#include "game/view/view.h"
 #include "game/sim/maps.h"
 #include "platform/plat.h"
 #include "platform/sysinfo.h"
 #include "engine/ui.h"
 #include <stdio.h>
 #include <string.h>
+
 
 namespace {
 
@@ -39,16 +41,16 @@ Xform ground_at(Vec3 p, float s) { return xf_mul(xf_translate(p), xf_scale(s, 1.
 // quelli fuori dal campo visivo): un rettangolo attorno al punto inquadrato che contiene il
 // terreno visibile con la telecamera di gioco a distanza d (inclinazione 0,98, campo 0,87):
 // di lato circa 0,93 d, verso la telecamera 0,45 d, in fondo 0,86 d (a 21 m: 19,5 - 9,2 - 18,1).
-bool near_view(Game& g, Vec3 p, float margin) {
-  const float d = fmaxf(g.cam_dist, 17.0f);
+bool near_view(const View& v, const Game& g, Vec3 p, float margin) {
+  const float d = fmaxf(v.cam_dist, 17.0f);
   return fabsf(p.x - g_view.x) < 0.95f * d + margin && p.z - g_view.z < 0.55f * d + margin && g_view.z - p.z < d + margin;
 }
 
-float ground_under(Game& g, Vec3 p) { return level_ground(&g.L, p.x, p.z, p.y, PL_STEP); }
+float ground_under(const Game& g, Vec3 p) { return level_ground(&g.L, p.x, p.z, p.y, PL_STEP); }
 
 // Ombra a disco della misura k (piccola, media, grande, boss) nel tono del terreno della mappa:
 // prato, sabbia o pietra, scelto una volta per mappa dal colore medio del pavimento.
-const Mesh* shadow(Game& g, int k) {
+const Mesh* shadow(const Game& g, int k) {
   static uint32_t seen = 0;
   static int tone = -1;
   if (g.L.nchunks > 0 && g.L.chunk[0].id != seen) {
@@ -168,7 +170,7 @@ void draw_char(int ch, int col, Vec3 pos, float yaw, const Anim& a, Vec3* tip = 
   }
 }
 
-void push_aim(Game& g, int i) {
+void push_aim(const Game& g, int i) {
   const Player& p = g.pl[i];
   const CharDef& cd = CHARS[p.ch];
   const float y = p.pos.y + 0.02f, range = pl_range(p);   // LUNGA GITTATA: la striscia e' lunga quanto il colpo
@@ -193,7 +195,7 @@ void push_aim(Game& g, int i) {
   }
 }
 
-void push_player(Game& g, int i) {
+void push_player(const View& v, const Game& g, int i) {
   const Player& p = g.pl[i];
   if (!p.active || (p.out && p.down >= OUT_VANISH)) return;   // senza vite: sparito in uno sbuffo
   Anim a;
@@ -226,7 +228,7 @@ void push_player(Game& g, int i) {
     // telecamera attorno al corpo e uno di traverso all'altezza della pancia.
     const float k = 1.1f + 0.06f * d_sin((float)g.ui_tick * 0.16f + (float)i * 1.3f);
     const Vec3 c = v3(p.pos.x, p.pos.y + 0.7f, p.pos.z);
-    push(&M.ring_big[i], scaled(xf_mul(xf_translate(c), xf_rot_x(D_HALF_PI - g.cam_pitch)), k, k, k));
+    push(&M.ring_big[i], scaled(xf_mul(xf_translate(c), xf_rot_x(D_HALF_PI - v.cam_pitch)), k, k, k));
     push(&M.ring_big[i], scaled(xf_mul(at(c + v3(0, -0.15f, 0), (float)g.ui_tick * 0.04f), xf_rot_x(0.35f)), k * 1.05f, k, k * 1.05f));
   }
   // Bonus delle casse (0.5.4): anello del colore del bonus ai piedi; VELOCITA' lascia una scia azzurra,
@@ -237,10 +239,10 @@ void push_player(Game& g, int i) {
     const float pulse = 0.85f + 0.08f * d_sin((float)g.ui_tick * 0.25f + (float)k);
     push(&M.pw_ring[k], xf_mul(xf_translate(v3(p.pos.x, gy + 0.01f * (float)k, p.pos.z)), xf_scale(pulse, 1.0f, pulse)));
     if (k == PW_SPEED) {
-      const float v = sqrtf(p.vx * p.vx + p.vz * p.vz);
-      if (v > 0.5f)
+      const float speed = sqrtf(p.vx * p.vx + p.vz * p.vz);
+      if (speed > 0.5f)
         for (int j = 1; j <= 3; ++j) {
-          const Vec3 q = p.pos + v3(-p.vx / v * 0.35f * (float)j, 0.35f, -p.vz / v * 0.35f * (float)j);
+          const Vec3 q = p.pos + v3(-p.vx / speed * 0.35f * (float)j, 0.35f, -p.vz / speed * 0.35f * (float)j);
           const float s = 1.1f - 0.25f * (float)j;
           push(&M.glow[PC_ENERGY], scaled(at(q, 0.0f), s, s * 0.7f, s));
         }
@@ -252,7 +254,7 @@ void push_player(Game& g, int i) {
     } else {
       const float s = 1.12f + 0.05f * d_sin((float)g.ui_tick * 0.2f);
       const Vec3 cc = v3(p.pos.x, p.pos.y + 0.7f, p.pos.z);
-      push(&M.pw_ring[k], scaled(xf_mul(xf_translate(cc), xf_rot_x(D_HALF_PI - g.cam_pitch)), s, s, s));
+      push(&M.pw_ring[k], scaled(xf_mul(xf_translate(cc), xf_rot_x(D_HALF_PI - v.cam_pitch)), s, s, s));
       push(&M.pw_ring[k], scaled(xf_mul(at(cc + v3(0, -0.15f, 0), (float)g.ui_tick * 0.05f), xf_rot_x(0.35f)), s * 1.05f, s, s * 1.05f));
     }
   }
@@ -337,7 +339,7 @@ Vec3 elbow_ik(Vec3 s, Vec3* h, float a, float b, Vec3 hint) {
 Xform hang(Vec3 p, Vec3 q) { return xf_mul(xf_translate(p), xf_align_y(normalize(p - q))); }
 
 // Scorpione: zampette che zampettano a coppie alterne, chele che pizzicano, coda inarcata.
-void draw_scorpion(Game& g, const Monster& m, int k, uint8_t flash, float rise, float sy, float sxz) {
+void draw_scorpion(const Game& g, const Monster& m, int k, uint8_t flash, float rise, float sy, float sxz) {
   const float tk = (float)g.tick;
   float yaw = m.yaw, pitch = 0.0f, y = m.pos.y - 1.1f * rise;
   float ph = m.phase * 1.2f, step = 0.3f, lift = 0.4f;
@@ -430,7 +432,7 @@ void draw_scorpion(Game& g, const Monster& m, int k, uint8_t flash, float rise, 
 // Arciere di terracotta. Cammina con l'arco nella sinistra; per tirare si inginocchia (ginocchio
 // destro a terra), si gira di fianco, alza l'arco verso il cielo e tende la corda fino al mento con
 // la freccia incoccata; scoccata, la corda vibra e la mano va indietro, poi abbassa l'arco e si rialza.
-void draw_archer(Game& g, const Monster& m, uint8_t flash, float rise, float sy, float sxz) {
+void draw_archer(const Game& g, const Monster& m, uint8_t flash, float rise, float sy, float sxz) {
   float kneel = 0.0f, raise = 0.0f, pull = 0.0f, rel = 0.0f;
   if (m.windup > 0) {
     const float u = 1.0f - (float)m.windup / (float)ARCHER_DRAW_FRAMES;
@@ -513,7 +515,7 @@ void draw_archer(Game& g, const Monster& m, uint8_t flash, float rise, float sy,
 }
 
 // Corpo del mostro con le sue animazioni.
-void draw_monster(Game& g, const Monster& m, int k) {
+void draw_monster(const Game& g, const Monster& m, int k) {
   uint8_t flash = m.hurt > 0 ? (uint8_t)(m.hurt >= 4 ? 200 : 70) : 0;
   const float rise = m.rise > 0 ? (float)m.rise / 36.0f : 0.0f;
   if (m.rise > 0) {
@@ -591,9 +593,9 @@ void draw_monster(Game& g, const Monster& m, int k) {
   }
 }
 
-void push_monster(Game& g, int k) {
+void push_monster(const View& v, const Game& g, int k) {
   const Monster& m = g.mo[k];
-  if (!m.alive || !near_view(g, m.pos, 2.0f)) return;
+  if (!m.alive || !near_view(v, g, m.pos, 2.0f)) return;
   if (!monster_drawn(g, m)) return;
   draw_monster(g, m, k);
 }
@@ -641,7 +643,7 @@ void rush_pose(BossPose* p, float u, float s, float run) {
   p->leg_r = lerpf(0.45f * u, -0.85f * s, run);
 }
 
-void boss_pose(Game& g, const Boss& b, BossPose* p) {
+void boss_pose(const Game& g, const Boss& b, BossPose* p) {
   const float br = d_sin((float)g.tick * 0.05f);           // respiro
   p->lean = 0.0f; p->twist = 0.0f; p->drop = 0.03f * br;
   p->arm_r = BOSS_REST_R + 0.05f * br; p->arm_l = BOSS_REST_L; p->roll_r = 0.0f; p->roll_l = BOSS_REST_ROLL_L;
@@ -799,7 +801,7 @@ void boss_pose(Game& g, const Boss& b, BossPose* p) {
   }
 }
 
-void push_boss(Game& g) {
+void push_boss(const Game& g) {
   const Boss& b = g.boss;
   const bool dying = !b.alive && b.dead_t > 0 && b.dead_t < 72;
   if (!b.alive && !dying) return;
@@ -848,7 +850,7 @@ void push_boss(Game& g) {
 }
 
 // Mano del gladiatore quando lascia i giavellotti (coordinate del boss): da li' partono quelli disegnati.
-Vec3 boss_throw_hand(Game& g, const Boss& b) {
+Vec3 boss_throw_hand(const Game& g, const Boss& b) {
   Boss t = b;
   t.alive = true;
   t.roar = 0;
@@ -865,7 +867,7 @@ Vec3 boss_throw_hand(Game& g, const Boss& b) {
 
 // Capsula dell'esploratore: chiusa con lui dentro che saltella e la lucina dell'antenna che
 // lampeggia; poi aperta, vuota, con un filo di fumo.
-void push_capsule(Game& g, const DynCell& dc, int d, Vec3 c) {
+void push_capsule(const Game& g, const DynCell& dc, int d, Vec3 c) {
   if (dc.hp > 0.0f) {
     const float hit = (float)g.crate_hit[d] / 10.0f;
     const float wob = 0.05f * hit * d_sin((float)g.crate_hit[d] * 2.0f);
@@ -885,7 +887,7 @@ void push_capsule(Game& g, const DynCell& dc, int d, Vec3 c) {
   }
 }
 
-void push_world(Game& g) {
+void push_world(const View& v, const Game& g) {
   for (int i = 0; i < g.L.nchunks; ++i) push(&g.L.chunk[i], xf_identity(), 0, 0, ITEM_STATIC);
   for (int i = 0; i < g.L.nscenery; ++i) push(&g.L.scenery[i], xf_identity(), 0, 0, ITEM_STATIC);   // paesaggio lontano
   // Cancelli a battente (0.5.4): ogni battente gira attorno al suo cardine, dalla posizione da chiuso.
@@ -894,7 +896,7 @@ void push_world(Game& g) {
       Vec3 h, d, c;
       float len;
       level_gate_leaf(&g.L, i, side, gate_theta(g.L.gates[i], side), &h, &d, &len, &c);
-      if (!near_view(g, h, 2.5f)) continue;
+      if (!near_view(v, g, h, 2.5f)) continue;
       const float co = c.x * d.x + c.z * d.z, si = c.z * d.x - c.x * d.z;   // rotazione attorno a Y che porta c in d
       Xform xf = xf_translate(h);
       xf.r[0] = co;
@@ -908,7 +910,7 @@ void push_world(Game& g) {
   for (int d = 0; d < g.L.ndyn; ++d) {
     const DynCell& dc = g.L.dyn[d];
     const Vec3 c = cell_center(&g.L, dc.cx, dc.cz);
-    if (!near_view(g, c, 1.0f)) continue;
+    if (!near_view(v, g, c, 1.0f)) continue;
     uint32_t hh = (uint32_t)dc.cx * 374761393u ^ (uint32_t)dc.cz * 668265263u;
     hh = (hh ^ (hh >> 13)) * 1274126177u;
     hh ^= hh >> 16;
@@ -954,7 +956,7 @@ void push_world(Game& g) {
     if (!g.item_on[it]) continue;
     const MapItem& mi = g.L.items[it];
     const Vec3 c = cell_center(&g.L, mi.cx, mi.cz);
-    if (!near_view(g, c, 1.0f)) continue;
+    if (!near_view(v, g, c, 1.0f)) continue;
     const float pop = clampf((float)g.item_t[it] / 15.0f, 0.0f, 1.0f);
     if (mi.kind == IT_TALISMAN) {
       const float ph = (float)g.ui_tick * 0.06f + (float)it * 2.0f;
@@ -969,7 +971,7 @@ void push_world(Game& g) {
       const float u = clampf((float)g.item_t[it] / 20.0f, 0.0f, 1.0f);       // salto: in 20 fotogrammi
       const float y = mi.y + 0.85f + 0.1f * d_sin(ph) + 1.2f * u * (1.0f - u) * 2.0f;
       const float s = (0.4f + 0.6f * u) * 1.35f;
-      const Xform face = xf_mul(xf_rot_x(-g.cam_pitch), xf_rot_y(0.5f * d_sin(ph * 0.8f)));
+      const Xform face = xf_mul(xf_rot_x(-v.cam_pitch), xf_rot_y(0.5f * d_sin(ph * 0.8f)));
       push(&M.pw_coin[k], scaled(xf_mul(xf_translate(v3(c.x, y, c.z)), face), s, s, s));
       const float r = 0.62f + 0.06f * d_sin(ph * 2.0f);
       push(&M.pw_ring[k], xf_mul(xf_translate(v3(c.x, mi.y, c.z)), xf_scale(r, 1.0f, r)));
@@ -994,8 +996,8 @@ void push_world(Game& g) {
 }
 
 // L'esploratore salvato: salta di gioia davanti alla capsula, poi se ne va saltellando.
-void push_explorer(Game& g) {
-  if (g.expl_t < 0 || !near_view(g, g.expl_pos, 2.0f)) return;
+void push_explorer(const View& v, const Game& g) {
+  if (g.expl_t < 0 || !near_view(v, g, g.expl_pos, 2.0f)) return;
   const float t = (float)g.expl_t;
   const float hop = g.expl_t < 70 ? 0.45f * fabsf(d_sin(t * 0.16f)) : 0.22f * fabsf(d_sin(t * 0.38f));
   const float shrink = g.expl_t > 200 ? clampf((float)(220 - g.expl_t) / 20.0f, 0.0f, 1.0f) : 1.0f;
@@ -1011,13 +1013,13 @@ void push_explorer(Game& g) {
 // fotogrammi si spostano un po' verso li' (solo nel disegno; il gioco li fa partire da
 // boss_javelin_start, launch_javelins). Le frecce degli arcieri partono gia' dall'arco disegnato
 // (ARCHER_NOCK_*, shoot_arrow).
-void push_shots(Game& g) {
+void push_shots(const View& v, const Game& g) {
   const Boss& b = g.boss;
   bool hand_ok = false;
   Vec3 hand = v3(0, 0, 0);
   for (int i = 0; i < MAX_SHOTS; ++i) {
     const Shot& s = g.sh[i];
-    if (!s.alive || !near_view(g, s.pos, 1.0f)) continue;
+    if (!s.alive || !near_view(v, g, s.pos, 1.0f)) continue;
     switch (s.kind) {
       case SK_BULLET: push(&M.bullet, at(s.pos, s.yaw)); break;
       case SK_SHARD: push(&M.shard, xf_mul(at(s.pos, s.yaw), xf_rot_z((float)s.life * 0.35f))); break;
@@ -1074,7 +1076,7 @@ void push_shots(Game& g) {
   }
 }
 
-void push_markers(Game& g) {
+void push_markers(const Game& g) {
   for (int i = 0; i < MAX_MARKERS; ++i) {
     const Marker& m = g.mk[i];
     if (!m.alive) continue;
@@ -1150,7 +1152,7 @@ void push_markers(Game& g) {
   }
 }
 
-void push_particles(Game& g) {
+void push_particles(const Game& g) {
   for (int i = 0; i < MAX_PARTICLES; ++i) {
     const Particle& q = g.pa[i];
     if (!q.alive) continue;
@@ -1190,7 +1192,7 @@ void push_particles(Game& g) {
 }
 
 // Menu: i personaggi alla partenza della mappa, rivolti verso la telecamera.
-void push_menu_chars(Game& g) {
+void push_menu_chars(const Game& g) {
   for (int i = 0; i < MAX_PLAYERS; ++i) {
     int ch = i;
     bool show = true, ready = false;
@@ -1221,7 +1223,7 @@ void push_menu_chars(Game& g) {
   }
 }
 
-void push_stats_chars(Game& g) {
+void push_stats_chars(const Game& g) {
   for (int i = 0; i < MAX_PLAYERS; ++i) {
     const Player& p = g.pl[i];
     if (!p.active) continue;
@@ -1257,7 +1259,7 @@ void push_stats_chars(Game& g) {
 
 const float HX = 24.0f, HY = 16.0f;
 
-bool blink(Game& g, unsigned period) { return ((g.ui_tick / period) & 1u) != 0; }
+bool blink(const Game& g, unsigned period) { return ((g.ui_tick / period) & 1u) != 0; }
 inline uint32_t O(uint32_t rgb) { return HUD_OPAQUE(rgb); }
 inline uint32_t A(uint32_t rgb, float a) { return hud_a(rgb, a); }
 
@@ -1287,7 +1289,7 @@ bool to_px(const Camera& cam, Vec3 p, float* x, float* y) {
   return true;
 }
 
-void player_bars(Game& g, Hud* h, const Camera& cam, int i) {
+void player_bars(const Game& g, Hud* h, const Camera& cam, int i) {
   const Player& p = g.pl[i];
   const CharDef& cd = CHARS[p.ch];
   float sx, sy;
@@ -1335,7 +1337,7 @@ void player_bars(Game& g, Hud* h, const Camera& cam, int i) {
 // Restituisce dove finiscono a destra.
 const float CARD = 40.0f, CARD_STEP = 46.0f;
 
-float player_icons(Game& g, Hud* h) {
+float player_icons(const Game& g, Hud* h) {
   float x = HX;
   for (int i = 0; i < MAX_PLAYERS; ++i) {
     const Player& p = g.pl[i];
@@ -1400,7 +1402,7 @@ float player_icons(Game& g, Hud* h) {
 
 // Riga in alto, a destra delle schede: pianeta e mappa, giro, zona, mostri che mancano; nell'arena
 // la vita del boss al posto della zona.
-void top_line(Game& g, Hud* h, float x) {
+void top_line(const Game& g, Hud* h, float x) {
   char buf[128];
   const float cy = HY + 14.0f;
   const int w = g.L.world >= 0 && g.L.world < NWORLDS ? g.L.world : 0;
@@ -1450,7 +1452,7 @@ void top_line(Game& g, Hud* h, float x) {
 
 // In rete (0.5.4) ogni console inquadra il suo eroe: per ogni compagno fuori dallo schermo una
 // freccia nel suo colore sul bordo, verso di lui, con il suo numero.
-void mate_arrows(Game& g, Hud* h, const Camera& cam) {
+void mate_arrows(const Game& g, Hud* h, const Camera& cam) {
   const int me = net_local(g);
   if (me < 0) return;
   const float X0 = 40.0f, X1 = 600.0f, Y0 = 96.0f, Y1 = 428.0f, CX = 320.0f, CY = 262.0f;
@@ -1495,7 +1497,7 @@ void mate_arrows(Game& g, Hud* h, const Camera& cam) {
 }
 
 // In rete, sulle console che aspettano i fotogrammi di chi ha creato la partita: "rete lenta".
-void net_wait_badge(Game& g, Hud* h) {
+void net_wait_badge(const Game& g, Hud* h) {
   if (net_wait_frames(g) < 12) return;
   const char* t = tr("rete lenta...");
   const float w = 18.0f + 8.0f + hud_text_w(HF_S13, t, 0.5f) + 24.0f, x = 320.0f - w * 0.5f, cy = 480.0f - HY - 44.0f;
@@ -1505,7 +1507,7 @@ void net_wait_badge(Game& g, Hud* h) {
 }
 
 // Messaggio grande al centro, su una fascia scura che sfuma ai lati.
-void center_msg(Game& g, Hud* h) {
+void center_msg(const Game& g, Hud* h) {
   const float cy = 140.0f, has2 = g.msg2[0] ? 1.0f : 0.0f;
   const float bh = 54.0f + 26.0f * has2, by = cy - 30.0f;
   hud_box_grad(h, 0, by, 320, bh, 0, A(ui::SCRIM, 0.0f), A(ui::SCRIM, 0.6f), 90.0f);
@@ -1519,7 +1521,7 @@ void center_msg(Game& g, Hud* h) {
   if (g.msg2[0]) stext(h, 320, cy + 32.0f, HF_S15, ui::TX, ui::fit(sub, sizeof(sub), g.msg2, HF_S15, 0.5f, 600.0f), 0.5f, 0);
 }
 
-void build_play_hud(Game& g, Hud* h, const Camera& cam) {
+void build_play_hud(const Game& g, Hud* h, const Camera& cam) {
   char buf[64];
   // Sopra i mostri colpiti: quanta vita resta.
   for (int k = 0; k < MAX_MONSTERS; ++k) {
@@ -1610,17 +1612,17 @@ bool to_screen(const Camera& c, Vec3 p, int* sx, int* sy) {
   return true;
 }
 
-void game_build_frame(Game& g, FrameDesc* fd, int w, int h, Hud* hud) {
+void view_build_frame(const View& v, const Game& g, FrameDesc* fd, int w, int h, Hud* hud) {
   g_n = 0;
-  g_view = g.cam_target;
+  g_view = v.cam_target;
   if (g.level_ok) {
-    push_world(g);
+    push_world(v, g);
     if (g.screen == SC_PLAY) {
-      for (int i = 0; i < MAX_PLAYERS; ++i) push_player(g, i);
-      for (int k = 0; k < MAX_MONSTERS; ++k) push_monster(g, k);
-      push_explorer(g);
+      for (int i = 0; i < MAX_PLAYERS; ++i) push_player(v, g, i);
+      for (int k = 0; k < MAX_MONSTERS; ++k) push_monster(v, g, k);
+      push_explorer(v, g);
       push_boss(g);
-      push_shots(g);
+      push_shots(v, g);
       push_markers(g);
     } else if (g.screen == SC_STATS) {
       push_stats_chars(g);
@@ -1629,12 +1631,12 @@ void game_build_frame(Game& g, FrameDesc* fd, int w, int h, Hud* hud) {
     }
     push_particles(g);
   }
-  Vec3 target = g.cam_target;
+  Vec3 target = v.cam_target;
   if (g.shake > 0.0f) {
     const float t = (float)g.ui_tick;
     target = target + v3(d_sin(t * 1.7f) * g.shake, d_sin(t * 2.3f + 1.0f) * g.shake * 0.6f, d_sin(t * 1.3f + 2.0f) * g.shake * 0.5f);
   }
-  const Vec3 eye = target + v3(0.0f, d_sin(g.cam_pitch), g.cam_back ? -d_cos(g.cam_pitch) : d_cos(g.cam_pitch)) * g.cam_dist;
+  const Vec3 eye = target + v3(0.0f, d_sin(v.cam_pitch), v.cam_back ? -d_cos(v.cam_pitch) : d_cos(v.cam_pitch)) * v.cam_dist;
   camera_setup(&fd->cam, eye, target, CAM_FOVY, 4.0f / 3.0f, 0.5f, 120.0f);
   fd->w = w;
   fd->h = h;

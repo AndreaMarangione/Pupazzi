@@ -375,8 +375,8 @@ struct GameSession {
   int net_local;                // player of this console in a LAN game (-1: none)
   int net_wait;                 // frames this console has been waiting for the network
   uint8_t net_silent;           // consoles that have not answered for a while
-  bool hdmi;                    // TV (HDMI) or the console screen: only the framing changes
   bool quit;                    // Exit chosen from the title
+  GameEvents events;            // who listens to the game (game_set_events)
   // bot.cpp
   Bot bot[MAX_PLAYERS];
   int bot_lag;                  // tests: the marks on the ground are seen this many frames late (bot_set_lag)
@@ -460,9 +460,7 @@ struct Game {
   unsigned tick, ui_tick;       // ui_tick va avanti anche in pausa e nei menu
   int time_frames;              // frames towards the next second of play time of the active save
   PadState in[MAX_PLAYERS];
-  Vec3 cam_target;
-  float cam_dist, cam_pitch, shake;
-  bool cam_back;                // telecamera rivolta verso sud (menu: i personaggi guardano verso chi gioca)
+  float shake;                  // screen shake (explosions, slams): the view adds it to its camera
   float gate_want[LV_MAX_GATES];
   char msg[160], msg2[224];        // gia' nella lingua scelta (tr al momento del messaggio)
   int msg_t, msg_size;
@@ -504,6 +502,19 @@ struct Game {
 
 
 
+
+// Events (game.h): the game announces, the view of this console listens. Output only: nothing in the
+// game depends on them.
+static inline void ev_sound(const Game& g, int id, Vec3 pos) {
+  if (g.session.events.sound_at) g.session.events.sound_at(g.session.events.ctx, id, pos);
+}
+static inline void ev_sound_ui(const Game& g, int id) {
+  if (g.session.events.sound_ui) g.session.events.sound_ui(g.session.events.ctx, id);
+}
+static inline void ev_camera(const Game& g, int how) {
+  if (g.session.events.camera) g.session.events.camera(g.session.events.ctx, g, how);
+}
+
 static inline bool has_card(const Player& p, int c) { return ((p.cards >> c) & 1u) != 0u; }
 // Valori del personaggio con le carte: li usano il gioco, il disegno (mira, barre) e i giocatori
 // automatici. Senza la carta restano esattamente quelli di CHARS.
@@ -523,8 +534,8 @@ static inline float pl_reload_frames(const Player& p) {
 }
 static inline int pl_bombs_cap(const Player& p) { return has_card(p, CA_BOMBAROLO) ? 4 : MAX_BOMBS_CARRIED; }
 
-static inline int aim_level_of(Game& g, int i) { const int l = g.aim_level[i]; return l < (int)NAIMLEVELS ? l : AIM_DEFAULT; }
-static inline const AimTune& aim_tune(Game& g, int i) { return AIM_TUNE[aim_level_of(g, i)]; }
+static inline int aim_level_of(const Game& g, int i) { const int l = g.aim_level[i]; return l < (int)NAIMLEVELS ? l : AIM_DEFAULT; }
+static inline const AimTune& aim_tune(const Game& g, int i) { return AIM_TUNE[aim_level_of(g, i)]; }
 
 static inline uint32_t rng_next(Game& g) {
   uint32_t x = g.rng;
@@ -555,7 +566,7 @@ static inline bool pad_pressed(Game& g, int i, int b) { return ((g.in[i].btn & ~
 int count_active(Game& g);
 int count_alive(Game& g);
 int count_in_play(Game& g);      // attivi e non ancora senza vite
-int count_monsters(Game& g);
+int count_monsters(const Game& g);
 void show_msg(Game& g, const char* big, const char* small, uint32_t rgb, int size, int frames);
 float diff_hp(Game& g);          // moltiplicatori dei mostri secondo il giro della campagna
 float diff_dmg(Game& g);
@@ -563,13 +574,8 @@ float diff_speed(Game& g);
 void start_map(Game& g, int idx);      // carica la mappa e comincia dalla zona 1
 void go_screen(Game& g, int s);
 void game_request_quit(Game& g);
-void update_camera(Game& g, bool snap);
 bool load_map_preview(Game& g, int idx);
-Vec3 menu_spot(Game& g, int i);        // dove sta il personaggio del giocatore i nei menu
-// Sonoro: un effetto in un punto del mondo (sinistra/destra e volume dalla posizione rispetto
-// all'inquadratura) o dei menu (al centro). Solo uscita: non cambia nulla della partita.
-void snd_at(Game& g, int id, Vec3 pos);
-void snd_ui(int id);
+Vec3 menu_spot(const Game& g, int i);        // dove sta il personaggio del giocatore i nei menu
 void settings_changed(Game& g);  // mira, antialias o volumi cambiati (gia' in save_data): si scrivono alla chiusura della pausa
 void stars_late_explorer(Game& g);   // esploratore salvato a mappa gia' finita (festa di fine mappa)
 // Pianeti e giri (dati nel salvataggio, mappe da maps.h).
@@ -622,7 +628,7 @@ void monsters_clear(Game& g);
 float monster_r(const Monster& m);
 float monster_h(const Monster& m);
 Vec3 monster_center(const Monster& m);
-bool monster_drawn(Game& g, const Monster& m);   // nascosto nell'erba alta lontano dai giocatori?
+bool monster_drawn(const Game& g, const Monster& m);   // nascosto nell'erba alta lontano dai giocatori?
 void boss_start(Game& g);
 void boss_update(Game& g);
 float boss_r(void);
@@ -636,20 +642,20 @@ void flow_build(Game& g, uint16_t* field, const Vec3* goals, int ngoals, int zon
 bool flow_dir(Game& g, const uint16_t* field, float x, float z, float* dx, float* dz);
 bool walk_clear(Game& g, Vec3 a, Vec3 b, float r, bool flying);
 // --- gioco in rete (game.cpp; vedi net.h) ---
-const NetView& net_view(Game& g);   // cosa c'e' in rete (dal core, solo per le pagine della rete)
+const NetView& net_view(const Game& g);   // cosa c'e' in rete (dal core, solo per le pagine della rete)
 void net_req(Game& g, int req, int arg);  // richiesta al core (NR_*): la prende dopo game_update
-int net_local(Game& g);             // giocatore di questa console in una partita in rete, -1 fuori
+int net_local(const Game& g);             // giocatore di questa console in una partita in rete, -1 fuori
 // In rete conta solo chi ha una console collegata (per gli avvisi "premete un tasto").
-static inline bool net_console(Game& g, int i) { return !g.net || ((g.net_consoles >> i) & 1u) != 0u; }
-int net_wait_frames(Game& g);       // da quanti fotogrammi questa console aspetta la rete (solo HUD)
-uint8_t net_silent(Game& g);        // console che non rispondono da un po' (solo HUD)
+static inline bool net_console(const Game& g, int i) { return !g.net || ((g.net_consoles >> i) & 1u) != 0u; }
+int net_wait_frames(const Game& g);       // da quanti fotogrammi questa console aspetta la rete (solo HUD)
+uint8_t net_silent(const Game& g);        // console che non rispondono da un po' (solo HUD)
 // --- menu.cpp ---
 void menu_info(Game& g, const char* s);   // avviso nei menu al posto del piede (2 secondi)
 const char* net_error_text(Game& g, int e, char* buf, int n);   // cosa dire per un errore della rete (NE_*)
 void menu_update(Game& g);
 void play_menus_update(Game& g);  // pausa e finestre per entrare, durante la partita
-void menu_build_hud(Game& g, Hud* h, const Camera& cam);
-void play_menus_hud(Game& g, Hud* h);
+void menu_build_hud(const Game& g, Hud* h, const Camera& cam);
+void play_menus_hud(const Game& g, Hud* h);
 // --- game_draw.cpp ---
 bool to_screen(const Camera& c, Vec3 p, int* sx, int* sy);
 // Faccia dell'eroe ch (disegni di tools/make_font.py) in un quadrato di lato 8 * size da (x, y):
@@ -665,7 +671,7 @@ void cards_offer(Game& g);               // apre la scelta (se le carte sono att
 void cards_zone_cleared(Game& g);        // zona ripulita e ne segue un'altra: la scelta si apre tra poco
 void cards_zone_start(Game& g);          // inizio (o nuovo inizio) di una zona: si ricaricano gli scudi
 void cards_update(Game& g);              // scelta aperta: cursori e conferme di tutti, poi si chiude
-void cards_hud(Game& g, Hud* h);               // riquadri della scelta (al posto della pausa)
+void cards_hud(const Game& g, Hud* h);               // riquadri della scelta (al posto della pausa)
 void card_lose_all(Game& g, int i);            // chi lascia la partita perde le sue carte
 uint8_t card_shot_fx(Game& g, int i, int kind);       // SFX_* dei colpi di questo tipo del giocatore i
 void card_shot_mods(Game& g, int i, Shot* s);         // colpo normale appena sparato: danni, PERFORANTE, RIMBALZO, combo

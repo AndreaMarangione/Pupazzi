@@ -88,7 +88,7 @@ void kill_monster(Game& g, int k, int owner) {
   burst(g, c, 4, PC_WHITE, 3.0f);
   for (int i = 0; i < 3; ++i) puff(g, c, PK_PUFF, PC_WHITE, rng_vec(g, 1.5f, 1.0f, 1.0f, 1.5f), 0.8f, 20);
   if (m.type == MO_GUERRIERO) add_shake(g, 0.12f);
-  snd_at(g, SND_DEFEAT, m.pos);
+  ev_sound(g, SND_DEFEAT, m.pos);
   if (owner >= 0 && owner < MAX_PLAYERS) {
     Player& p = g.pl[owner];
     p.kills++;
@@ -302,7 +302,7 @@ void update_lob(Game& g, Shot& s) {
   Marker* mk = marker_new(g, MK_BLAST, p, 1.4f, 12);
   (void)mk;
   add_shake(g, 0.08f);
-  snd_at(g, SND_JAVELIN, p);
+  ev_sound(g, SND_JAVELIN, p);
 }
 
 // Frecce degli arcieri di terracotta: a parabola come i giavellotti (passano sopra muretti e casse),
@@ -338,7 +338,7 @@ void update_arrow(Game& g, Shot& s) {
   }
   burst(g, p + v3(0, 0.1f, 0), 3, PC_SAND, 1.6f);
   for (int k = 0; k < 3; ++k) puff(g, p + v3(0, 0.15f, 0), PK_PUFF, PC_SAND, rng_vec(g, 0.9f, 0.5f, 0.0f, 0.9f), 0.55f, 18);
-  snd_at(g, SND_ARROW_LAND, p);
+  ev_sound(g, SND_ARROW_LAND, p);
   s.pos = p;
   s.life = -ARROW_STUCK;
 }
@@ -432,7 +432,7 @@ void explorer_rescue(Game& g, Vec3 c) {
   burst(g, v3(c.x, 0.6f, c.z), 10, PC_GREY, 3.5f);
   add_float_text(g, v3(c.x, 1.9f, c.z), 0xFFE14D, N_("GRAZIE!"));
   show_msg(g, tr("ESPLORATORE SALVATO!"), tr("una stella in più per questa mappa"), 0xFFE14D, 2, 150);
-  snd_at(g, SND_RESCUE, c);
+  ev_sound(g, SND_RESCUE, c);
   if (g.phase == PH_MAP_DONE) stars_late_explorer(g);     // la mappa era gia' finita: la stella arriva lo stesso
   plat_log("esploratore salvato (mappa %d, zona %d)", g.map_idx + 1, g.zone + 1);
 }
@@ -448,7 +448,7 @@ void explorer_update(Game& g) {
       const Player& p = g.pl[j];
       if (!p.active || !p.alive || dist2d(p.pos, c) > HELP_DIST) continue;
       add_float_text(g, v3(c.x, 1.7f, c.z), 0xFFFFFF, N_("AIUTO!"));
-      snd_at(g, SND_HELP, c);
+      ev_sound(g, SND_HELP, c);
       g.help_t = HELP_PERIOD;
       break;
     }
@@ -572,7 +572,7 @@ void damage_monster(Game& g, int k, float dmg, int owner, Vec3 dir, float knock,
   if (dmg > 0.0f)
     add_float(g, v3(m.pos.x, m.pos.y + (MONS[m.type].flying ? m.fly + 0.5f : monster_h(m) + 0.4f), m.pos.z), charges ? 0xFFFFFF : 0xFFE14D,
               1 + k, (int)(dmg + 0.5f), 0);
-  if (owner >= 0 && dmg >= 4.0f && m.hp > 0.0f) snd_at(g, SND_HIT, m.pos);   // i danni piccoli e continui non fanno rumore
+  if (owner >= 0 && dmg >= 4.0f && m.hp > 0.0f) ev_sound(g, SND_HIT, m.pos);   // i danni piccoli e continui non fanno rumore
   if (owner >= 0 && owner < MAX_PLAYERS) {
     Player& p = g.pl[owner];
     p.dmg_done += dmg;
@@ -580,7 +580,7 @@ void damage_monster(Game& g, int k, float dmg, int owner, Vec3 dir, float knock,
       const float cost = pl_special_cost(p);     // SUPER CARICA
       const bool was = p.charge >= cost;
       p.charge = fminf(cost, p.charge + dmg);
-      if (!was && p.charge >= cost && p.alive) snd_at(g, SND_SPECIAL_READY, p.pos);
+      if (!was && p.charge >= cost && p.alive) ev_sound(g, SND_SPECIAL_READY, p.pos);
     }
   }
   if (m.hp <= 0.0f) kill_monster(g, k, owner);
@@ -594,7 +594,7 @@ void damage_boss(Game& g, float dmg, int owner, bool charges) {
   else if (b.act == BA_STUN) dmg *= BOSS_STUN_DMG;   // stordito dopo una carica contro un ostacolo: prende di piu'
   b.hp -= dmg;
   if (owner >= 0 && owner < MAX_PLAYERS) b.aggro[owner] += dmg;   // chi lo picchia forte se lo tira dietro
-  if (b.hurt == 0 && dmg >= 4.0f) snd_at(g, SND_HIT, b.pos);
+  if (b.hurt == 0 && dmg >= 4.0f) ev_sound(g, SND_HIT, b.pos);
   b.hurt = 6;
   b.shown = 150;
   b.sq_v -= 0.6f;
@@ -605,7 +605,7 @@ void damage_boss(Game& g, float dmg, int owner, bool charges) {
     if (charges) {
       const bool was = p.charge >= pl_special_cost(p);
       p.charge = fminf(pl_special_cost(p), p.charge + dmg);
-      if (!was && p.charge >= pl_special_cost(p) && p.alive) snd_at(g, SND_SPECIAL_READY, p.pos);
+      if (!was && p.charge >= pl_special_cost(p) && p.alive) ev_sound(g, SND_SPECIAL_READY, p.pos);
     }
   }
 }
@@ -669,7 +669,7 @@ void explode(Game& g, Vec3 p, float radius, float dmg, int owner, float knock, b
   }
   burst(g, p + v3(0, 0.3f, 0), big ? 10 : 5, PC_DARK, 6.0f);
   add_shake(g, big ? 0.45f : 0.15f);
-  snd_at(g, big ? SND_EXPLODE : SND_EXPLODE_SMALL, p);
+  ev_sound(g, big ? SND_EXPLODE : SND_EXPLODE_SMALL, p);
 }
 
 // --- bombe, talismani, casse ------------------------------------------------------
@@ -687,7 +687,7 @@ bool bomb_drop(Game& g, int i) {
   b->pos = p.pos;
   b->vy = 0.0f;
   b->fuse = BOMB_FUSE;
-  snd_at(g, SND_BOMB_DROP, p.pos);
+  ev_sound(g, SND_BOMB_DROP, p.pos);
   plat_log("giocatore %d lascia una bomba (ne restano %d)", i + 1, p.bombs);
   return true;
 }
@@ -746,7 +746,7 @@ void items_update(Game& g) {
         g.item_on[it] = false;
         heal_player(g, j, HEAL_TALISMAN);
         burst(g, v3(c.x, mi.y + 0.7f, c.z), 14, PC_GREEN, 3.0f);
-        snd_at(g, SND_PICK_TALISMAN, c);
+        ev_sound(g, SND_PICK_TALISMAN, c);
         plat_log("giocatore %d prende un talismano (vita %d)", j + 1, (int)p.hp);
       } else if (mi.kind == IT_POWER) {
         if (g.item_t[it] < 20) continue;             // prima salta fuori dalla cassa
@@ -757,7 +757,7 @@ void items_update(Game& g) {
         if (p.bombs >= pl_bombs_cap(p)) continue;     // BOMBAROLO: fino a 4
         g.item_on[it] = false;
         p.bombs++;
-        snd_at(g, SND_PICK_BOMB, c);
+        ev_sound(g, SND_PICK_BOMB, c);
         plat_log("giocatore %d raccoglie una bomba (ne ha %d)", j + 1, p.bombs);
         burst(g, v3(c.x, mi.y + 0.4f, c.z), 8, PC_GOLD, 2.5f);
         add_float(g, v3(p.pos.x, p.pos.y + PL_H + 1.2f, p.pos.z), 0xFFE14D, 300 + j, p.bombs, '+');
@@ -777,11 +777,11 @@ void crate_damage(Game& g, int d, float dmg, Vec3 from) {
   if (dc.hp > 0.0f) {
     (void)from;
     burst(g, v3(c.x, 0.7f, c.z), 2, dc.capsule ? PC_WHITE : PC_WOOD, 1.5f);
-    if (sound) snd_at(g, dc.capsule ? SND_CAPSULE_HIT : SND_CRATE_HIT, c);
+    if (sound) ev_sound(g, dc.capsule ? SND_CAPSULE_HIT : SND_CRATE_HIT, c);
     return;
   }
   dc.hp = 0.0f;
-  snd_at(g, SND_CRATE_BREAK, c);
+  ev_sound(g, SND_CRATE_BREAK, c);
   if (dc.capsule) {
     explorer_rescue(g, c);
     return;
@@ -817,7 +817,7 @@ bool power_take(Game& g, int j, int pw) {
   } else {
     p.pw_t[pw] = PW_FRAMES[pw];
   }
-  snd_at(g, PW_SND[pw], p.pos);
+  ev_sound(g, PW_SND[pw], p.pos);
   add_float_text(g, v3(p.pos.x, p.pos.y + PL_H + 1.0f, p.pos.z), PW_RGB[pw], PW_NAME[pw]);
   plat_log("giocatore %d prende il bonus %s", j + 1, PW_LOG[pw]);
   return true;

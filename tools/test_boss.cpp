@@ -13,6 +13,7 @@
 //   --solo PERSONAGGI (per esempio 01): solo quella lotta, senza le prove. --traccia N: una riga
 //   ogni N fotogrammi con boss e giocatori.
 #include "game/sim/game_int.h"
+#include "game/view/view.h"
 #include "game/sim/maps.h"
 #include "platform/plat.h"
 #include "game/save.h"
@@ -24,6 +25,7 @@
 #include <unistd.h>
 
 static Game& g = *game_create();   // the game under test (the game keeps no global state: the test owns it)
+static View& v = *view_create();   // its view: camera and frames for the images
 
 static int g_fail = 0;
 static Pad g_pads[MAX_PLAYERS];
@@ -138,7 +140,7 @@ static void shot(const char* name) {
   if (!g_shots) return;
   static Hud hud;
   FrameDesc fd{};
-  game_build_frame(g, &fd, 640, 480, &hud);
+  view_build_frame(v, g, &fd, 640, 480, &hud);
   RenderStats st;
   const uint32_t* fb = swr_render(&fd, &st);
   char path[512];
@@ -175,11 +177,11 @@ static void test_walk(void) {
   step(90);
   const Vec3 a = g.boss.pos;
   step(30);
-  const float v = dist2d(a, g.boss.pos) / (30.0f * DT), d1 = dist2d(g.boss.pos, g.pl[0].pos);
+  const float speed = dist2d(a, g.boss.pos) / (30.0f * DT), d1 = dist2d(g.boss.pos, g.pl[0].pos);
   const float face = fabsf(d_wrap_pi(g.boss.face - yaw_to(g.boss.pos, g.pl[0].pos)));
   snprintf(buf, sizeof(buf), "in 2 secondi da %.1f a %.1f m, a %.2f m/s (fase 1: %.1f), guardandolo (%.2f rad)", (double)d0, (double)d1,
-           (double)v, (double)boss_speed(g), (double)face);
-  check(d0 - d1 > 3.6f && fabsf(v - 2.4f) < 0.15f && face < 0.15f && g.boss.act == BA_NONE, buf);
+           (double)speed, (double)boss_speed(g), (double)face);
+  check(d0 - d1 > 3.6f && fabsf(speed - 2.4f) < 0.15f && face < 0.15f && g.boss.act == BA_NONE, buf);
   g.boss.stage = 1;
   const float v1 = boss_speed(g);
   g.boss.stage = 2;
@@ -658,7 +660,7 @@ static void scene(const char* chars) {
   for (int i = 0; i < MAX_PLAYERS; ++i) g.pl[i].invuln = 100000;
   g.boss.target = 0;
   g.msg_t = 0;                       // niente scritta della mappa sopra
-  update_camera(g, true);
+  view_camera(v, g, CAM_CUT);
 }
 
 static void pictures(void) {
@@ -746,6 +748,7 @@ static void pictures(void) {
 }
 
 int main(int argc, char** argv) {
+  game_set_events(g, view_events(&v));
   plat_log_open("/dev/null");
   int per = 0, lag = 0;
   for (int i = 1; i < argc; ++i) {

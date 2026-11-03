@@ -120,7 +120,7 @@ void respawn_player(Game& g, int i) {
   }
   p.hp = p.hp_max * RESPAWN_HP;
   p.invuln = INVULN_FRAMES;
-  snd_at(g, SND_REVIVE, p.pos);
+  ev_sound(g, SND_REVIVE, p.pos);
   plat_log("giocatore %d di nuovo in gioco", i + 1);
 }
 
@@ -193,18 +193,18 @@ void attack_normal(Game& g, int i, float yaw) {
     case CH_MOCHI:
       for (int k = 0; k < 5; ++k) fire_shot(g, i, SK_SHARD, yaw + cd.aim_w * ((float)k / 4.0f - 0.5f), 15.0f, range, 9.0f, 0.12f, false);
       p.sq_v -= 1.2f;
-      snd_at(g, SND_SHARD, p.pos);
+      ev_sound(g, SND_SHARD, p.pos);
       break;
     case CH_MARZIO:
       // Tre palle di neve insieme, aperte sul ventaglio: sinistra, centro, destra.
       for (int k = 1; k >= -1; --k) fire_shot(g, i, SK_FROST, yaw + cd.aim_w * 0.5f * (float)k, 14.0f, range, 6.0f, 0.16f, false);
       p.sq_v -= 0.8f;
-      snd_at(g, SND_FROST, p.pos);
+      ev_sound(g, SND_FROST, p.pos);
       break;
     case CH_ZOLFO: {
       Shot* s = fire_shot(g, i, SK_FLAME, yaw + rng_s(g) * 0.12f, 9.5f, range, 4.5f, 0.18f, false);
       (void)s;
-      snd_at(g, SND_FLAME, p.pos);
+      ev_sound(g, SND_FLAME, p.pos);
       p.flame_t = 8;
       p.recoil = 2;
       break;
@@ -254,7 +254,7 @@ void special(Game& g, int i, float yaw) {
         s->yaw = a;
       }
       burst(g, p.pos + v3(0, 1.2f, 0), 10, PC_GREY, 3.0f);   // fumo dei razzi
-      snd_at(g, SND_ROCKET, p.pos);
+      ev_sound(g, SND_ROCKET, p.pos);
       break;
     case CH_MOCHI:
       p.leap_a = p.pos;
@@ -264,11 +264,11 @@ void special(Game& g, int i, float yaw) {
       p.grounded = false;
       p.tramp_t = 0;
       for (int k = 0; k < 6; ++k) puff(g, p.pos + v3(0, 0.2f, 0), PK_PUFF, PC_EARTH, rng_vec(g, 2.0f, 0.8f, 0.0f, 2.0f), 1.0f, 20);
-      snd_at(g, SND_LEAP, p.pos);
+      ev_sound(g, SND_LEAP, p.pos);
       break;
     case CH_MARZIO:
       p.blizzard_t = 240;
-      snd_at(g, SND_BLIZZARD, p.pos);
+      ev_sound(g, SND_BLIZZARD, p.pos);
       for (int k = 0; k < 16; ++k) {
         const float a = D_TWO_PI * (float)k / 16.0f;
         puff(g, p.pos + v3(0, 0.8f, 0), PK_SNOW, PC_SNOW, v3(d_cos(a) * 6.0f, 1.0f, d_sin(a) * 6.0f), 1.2f, 30);
@@ -292,8 +292,8 @@ void special(Game& g, int i, float yaw) {
       }
       p.flame_t = 14;
       for (int k = 0; k < 8; ++k) puff(g, start, PK_FLAME, PC_FIRE, rng_vec(g, 2.0f, 3.0f, 0.0f, 2.0f), 1.0f, 16);
-      snd_at(g, SND_ERUPT, p.pos);
-      snd_at(g, SND_LAVA, p.pos);
+      ev_sound(g, SND_ERUPT, p.pos);
+      ev_sound(g, SND_LAVA, p.pos);
       break;
     }
   }
@@ -315,7 +315,7 @@ void update_leap(Game& g, int i) {
   p.vy = 0.0f;
   p.land = 10;
   p.sq_v -= 6.0f;
-  snd_at(g, SND_SLAM, p.pos);
+  ev_sound(g, SND_SLAM, p.pos);
   explode(g, p.pos + v3(0, 0.2f, 0), 2.3f, 60.0f, i, 5.5f, false);
   for (int k = 0; k < 12; ++k) {
     const float a = D_TWO_PI * (float)k / 12.0f;
@@ -486,7 +486,7 @@ void hurt_player(Game& g, int i, float dmg, Vec3 from, float knock) {
   }
   add_float(g, v3(p.pos.x + 0.5f, p.pos.y + PL_H + 1.4f, p.pos.z), 0xFF5A4A, 100 + i, (int)(dmg + 0.5f), '-');
   if (p.hp > 0.0f) {
-    snd_at(g, SND_HURT, p.pos);
+    ev_sound(g, SND_HURT, p.pos);
     return;
   }
   player_down(g, i, false);
@@ -503,7 +503,7 @@ static void player_fall(Game& g, int i) {
   }
   burst(g, p.pos + v3(0.0f, -0.4f, 0.0f), 8, PC_SNOW, 3.0f);
   add_float_text(g, v3(p.pos.x, 1.6f, p.pos.z), 0xBFEFFF, N_("SPLASH!"));
-  snd_at(g, SND_SPLASH, p.pos);   // il tonfo nell'acqua arriva dopo 0,75 s (niente SND_DOWN sopra)
+  ev_sound(g, SND_SPLASH, p.pos);   // il tonfo nell'acqua arriva dopo 0,75 s (niente SND_DOWN sopra)
   plat_log("giocatore %d caduto nel cenote", i + 1);
   p.hp = 0.0f;
   p.kx = p.kz = p.vx = p.vz = 0.0f;
@@ -513,7 +513,7 @@ static void player_fall(Game& g, int i) {
 // A terra (vita finita o caduto nel cenote): vite, rientro, messaggi.
 static void player_down(Game& g, int i, bool pit) {
   Player& p = g.pl[i];
-  if (!pit) snd_at(g, SND_DOWN, p.pos);
+  if (!pit) ev_sound(g, SND_DOWN, p.pos);
   p.hp = 0.0f;
   p.alive = false;
   p.pos.y = level_ground(&g.L, p.pos.x, p.pos.z, p.pos.y, PL_STEP);   // colpito in salto: giu' a terra
@@ -687,7 +687,7 @@ void player_update(Game& g, int i, const Pad& raw) {
   if (p.invuln > 0) p.invuln--;
   // Bonus delle casse (0.5.4): il tempo passa solo in partita (in pausa e con le carte e' fermo).
   for (int k = 0; k < NPW_TIMED; ++k)
-    if (p.pw_t[k] > 0 && --p.pw_t[k] == 0) snd_at(g, SND_POWER_END, p.pos);
+    if (p.pw_t[k] > 0 && --p.pw_t[k] == 0) ev_sound(g, SND_POWER_END, p.pos);
   if (p.hurt > 0) p.hurt--;
   if (p.recoil > 0) p.recoil--;
   if (p.aim_hold > 0) p.aim_hold--;
@@ -762,7 +762,7 @@ void player_update(Game& g, int i, const Pad& raw) {
     p.vy = PL_JUMP_V;
     p.grounded = false;
     p.sq_v += 3.5f;
-    snd_at(g, SND_JUMP, p.pos);
+    ev_sound(g, SND_JUMP, p.pos);
   }
   if (!jump && !p.grounded && p.tramp_t <= 0 && p.vy > 2.5f) p.vy = 2.5f;
   if (!p.grounded) p.vy -= GRAVITY * DT;
@@ -773,7 +773,7 @@ void player_update(Game& g, int i, const Pad& raw) {
       p.sq_v -= clampf(-p.vy * 0.45f, 1.5f, 5.0f);
       p.land = 8;
       puff(g, v3(nx, gnd + 0.05f, nz), PK_PUFF, PC_WHITE, v3(0, 0.3f, 0), 0.6f, 12);
-      snd_at(g, SND_LAND, p.pos);
+      ev_sound(g, SND_LAND, p.pos);
     }
     ny = gnd;
     p.vy = 0.0f;
@@ -799,7 +799,7 @@ void player_update(Game& g, int i, const Pad& raw) {
     p.grounded = false;
     p.tramp_t = 1;
     p.sq_v += 5.0f;
-    snd_at(g, SND_TRAMP, p.pos);
+    ev_sound(g, SND_TRAMP, p.pos);
     int cx, cz;
     if (level_cell(&g.L, p.pos.x, p.pos.z, &cx, &cz) && g.L.dyn_at[cz][cx] >= 0) g.tramp_t[g.L.dyn_at[cz][cx]] = 20;
     plat_log("giocatore %d sul trampolino", i + 1);
@@ -820,7 +820,7 @@ void player_update(Game& g, int i, const Pad& raw) {
     // Astro: i tre colpi della raffica spazzano il ventaglio (sinistra, centro, destra).
     const float side = 0.5f * (float)(p.burst_left - 2);
     fire_shot(g, i, SK_BULLET, p.burst_yaw + cd.aim_w * side, 18.0f, pl_range(p), 12.0f, 0.12f, false);
-    snd_at(g, SND_BULLET, p.pos);
+    ev_sound(g, SND_BULLET, p.pos);
     p.burst_left--;
     p.burst_cd = 4;
   }

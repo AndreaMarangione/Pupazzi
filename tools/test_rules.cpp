@@ -7,6 +7,7 @@
 // Con --immagini scrive anche le schermate dell'HUD (PPM a 640x480, renderer software): icone
 // dei giocatori con uno a terra e uno senza vite, arena, menu delle mappe, fine dell'arena.
 #include "game/sim/game_int.h"
+#include "game/view/view.h"
 #include "game/sim/maps.h"
 #include "platform/plat.h"
 #include "game/save.h"
@@ -18,6 +19,7 @@
 #include <unistd.h>
 
 static Game& g = *game_create();   // the game under test (the game keeps no global state: the test owns it)
+static View& v = *view_create();   // its view: camera and frames for the images
 
 static int g_fail = 0;
 static Pad g_pads[MAX_PLAYERS];
@@ -143,7 +145,7 @@ static void shot(const char* name) {
   if (!g_shots) return;
   static Hud hud;
   FrameDesc fd{};
-  game_build_frame(g, &fd, 640, 480, &hud);
+  view_build_frame(v, g, &fd, 640, 480, &hud);
   RenderStats st;
   const uint32_t* fb = swr_render(&fd, &st);
   char path[512];
@@ -168,6 +170,7 @@ static void fresh(int map, int players, const char* chars) {
 }
 
 int main(int argc, char** argv) {
+  game_set_events(g, view_events(&v));
   plat_log_open("/dev/null");
   for (int i = 1; i + 1 < argc; ++i) {
     if (!strcmp(argv[i], "--immagini")) g_shots = argv[i + 1];
@@ -322,7 +325,7 @@ int main(int argc, char** argv) {
     memset(g_pads, 0, sizeof(g_pads));
     const float moved = dist2d(a.pos, a0);
     step(120);
-    const float cam_off = fabsf(g.cam_target.x - a.pos.x);
+    const float cam_off = fabsf(v.cam_target.x - a.pos.x);
     quiet();
     Vec3 near_b = g.L.zones[g.zone].start[1];
     b.pos = near_b;
@@ -527,7 +530,7 @@ int main(int argc, char** argv) {
       }
       kill_player(1);
       step(90);
-      printf("  arena: telecamera a %.1f m\n", (double)g.cam_dist);
+      printf("  arena: telecamera a %.1f m\n", (double)v.cam_dist);
       shot("arena_4_giocatori");
     }
   }
@@ -986,9 +989,9 @@ int main(int argc, char** argv) {
     };
     for (const Spot& s : SPOTS) {
       for (int i = 0; i < 4; ++i) g.pl[i].pos = v3(s.p[i][0], 0.0f, s.p[i][1]);
-      update_camera(g, true);
-      printf("  %s: distanza %.1f m, punto inquadrato %.1f %.1f\n", s.name, (double)g.cam_dist, (double)g.cam_target.x,
-             (double)g.cam_target.z);
+      view_camera(v, g, CAM_CUT);
+      printf("  %s: distanza %.1f m, punto inquadrato %.1f %.1f\n", s.name, (double)v.cam_dist, (double)v.cam_target.x,
+             (double)v.cam_target.z);
       shot(s.name);
     }
   }

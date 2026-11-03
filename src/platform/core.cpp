@@ -17,6 +17,7 @@
 #endif
 #include "platform/libretro.h"
 #include "game/game.h"
+#include "game/view/view.h"
 #include "engine/swr.h"
 #include "engine/glr.h"
 #include "platform/plat.h"
@@ -95,6 +96,7 @@ static struct {
   int hdmi_force;             // PUPAZZI_HDMI=0/1 (prove): schermo fisso; -1 si legge dal sistema
   int hdmi_src;               // da dove: 0 niente (si resta come con l'HDMI), 1 extcon, 2 switch
   Game* game;                 // the game (created in retro_init, destroyed in retro_deinit)
+  View* view;                 // ...and how this console shows it (camera, sounds, music, drawing)
 } A;
 
 // HDMI collegato? Lo stesso file che legge il RetroArch della console ("HDMI=1"); su altri kernel
@@ -135,7 +137,7 @@ static void hdmi_poll(bool first) {
     plat_log("HDMI: %s, da %s", on < 0 ? "non si sa" : (on ? "collegato" : "staccato"), SRC[src]);
     A.hdmi_src = src;
   }
-  if (on >= 0) game_set_hdmi(*A.game, on != 0);
+  if (on >= 0) view_set_hdmi(*A.view, on != 0);
 }
 
 static void log_sink(const char* line) {
@@ -762,6 +764,8 @@ RETRO_API void retro_init(void) {
     plat_log("sonoro pronto in %.0f ms", plat_now_ms() - t);
   }
   A.game = game_create();
+  A.view = view_create();
+  game_set_events(*A.game, view_events(A.view));
   game_init(*A.game);
   snprintf(g_aa_try.path, sizeof(g_aa_try.path), "%s/aa_in_prova.txt", A.out_dir);
   g_aa_try.frames = -1;
@@ -816,7 +820,9 @@ RETRO_API void retro_deinit(void) {
   swr_shutdown();
   game_shutdown(*A.game);
   game_destroy(A.game);
+  view_destroy(A.view);
   A.game = NULL;
+  A.view = NULL;
   plat_log_close();
 }
 
@@ -1019,6 +1025,7 @@ RETRO_API void retro_run(void) {
     while (net_step(pads, taps, &consoles, &silent)) {
       game_net_frame(*A.game, consoles, silent, taps);
       game_update(*A.game, pads);
+      view_step(*A.view, *A.game);
       const uint64_t hh = game_state_hash(*A.game);
       net_step_done(hh);
       if (A.trace) plat_log("rete traccia %u %016llx", net_frame_no(), (unsigned long long)hh);
@@ -1031,6 +1038,7 @@ RETRO_API void retro_run(void) {
   } else {
     A.net_tap = false;
     game_update(*A.game, A.pads);
+    view_step(*A.view, *A.game);
     if (A.trace) plat_log("traccia %u %016llx", A.frame, (unsigned long long)game_state_hash(*A.game));
     if (A.trace_m) {
       plat_log("fotogramma %u", A.frame);
@@ -1043,7 +1051,7 @@ RETRO_API void retro_run(void) {
   net_frame_end();
   if (game_wants_quit(*A.game)) request_shutdown("menu: Esci", "giocatore");
   FrameDesc fd;
-  game_build_frame(*A.game, &fd, A.w, A.h, A.hud_off ? NULL : &g_hud);
+  view_build_frame(*A.view, *A.game, &fd, A.w, A.h, A.hud_off ? NULL : &g_hud);
   if (!A.hud_off && A.perf) {
     if (A.hud_fixed) A.fps = A.frame_avg = A.frame_max = A.e_core = 0.0f;
     perf_overlay(&g_hud);

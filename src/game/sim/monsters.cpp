@@ -132,7 +132,7 @@ void update_scorpion(Game& g, Monster& m, int k) {
       if (m.target >= 0 && m.cd == 0 && d < 7.0f && d > 1.4f && walk_clear(g, m.pos, to, r * 0.9f, false)) {
         m.state = S_WINDUP;
         m.state_t = 32;
-        snd_at(g, SND_SCORPION, m.pos);
+        ev_sound(g, SND_SCORPION, m.pos);
       }
       break;
     }
@@ -227,7 +227,7 @@ void shoot_arrow(Game& g, Monster& m) {
     launch_arrow(g, m, from, aim - side);
   }
   m.hitmask ^= 1u;
-  snd_at(g, SND_BOW, m.pos);
+  ev_sound(g, SND_BOW, m.pos);
   m.cd = (int)(110.0f * (0.8f + 0.4f * rng_f(g)) / shoot_scale(g));
   m.state = S_RECOVER;
   m.state_t = ARCHER_REST_FRAMES;
@@ -314,7 +314,7 @@ void update_wasp(Game& g, Monster& m, int k) {
       const float d = dist2d(p.pos, m.pos);
       if (d > monster_r(m) + PL_R + 0.12f || p.pos.y > m.fly + 0.4f) continue;
       hurt_player(g, j, m.dmg, m.pos, 2.0f);
-      snd_at(g, SND_SCARAB, m.pos);
+      ev_sound(g, SND_SCARAB, m.pos);
       m.cd = 50;
       if (d > 1e-3f) {
         m.kx -= (p.pos.x - m.pos.x) / d * 4.0f;
@@ -337,7 +337,7 @@ void update_bear(Game& g, Monster& m, int k) {
       if (m.target >= 0 && m.cd == 0 && d < 1.9f) {
         m.state = S_WINDUP;
         m.state_t = 30;
-        snd_at(g, SND_WARRIOR, m.pos);
+        ev_sound(g, SND_WARRIOR, m.pos);
       }
       break;
     }
@@ -379,7 +379,7 @@ void monster_fall(Game& g, int k) {
     puff(g, m.pos + v3(0.0f, -0.6f, 0.0f), PK_PUFF, PC_WHITE, v3(d_cos(a) * 1.4f, 3.0f, d_sin(a) * 1.4f), 0.6f, 24);
   }
   add_float_text(g, v3(m.pos.x, 1.4f, m.pos.z), 0xBFEFFF, N_("SPLASH!"));
-  snd_at(g, SND_SPLASH, m.pos);
+  ev_sound(g, SND_SPLASH, m.pos);
   plat_log("mostro %d (%s) caduto nel cenote", k, MONS[m.type].name);
   m.hp = 0.0f;
   damage_monster(g, k, 0.0f, m.push_by - 1, v3(0, 0, 0), 0.0f, false);
@@ -448,7 +448,7 @@ Vec3 monster_center(const Monster& m) {
   return MONS[m.type].flying ? v3(m.pos.x, m.fly, m.pos.z) : v3(m.pos.x, m.pos.y + monster_h(m) * 0.5f, m.pos.z);
 }
 
-bool monster_drawn(Game& g, const Monster& m) {
+bool monster_drawn(const Game& g, const Monster& m) {
   if (MONS[m.type].flying || m.reveal > 0 || m.hurt > 0 || m.rise > 0) return true;
   if (level_type_at(&g.L, m.pos.x, m.pos.z) != C_GRASS) return true;
   for (int j = 0; j < MAX_PLAYERS; ++j)
@@ -970,7 +970,7 @@ void start_slam(Game& g) {
     }
   }
   b.sq_v -= 2.0f;
-  snd_at(g, SND_SLASH, b.pos);
+  ev_sound(g, SND_SLASH, b.pos);
 }
 
 // Fendente: chi sta nel settore davanti a lui (anche solo con un pezzo) prende la spadata e vola via.
@@ -993,7 +993,7 @@ void sweep_strike(Game& g) {
     puff(g, b.pos + d * 3.3f + v3(0, 0.3f, 0), PK_PUFF, PC_SAND, d * 2.5f + v3(0, 0.6f, 0), 1.0f, 22);
   }
   add_shake(g, 0.15f);
-  snd_at(g, SND_BOSS_SWEEP, b.pos);
+  ev_sound(g, SND_BOSS_SWEEP, b.pos);
   b.sq_v -= 1.5f;
 }
 
@@ -1021,7 +1021,7 @@ void rush_crash(Game& g) {
   burst(g, hit + v3(0, 2.2f, 0), 6, PC_GOLD, 3.5f);
   for (int k = 0; k < 6; ++k) puff(g, hit + v3(0, 0.5f, 0), PK_PUFF, PC_SAND, rng_vec(g, 2.5f, 0.6f, 1.0f, 2.5f), 1.4f, 30);
   add_shake(g, 0.45f);
-  snd_at(g, SND_BOSS_IMPACT, hit);
+  ev_sound(g, SND_BOSS_IMPACT, hit);
   add_float_text(g, v3(b.pos.x, 5.6f, b.pos.z), 0xFFE14D, N_("STORDITO!"));
   b.sq_v -= 3.0f;
   plat_log("boss: carica contro un ostacolo, stordito (fotogramma %u, vita %d)", g.tick, (int)b.hp);
@@ -1065,7 +1065,7 @@ void rush_update(Game& g) {
       add_shake(g, 0.15f);
     }
     if ((b.act_t & 3) == 0) puff(g, b.pos - d * 0.9f + v3(0, 0.15f, 0), PK_PUFF, PC_SAND, v3(-d.x * 2.0f, 0.8f, -d.z * 2.0f), 1.1f, 20);
-    if (b.act_t % 9 == 0) snd_at(g, SND_BOSS_STEP, b.pos);
+    if (b.act_t % 9 == 0) ev_sound(g, SND_BOSS_STEP, b.pos);
     const bool blocked = moved < step * 0.5f;     // qualcosa che la corsia non aveva (non dovrebbe succedere)
     if (b.run >= b.lane - 1e-4f || blocked) {
       b.run = b.lane;
@@ -1120,7 +1120,7 @@ void act_begin(Game& g, int act) {
         m->yaw = b.act_yaw;
         m->fire_at = b.wind;
       }
-      snd_at(g, SND_BOSS_SWEEP_WARN, b.pos);
+      ev_sound(g, SND_BOSS_SWEEP_WARN, b.pos);
       break;
     }
     case BA_RUSH: {
@@ -1139,7 +1139,7 @@ void act_begin(Game& g, int act) {
         m->fire_at = b.wind;
         m->crash = b.crash;
       }
-      snd_at(g, SND_BOSS_RUSH, b.pos);
+      ev_sound(g, SND_BOSS_RUSH, b.pos);
       break;
     }
     case BA_JAVELIN: b.wind = wind_of(g, THROW_WIND); break;
@@ -1248,7 +1248,7 @@ void boss_move(Game& g, float dvx, float dvz, float accel) {
     const float side = s1 < 0.0f ? 1.0f : -1.0f;       // il piede che va giu'
     const Vec3 foot = b.pos + v3(d_cos(b.face) * BOSS_HIP_X * side, 0.1f, -d_sin(b.face) * BOSS_HIP_X * side);
     puff(g, foot, PK_PUFF, PC_SAND, v3(0, 0.4f, 0), 0.8f, 16);
-    snd_at(g, SND_BOSS_STEP, b.pos);
+    ev_sound(g, SND_BOSS_STEP, b.pos);
   }
 }
 
@@ -1430,7 +1430,7 @@ void boss_update(Game& g) {
       Marker& m = g.mk[i];
       if (m.alive && (m.kind == MK_LOB || m.kind == MK_SWEEP || m.kind == MK_LANE || (m.kind == MK_ROOT && !m.done))) m.alive = false;
     }
-    snd_at(g, SND_BOSS_ROAR, b.pos);
+    ev_sound(g, SND_BOSS_ROAR, b.pos);
     for (int k = 0; k < 40; ++k)
     {
       const Vec3 at = b.pos + rng_vec(g, 1.6f, 3.0f, 2.5f, 1.6f);
@@ -1456,7 +1456,7 @@ void boss_update(Game& g) {
       puff(g, at, PK_LEAF, (k % 3) ? PC_RED : PC_GOLD, rng_vec(g, 3.0f, 0.5f, 0.0f, 3.0f), 1.0f, 80);   // piume della cresta
     }
     show_msg(g, stage == 1 ? tr("SI ARRABBIA!") : tr("È FURIOSO!"), tr("il gladiatore va più veloce"), 0xFF8A5C, 2, 120);
-    snd_at(g, SND_BOSS_ROAR, b.pos);
+    ev_sound(g, SND_BOSS_ROAR, b.pos);
     plat_log("boss: fase %d (fotogramma %u)", stage + 1, g.tick);
   }
   if (b.roar > 0) {
