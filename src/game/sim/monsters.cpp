@@ -1445,9 +1445,11 @@ void boss_update(Game& g) {
     return;
   }
   // Phase: at 2/3 and at 1/3 of his health, as soon as the current attack is over, he roars and
-  // calls the reinforcements.
+  // calls the reinforcements. Since 0.5.6 first the card choice for that third (once per map):
+  // the game stops there and, when everyone has chosen, he roars.
   const int stage = b.hp < b.hp_max / 3.0f ? 2 : (b.hp < b.hp_max * 2.0f / 3.0f ? 1 : 0);
   if (stage > b.stage && b.act == BA_NONE && b.roar == 0) {
+    if (cards_boss_third(g, stage)) return;
     b.stage = stage;
     b.roar = ROAR_FRAMES;
     b.vx = b.vz = 0.0f;

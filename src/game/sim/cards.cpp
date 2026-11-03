@@ -1,6 +1,8 @@
 // Cards (0.4): at the start of every map and after every cleared zone, if another one follows,
 // each player picks 1 card out of 3, which lasts until the end of the map (it stays even if the
 // zone is replayed; if the map is restarted from the start, everyone starts again without cards).
+// Since 0.5.6 also when the gladiator loses a third of its health (at 2/3 and at 1/3), once per
+// third in the map: replaying the zone does not give them again.
 // While the choice is open the game is frozen as in the pause; everyone picks on their own panel
 // with up/down and A (or a short START press); a player out of lives does not pick. This file also
 // has the effects that don't fit better elsewhere: shield, extra life, generous special, burns and
@@ -168,6 +170,15 @@ void cards_map_start(Game& g) {
   memset(g.offer, 0, sizeof(g.offer));
   g.cards_open = false;
   g.cards_t = g.cards_due = 0;
+  g.boss_thirds = 0;
+}
+
+bool cards_boss_third(Game& g, int thirds) {
+  if (!g.session.cards_on || thirds <= g.boss_thirds) return false;
+  g.boss_thirds++;
+  plat_log("boss: perso un terzo della vita (%d su 3), carte", g.boss_thirds);
+  cards_offer(g);
+  return g.cards_open;
 }
 
 void cards_offer(Game& g) {

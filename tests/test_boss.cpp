@@ -1,7 +1,8 @@
 // Tests of the giant Gladiator (0.5.1): chases by walking and goes around obstacles, slash in
 // front and not behind, charge dodged by leaving the lane, charge into an obstacle (stunned and
-// more damage), phases with roar and reinforcements, boss reset when restarting, never stuck with
-// the heroes running around it, the same game twice. Uses the game without a frontend (like
+// more damage), phases with roar and reinforcements, the cards at every third of its health
+// (0.5.6), boss reset when restarting, never stuck with the heroes running around it, the same
+// game twice. Uses the game without a frontend (like
 // test_rules) and a save in a temporary directory.
 //   make build/native/test_boss && ./build/native/test_boss [--immagini DIR] [--lotte [N]] [--ritardo F]
 //                                                          [--solo HEROES] [--traccia N]
@@ -375,6 +376,95 @@ TEST_CASE("5) a 2/3 e a 1/3 della vita ruggisce (prende poco) e chiama i rinforz
   const bool waits = g.boss.stage == 0 && g.boss.act == BA_SWEEP;
   for (int k = 0; k < 200 && g.boss.roar == 0; ++k) step();
   EXPECT(waits && g.boss.stage == 1 && g.boss.roar > 0, "con il fendente in corso ruggisce dopo averlo finito");
+}
+
+// Card choice open: everyone takes the card under the cursor (A on alternate frames, as a person
+// presses it: the first A shows the cards, the next one takes), until the game starts again.
+static bool choose_cards(void) {
+  for (int k = 0; k < 2000 && g.cards_open; ++k) {
+    for (int i = 0; i < MAX_PLAYERS; ++i) g_pads[i].btn = (k & 1) ? (uint16_t)(1u << PAD_A) : (uint16_t)0;
+    step();
+  }
+  memset(g_pads, 0, sizeof(g_pads));
+  return !g.cards_open;
+}
+
+static int ncards(int i) { return __builtin_popcount(g.pl[i].cards); }
+
+// The arena as above (no choice at the start of the map), then with the cards on.
+static void arena_cards(int n, const char* chars) {
+  game_set_cards_enabled(g, false);
+  arena(n, chars);
+  game_set_cards_enabled(g, true);
+}
+
+TEST_CASE("5b) carte al boss (0.5.6): a 2/3 e a 1/3 della vita, una volta per terzo nella mappa") {
+  arena_cards(2, "01");
+  Boss& b = g.boss;
+  b.hp = b.hp_max * 0.66f;
+  step();
+  bool ok = g.cards_open && g.offer[0].on && g.offer[1].on && b.stage == 0 && b.roar == 0 && g.boss_thirds == 1;
+  EXPECT(ok, "a 2/3 della vita: prima la scelta delle carte per tutti, il gladiatore aspetta");
+  ok = choose_cards() && ncards(0) == 1 && ncards(1) == 1;
+  step();
+  snprintf(buf, sizeof(buf), "scelte le carte (G1 %d, G2 %d): ruggisce adesso, fase %d, \"%s\"", ncards(0), ncards(1), b.stage + 1, g.msg);
+  EXPECT(ok && b.stage == 1 && b.roar > 0 && !strcmp(g.msg, "SI ARRABBIA!"), buf);
+  for (int k = 0; k < 400 && (b.roar > 0 || b.act != BA_NONE); ++k) step();
+  b.cd = 1000000;
+  b.hp = b.hp_max * 0.32f;
+  step();
+  ok = g.cards_open && b.stage == 1 && g.boss_thirds == 2;
+  ok &= choose_cards();
+  step();
+  snprintf(buf, sizeof(buf), "a 1/3: di nuovo le carte (G1 %d, G2 %d), poi \"%s\"", ncards(0), ncards(1), g.msg);
+  EXPECT(ok && ncards(0) == 2 && ncards(1) == 2 && b.stage == 2 && b.roar > 0 && !strcmp(g.msg, "È FURIOSO!"), buf);
+  // Two thirds lost before the phase changes (during an attack): two choices in a row, one roar.
+  arena_cards(1, "0");
+  const unsigned seq = g.cards_seq;
+  g.boss.hp = g.boss.hp_max * 0.3f;
+  step();
+  ok = g.cards_open && choose_cards();
+  step();
+  snprintf(buf, sizeof(buf), "da 1 a meno di 1/3 in una volta: due scelte di fila (%u, carte %d), poi un ruggito solo (fase %d)", g.cards_seq - seq,
+           ncards(0), g.boss.stage + 1);
+  EXPECT(ok && g.cards_seq - seq == 2 && ncards(0) == 2 && g.boss.stage == 2 && g.boss.roar > 0 && !strcmp(g.msg, "È FURIOSO!"), buf);
+  // Alone, fallen with lives left: the zone (and the gladiator) starts again, the cards stay and
+  // the thirds already rewarded do not give them again.
+  arena_cards(1, "0");
+  g.boss.hp = g.boss.hp_max * 0.6f;
+  step();
+  ok = choose_cards();
+  step();
+  g.pl[0].invuln = 0;
+  hurt_player(g, 0, 1e6f, g.pl[0].pos + v3(1, 0, 0), 0.0f);
+  step();
+  ok &= g.phase == PH_WIPE && !g.wipe_map;
+  step(WIPE_ZONE_FRAMES);
+  quiet();
+  g.boss.cd = 1000000;
+  ok &= g.boss.hp == g.boss.hp_max && g.boss.stage == 0 && ncards(0) == 1;
+  g.boss.hp = g.boss.hp_max * 0.6f;
+  step();
+  snprintf(buf, sizeof(buf), "zona rifatta: la carta resta (%d), di nuovo a 2/3 ruggisce subito senza carte", ncards(0));
+  EXPECT(ok && !g.cards_open && g.boss.stage == 1 && g.boss.roar > 0, buf);
+  // Last life lost: the map starts again from the start, without cards, and the thirds count again.
+  for (int k = 0; k < 400 && (g.boss.roar > 0 || g.boss.act != BA_NONE); ++k) step();
+  g.pl[0].lives = 1;
+  g.pl[0].invuln = 0;
+  hurt_player(g, 0, 1e6f, g.pl[0].pos + v3(1, 0, 0), 0.0f);
+  step();
+  ok = g.phase == PH_WIPE && g.wipe_map;
+  step(WIPE_MAP_FRAMES);
+  ok &= g.cards_open && g.boss_thirds == 0 && ncards(0) == 0;
+  ok &= choose_cards() && ncards(0) == 1;
+  step(3);
+  quiet();
+  g.boss.cd = 1000000;
+  g.boss.hp = g.boss.hp_max * 0.6f;
+  step();
+  EXPECT(ok && g.cards_open && g.boss_thirds == 1, "mappa da capo: le carte dell'inizio e di nuovo quelle a 2/3");
+  choose_cards();
+  game_set_cards_enabled(g, false);
 }
 
 TEST_CASE("6) bersaglio: il piu' vicino, tenuto almeno 3 secondi; passa a chi lo picchia forte; giavellotti 1, 2, 3") {

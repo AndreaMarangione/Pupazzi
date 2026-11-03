@@ -954,8 +954,8 @@ uint64_t game_state_hash(Game& g) {
         mix(&g.mo[k].burn_t, sizeof(int));
         mix(&g.mo[k].vapor_t, sizeof(int));
       }
-    const uint8_t open = g.cards_open;
-    mix(&open, 1);
+    const uint8_t open[2] = { (uint8_t)g.cards_open, (uint8_t)g.boss_thirds };
+    mix(open, sizeof(open));
   }
   // Swing gates (0.5.4): how open they are and how they move.
   for (int i = 0; i < g.L.ngates; ++i) {
@@ -1096,6 +1096,7 @@ static void net_reset_sim(Game& g) {
   g.cards_open = false;
   g.cards_t = g.cards_age = g.cards_due = 0;
   g.cards_seq = 0;
+  g.boss_thirds = 0;
   g.explorer_free = false;
   g.expl_t = -1;
   g.expl_pos = v3(0, 0, 0);
