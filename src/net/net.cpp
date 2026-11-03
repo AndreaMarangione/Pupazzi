@@ -171,6 +171,7 @@ struct State {
   uint32_t rnd;
 };
 State S;
+Game* g_game;                       // the game (net_init): menus and LAN start/stop go through it
 bool g_inited;                      // net_init fatta (prima S.fd non vale)
 
 // Messaggi in uscita trattenuti (prove: PUPAZZI_RETE_RITARDO).
@@ -667,7 +668,7 @@ void host_start(void) {
   if (S.role != R_HOST_LOBBY || count_peers() == 0) return;
   NetStart& st = S.start;
   memset(&st, 0, sizeof(st));
-  game_net_prepare(&st);
+  game_net_prepare(*g_game, &st);
   st.local = 0;
   st.consoles = present_mask();
   for (int p = 1; p < MAX_PLAYERS; ++p) st.aim[p] = S.peer[p].used ? (uint8_t)S.peer[p].aim : (uint8_t)0;
@@ -697,7 +698,7 @@ void host_start(void) {
   }
   plat_log("rete: si comincia con %d console (giocatori 1%s%s%s), numero %08x", 1 + count_peers(), S.peer[1].used ? " 2" : "",
            S.peer[2].used ? " 3" : "", S.peer[3].used ? " 4" : "", (unsigned)st.seed);
-  game_net_begin(&st);
+  game_net_begin(*g_game, &st);
 }
 
 // Fotogrammi per la console p: da quello che le manca fin dove si e' arrivati (al massimo WIN per
@@ -742,7 +743,7 @@ void host_closing(void) {
   S.close_frame = S.frame;
   S.close_t = S.now;
   plat_log("rete: la partita in rete torna al titolo (fotogramma %u), aspetto che ci arrivino anche le altre console", S.frame);
-  game_net_end(NE_OVER, true);
+  game_net_end(*g_game, NE_OVER, true);
 }
 
 void host_tick(void) {
@@ -897,7 +898,7 @@ void join_send(void) {
   w.u64(S.content);
   NetStart st;
   memset(&st, 0, sizeof(st));
-  game_net_prepare(&st);
+  game_net_prepare(*g_game, &st);
   w.u8(st.aim[0]);
   send_to(S.host, w);
 }
@@ -1009,7 +1010,7 @@ void client_begin(Rd& r) {
   S.stalls = S.catchup = 0;
   memset(S.hist, 0, sizeof(S.hist));
   plat_log("rete: la partita comincia, sono il giocatore %d (numero %08x)", player + 1, (unsigned)st.seed);
-  game_net_begin(&st);
+  game_net_begin(*g_game, &st);
 }
 
 void client_bundle(Rd& r) {
@@ -1290,7 +1291,7 @@ void end_session(int reason) {
   }
   S.role = R_OFF;
   close_socket();
-  if (playing) game_net_end(reason, host);
+  if (playing) game_net_end(*g_game, reason, host);
 }
 
 void parse_env(void) {
@@ -1343,16 +1344,17 @@ void parse_env(void) {
 static void auto_start(void) {
   if (S.auto_mode == 1) {
     if (save_slot() < 0 && !save_slot_load(0)) save_slot_new(0);
-    if (host_open()) game_net_lobby();
+    if (host_open()) game_net_lobby(*g_game);
   } else if (S.auto_mode == 2) {
     search_start();
-    if (S.role == R_SEARCH) game_net_lobby();
+    if (S.role == R_SEARCH) game_net_lobby(*g_game);
   }
 }
 
-void net_init(void) {
+void net_init(Game& game) {
   net_shutdown();
   memset(&S, 0, sizeof(S));
+  g_game = &game;
   S.fd = -1;
   g_inited = true;
   S.now = plat_now_ms();
@@ -1415,7 +1417,7 @@ void net_frame_begin(void) {
   if (S.role == R_SEARCH)
     for (int k = 0; k < NET_MAX_GAMES; ++k)
       if (S.found[k].used) v.games[v.ngames++] = S.found[k].game;
-  game_net_view(&v);
+  game_net_view(*g_game, &v);
 }
 
 bool net_session(void) { return g_inited && (S.role == R_HOST_PLAY || S.role == R_CLIENT_PLAY); }
@@ -1480,7 +1482,7 @@ void net_step_done(uint64_t hash) {
     }
     S.last_done = S.frame;
     S.frame++;
-    if (game_net_over()) {
+    if (game_net_over(*g_game)) {
       host_closing();
     } else if (count_peers() == 0) {
       plat_log("rete: le altre console sono uscite, si continua da soli");
@@ -1498,7 +1500,7 @@ void net_step_done(uint64_t hash) {
     end_session(NE_DESYNC);
     return;
   }
-  if (game_net_over()) end_session(NE_OVER);
+  if (game_net_over(*g_game)) end_session(NE_OVER);
 }
 
 void net_frame_end(void) {
@@ -1530,7 +1532,7 @@ void net_frame_end(void) {
     default: break;
   }
   flush_delayed(false);
-  game_net_wait(S.role == R_CLIENT_PLAY ? S.stall_run : 0);
+  game_net_wait(*g_game, S.role == R_CLIENT_PLAY ? S.stall_run : 0);
   if ((S.role == R_HOST_PLAY || S.role == R_CLIENT_PLAY) && S.now - S.stat_t >= STAT_MS) {
     S.stat_t = S.now;
     if (S.role == R_CLIENT_PLAY) {

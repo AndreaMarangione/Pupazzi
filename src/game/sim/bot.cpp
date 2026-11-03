@@ -10,28 +10,13 @@
 
 namespace {
 
-struct Bot {
-  Vec3 last, goal;
-  int check_t, side_t, jump_t, strafe_t, field_t, menu_t;
-  float side, strafe;
-  int orbit_t;                        // gladiatore: fotogrammi prima di poter cambiare verso del giro attorno
-  float orbit;                        // ...e il verso (+1 / -1)
-  bool l1_prev, a_prev, field_ok;
-  unsigned card_seq;                  // scelta delle carte gia' vista
-  int card_t, card_want, card_wait;
-  int cage_t;                         // da quanto cercano di aprire la capsula dell'esploratore
-  int heal_t, heal_off;               // da quanto inseguono un talismano / per quanto lasciarli stare
-  uint16_t field[FLOW_W * FLOW_H];
-};
 
-Bot B[MAX_PLAYERS];
-int g_lag;                            // prove: i segni a terra si vedono dopo cosi' tanti fotogrammi (bot_set_lag)
 
 // Carte: ognuno preme A sul banner per vedere le sue carte (dalla 0.5.4), aspetta un po' (30-60
 // fotogrammi, diverso per giocatore), a volte sposta il cursore e conferma con A. Le scelte vengono
 // da un miscuglio di numeri della partita: g.rng non si tocca.
-void bot_cards(int i, Pad& pad) {
-  Bot& b = B[i];
+void bot_cards(Game& g, int i, Pad& pad) {
+  Bot& b = g.session.bot[i];
   const CardOffer& o = g.offer[i];
   if (!o.on || o.done || o.n <= 0) return;
   if (b.card_seq != g.cards_seq) {
@@ -57,7 +42,7 @@ void bot_cards(int i, Pad& pad) {
 }
 
 // Bersaglio: il mostro piu' vicino (o il boss), con la distanza.
-bool nearest_target(const Player& p, Vec3* where, float* dist, int* type) {
+bool nearest_target(Game& g, const Player& p, Vec3* where, float* dist, int* type) {
   float bd = 1e30f;
   bool found = false;
   for (int k = 0; k < MAX_MONSTERS; ++k) {
@@ -74,7 +59,7 @@ bool nearest_target(const Player& p, Vec3* where, float* dist, int* type) {
   return found;
 }
 
-int monsters_near(Vec3 p, float r) {
+int monsters_near(Game& g, Vec3 p, float r) {
   int n = 0;
   for (int k = 0; k < MAX_MONSTERS; ++k)
     if (g.mo[k].alive && g.mo[k].rise == 0 && dist2d(g.mo[k].pos, p) < r) n += g.mo[k].type == MO_GUERRIERO ? 2 : 1;
@@ -82,7 +67,7 @@ int monsters_near(Vec3 p, float r) {
   return n;
 }
 
-bool nearest_item(const Player& p, int kind, float maxd, Vec3* out) {
+bool nearest_item(Game& g, const Player& p, int kind, float maxd, Vec3* out) {
   float bd = maxd;
   bool found = false;
   for (int it = 0; it < g.L.nitems; ++it) {
@@ -101,7 +86,7 @@ bool nearest_item(const Player& p, int kind, float maxd, Vec3* out) {
 // Zona appena ripulita con l'esploratore ancora nella capsula: si va a salvarlo (per al massimo
 // 20 secondi, poi avanti), cosi' le prove coprono anche la capsula e le stelle. goal: la casella
 // libera accanto alla capsula piu' vicina; capsule: il centro della capsula.
-bool capsule_goal(const Player& p, Bot& b, Vec3* goal, Vec3* capsule) {
+bool capsule_goal(Game& g, const Player& p, Bot& b, Vec3* goal, Vec3* capsule) {
   if (g.phase != PH_CLEAR || g.L.capsule_dyn < 0 || g.explorer_free) { b.cage_t = 0; return false; }
   const DynCell& dc = g.L.dyn[g.L.capsule_dyn];
   if (dc.hp <= 0.0f || dc.zone != g.zone || ++b.cage_t > 1200) return false;
@@ -121,17 +106,17 @@ bool capsule_goal(const Player& p, Bot& b, Vec3* goal, Vec3* capsule) {
 }
 
 // Si puo' fare un passo da 1,6 m in quella direzione (niente muri, rocce, casse alte)?
-bool step_ok(const Player& p, float dx, float dz) {
-  return walk_clear(p.pos, v3(p.pos.x + dx * 1.6f, 0.0f, p.pos.z + dz * 1.6f), PL_R, false);
+bool step_ok(Game& g, const Player& p, float dx, float dz) {
+  return walk_clear(g, p.pos, v3(p.pos.x + dx * 1.6f, 0.0f, p.pos.z + dz * 1.6f), PL_R, false);
 }
 
 // Gladiatore: dentro il settore del fendente o la corsia della carica mentre si preparano (o mentre
 // corre)? In (ox, oz) la via d'uscita piu' corta: dal settore all'indietro o dal lato piu' vicino,
 // dalla corsia di lato; se da quella parte c'e' un ostacolo, l'altra.
-bool boss_escape(const Player& p, int i, float* ox, float* oz) {
+bool boss_escape(Game& g, const Player& p, int i, float* ox, float* oz) {
   for (int k = 0; k < MAX_MARKERS; ++k) {
     const Marker& m = g.mk[k];
-    if (!m.alive || (m.kind != MK_SWEEP && m.kind != MK_LANE) || m.t < g_lag) continue;
+    if (!m.alive || (m.kind != MK_SWEEP && m.kind != MK_LANE) || m.t < g.session.bot_lag) continue;
     const float vx = p.pos.x - m.pos.x, vz = p.pos.z - m.pos.z;
     float ax, az, bx, bz;                      // la via migliore e l'altra
     if (m.kind == MK_SWEEP) {
@@ -155,7 +140,7 @@ bool boss_escape(const Player& p, int i, float* ox, float* oz) {
       ax = dz * s; az = -dx * s;
       bx = -ax; bz = -az;
     }
-    if (!step_ok(p, ax, az) && step_ok(p, bx, bz)) { ax = bx; az = bz; }
+    if (!step_ok(g, p, ax, az) && step_ok(g, p, bx, bz)) { ax = bx; az = bz; }
     *ox = ax;
     *oz = az;
     return true;
@@ -167,13 +152,13 @@ bool boss_escape(const Player& p, int i, float* ox, float* oz) {
 // Il verso del giro si sceglie dallo spazio libero davanti e da quanto porta verso il centro
 // dell'arena (negli angoli si resta chiusi e lui arriva col fendente); se dietro c'e' un muro non
 // ci si allontana: si scivola di lato attorno a lui.
-void boss_orbit(const Player& p, Bot& b, int i, float range, float* mx, float* mz) {
+void boss_orbit(Game& g, const Player& p, Bot& b, int i, float range, float* mx, float* mz) {
   const Boss& bs = g.boss;
   const float dx = p.pos.x - bs.pos.x, dz = p.pos.z - bs.pos.z, d = fmaxf(sqrtf(dx * dx + dz * dz), 1e-3f);
   const float ux = dx / d, uz = dz / d;
   const float keep = clampf(range + boss_r() + 0.4f - 1.0f, 5.0f, 8.0f);
   float rad = clampf((keep - d) * 0.7f, -1.0f, 1.0f);
-  if (rad > 0.0f && !step_ok(p, ux, uz)) rad = 0.0f;
+  if (rad > 0.0f && !step_ok(g, p, ux, uz)) rad = 0.0f;
   const ZoneDef& z = g.L.zones[g.zone];
   float ex = 0.5f * (z.wx0 + z.wx1) - p.pos.x, ez = 0.5f * (z.wz0 + z.wz1) - p.pos.z;
   const float el = sqrtf(ex * ex + ez * ez);
@@ -188,8 +173,8 @@ void boss_orbit(const Player& p, Bot& b, int i, float range, float* mx, float* m
     const float sx = ux * rad - uz * (float)s * 0.9f, sz = uz * rad + ux * (float)s * 0.9f, sl = sqrtf(sx * sx + sz * sz);
     const float nx = sx / sl, nz = sz / sl;
     float score = (nx * ex + nz * ez) * 0.8f * fminf(el / 8.0f, 1.5f);
-    if (step_ok(p, nx, nz)) score += 2.0f;
-    if (walk_clear(p.pos, v3(p.pos.x + nx * 3.2f, 0.0f, p.pos.z + nz * 3.2f), PL_R, false)) score += 1.0f;
+    if (step_ok(g, p, nx, nz)) score += 2.0f;
+    if (walk_clear(g, p.pos, v3(p.pos.x + nx * 3.2f, 0.0f, p.pos.z + nz * 3.2f), PL_R, false)) score += 1.0f;
     if ((float)s == b.orbit) score += 0.6f;      // senza cambiare a ogni passo
     if (score > best) {
       best = score;
@@ -210,10 +195,10 @@ void boss_orbit(const Player& p, Bot& b, int i, float range, float* mx, float* m
 }
 
 // I comandi del giocatore automatico i in questo fotogramma.
-void bot_one(int i, Pad& pad) {
+void bot_one(Game& g, int i, Pad& pad) {
   {
     memset(&pad, 0, sizeof(pad));
-    Bot& b = B[i];
+    Bot& b = g.session.bot[i];
     if (g.screen != SC_PLAY) {
       // Menu: A ogni tanto (avanti dalle statistiche, pronto nella scelta dei personaggi).
       if (++b.menu_t >= 40) {
@@ -223,7 +208,7 @@ void bot_one(int i, Pad& pad) {
       return;
     }
     if (g.cards_open) {               // scelta delle carte: il gioco e' fermo
-      bot_cards(i, pad);
+      bot_cards(g, i, pad);
       return;
     }
     const Player& p = g.pl[i];
@@ -237,7 +222,7 @@ void bot_one(int i, Pad& pad) {
     Vec3 tp = p.pos, it;
     float td = 1e30f;
     int ttype = 0;
-    const bool have = nearest_target(p, &tp, &td, &ttype);
+    const bool have = nearest_target(g, p, &tp, &td, &ttype);
     bool have_goal = false, jumpy = false, fire = false, to_capsule = false;
     Vec3 goal = p.pos, capsule = p.pos;
     float mx = 0.0f, mz = 0.0f;
@@ -246,21 +231,21 @@ void bot_one(int i, Pad& pad) {
     // Talismano per curarsi; se in 10 secondi non lo prendono (uno su una piattaforma da un lato
     // stretto) lo lasciano stare per 15 secondi.
     if (b.heal_off > 0) b.heal_off--;
-    const bool heal = b.heal_off == 0 && p.hp < p.hp_max * 0.45f && nearest_item(p, IT_TALISMAN, 14.0f, &it);
+    const bool heal = b.heal_off == 0 && p.hp < p.hp_max * 0.45f && nearest_item(g, p, IT_TALISMAN, 14.0f, &it);
     if (!heal) b.heal_t = 0;
     else if (++b.heal_t > 600) { b.heal_t = 0; b.heal_off = 900; }
     if (heal && b.heal_off == 0) {
       goal = it;
       have_goal = true;
       jumpy = it.y > 0.1f && dist2d(it, p.pos) < 3.5f;
-    } else if (p.bombs < pl_bombs_cap(p) && nearest_item(p, IT_BOMB, 5.0f, &it) && (!have || td > 4.0f)) {
+    } else if (p.bombs < pl_bombs_cap(p) && nearest_item(g, p, IT_BOMB, 5.0f, &it) && (!have || td > 4.0f)) {
       goal = it;
       have_goal = true;
-    } else if (nearest_item(p, IT_POWER, 7.0f, &it) && (!have || td > 3.5f)) {   // bonus delle casse (0.5.4)
+    } else if (nearest_item(g, p, IT_POWER, 7.0f, &it) && (!have || td > 3.5f)) {   // bonus delle casse (0.5.4)
       goal = it;
       have_goal = true;
     } else if (g.boss.alive && dist2d(g.boss.pos, p.pos) < 16.0f) {
-      boss_orbit(p, b, i, range, &mx, &mz);   // gladiatore: gli si gira attorno sparando (i mostri si colpiscono lo stesso)
+      boss_orbit(g, p, b, i, range, &mx, &mz);   // gladiatore: gli si gira attorno sparando (i mostri si colpiscono lo stesso)
     } else if (have) {
       const float ux = (tp.x - p.pos.x) / (td > 1e-3f ? td : 1.0f), uz = (tp.z - p.pos.z) / (td > 1e-3f ? td : 1.0f);
       if (--b.strafe_t <= 0) { b.strafe_t = 70; b.strafe = b.strafe > 0.0f ? -1.0f : 1.0f; }
@@ -274,7 +259,7 @@ void bot_one(int i, Pad& pad) {
         mx = -uz * b.strafe;
         mz = ux * b.strafe;
       }
-    } else if (capsule_goal(p, b, &goal, &capsule)) {
+    } else if (capsule_goal(g, p, b, &goal, &capsule)) {
       have_goal = true;
       to_capsule = true;
     } else if (g.phase == PH_CLEAR && g.zone + 1 < g.L.nzones) {
@@ -287,17 +272,17 @@ void bot_one(int i, Pad& pad) {
     }
 
     if (have_goal && dist2d(goal, p.pos) > 0.5f) {
-      if (walk_clear(p.pos, goal, PL_R, false)) {
+      if (walk_clear(g, p.pos, goal, PL_R, false)) {
         mx = goal.x - p.pos.x;
         mz = goal.z - p.pos.z;
       } else {
         if (!b.field_ok || --b.field_t <= 0 || dist2d(goal, b.goal) > 1.5f) {
-          flow_build(b.field, &goal, 1, -1);
+          flow_build(g, b.field, &goal, 1, -1);
           b.field_ok = true;
           b.field_t = 30;
           b.goal = goal;
         }
-        if (!flow_dir(b.field, p.pos.x, p.pos.z, &mx, &mz)) {
+        if (!flow_dir(g, b.field, p.pos.x, p.pos.z, &mx, &mz)) {
           mx = goal.x - p.pos.x;
           mz = goal.z - p.pos.z;
         }
@@ -306,7 +291,7 @@ void bot_one(int i, Pad& pad) {
     // Pericoli segnati a terra: fendente e carica del gladiatore prima di tutto, poi giavellotti in
     // arrivo e crepe che stanno per spaccarsi.
     float ex = 0.0f, ez = 0.0f;
-    const bool escape = boss_escape(p, i, &ex, &ez);
+    const bool escape = boss_escape(g, p, i, &ex, &ez);
     if (escape) {
       mx = ex;
       mz = ez;
@@ -314,7 +299,7 @@ void bot_one(int i, Pad& pad) {
       float ddx = 0.0f, ddz = 0.0f;
       for (int k = 0; k < MAX_MARKERS; ++k) {
         const Marker& m = g.mk[k];
-        if (!m.alive || m.t < g_lag) continue;
+        if (!m.alive || m.t < g.session.bot_lag) continue;
         const bool lob = m.kind == MK_LOB, root = m.kind == MK_ROOT && m.t < m.fire_at;
         if (!lob && !root) continue;
         const float d = dist2d(p.pos, m.pos);
@@ -382,7 +367,7 @@ void bot_one(int i, Pad& pad) {
       // cosi' quando parte la gittata ha gia' seguito la levetta (come farebbe un giocatore).
       if (cd.aim_sp == AIM_LOB && p.charge >= cost * 0.85f) k = clampf(td / cd.sp_range, 0.2f, 1.0f);
       if (dl > 1e-3f) {
-        const float on = aim_tune(i).on;
+        const float on = aim_tune(g, i).on;
         const float mag = fminf(1.0f, on + k * (AIM_FULL - on) + 0.02f);
         float ax = dx / dl, az = dz / dl * AIM_FORESHORTEN;
         const float al = sqrtf(ax * ax + az * az);
@@ -394,7 +379,7 @@ void bot_one(int i, Pad& pad) {
       bool sp = false;
       if (p.charge >= cost) {
         switch (p.ch) {
-          case CH_MARZIO: sp = monsters_near(p.pos, 3.5f) >= 2; break;
+          case CH_MARZIO: sp = monsters_near(g, p.pos, 3.5f) >= 2; break;
           case CH_MOCHI: sp = td > 1.5f && td < 6.0f; break;
           default: sp = td < cd.sp_range; break;
         }
@@ -408,7 +393,7 @@ void bot_one(int i, Pad& pad) {
     if (to_capsule && !have && dist2d(capsule, p.pos) < range) {
       const float dx = capsule.x - p.pos.x, dz = capsule.z - p.pos.z, dl = sqrtf(dx * dx + dz * dz);
       if (dl > 1e-3f) {
-        const float on = aim_tune(i).on, mag = fminf(1.0f, on + 0.5f * (AIM_FULL - on) + 0.02f);
+        const float on = aim_tune(g, i).on, mag = fminf(1.0f, on + 0.5f * (AIM_FULL - on) + 0.02f);
         const float ax = dx / dl, az = dz / dl * AIM_FORESHORTEN, al = sqrtf(ax * ax + az * az);
         pad.rx = ax / al * mag;
         pad.ry = az / al * mag;
@@ -416,7 +401,7 @@ void bot_one(int i, Pad& pad) {
       }
     }
     if (fire) pad.btn |= 1u << PAD_R;
-    const bool bomb = p.bombs > 0 && monsters_near(p.pos, 2.6f) >= 2;
+    const bool bomb = p.bombs > 0 && monsters_near(g, p.pos, 2.6f) >= 2;
     if (bomb && !b.a_prev) pad.btn |= 1u << PAD_L2;
     b.a_prev = bomb && !b.a_prev;
   }
@@ -424,15 +409,15 @@ void bot_one(int i, Pad& pad) {
 
 }  // namespace
 
-void bot_reset(void) { memset(B, 0, sizeof(B)); }
-void bot_set_lag(int frames) { g_lag = frames > 0 ? frames : 0; }
+void bot_reset(Game& g) { memset(g.session.bot, 0, sizeof(g.session.bot)); }
+void bot_set_lag(Game& g, int frames) { g.session.bot_lag = frames > 0 ? frames : 0; }
 
-void game_bot_pads(Pad pads[MAX_PLAYERS], int n) {
+void game_bot_pads(Game& g, Pad pads[MAX_PLAYERS], int n) {
   if (n > MAX_PLAYERS) n = MAX_PLAYERS;
   g.bots = n;
-  for (int i = 0; i < n; ++i) bot_one(i, pads[i]);
+  for (int i = 0; i < n; ++i) bot_one(g, i, pads[i]);
 }
 
-void game_bot_pad(int player, Pad* out) {
-  if (player >= 0 && player < MAX_PLAYERS) bot_one(player, *out);
+void game_bot_pad(Game& g, int player, Pad* out) {
+  if (player >= 0 && player < MAX_PLAYERS) bot_one(g, player, *out);
 }

@@ -41,7 +41,6 @@ const CardDef CARDS[NCARDS] = {
 
 namespace {
 
-bool g_on = true;                       // game_set_cards_enabled: vale per tutta la sessione
 
 const float BURN_DMG = 1.0f;            // ogni BURN_EVERY fotogrammi: 4 al secondo per 3 secondi
 const int BURN_FRAMES = 180, BURN_EVERY = 15;
@@ -55,66 +54,66 @@ const int SHIELD_INVULN = 45;           // dopo lo scudo: niente secondo colpo d
 // --- proposta ---------------------------------------------------------------------
 
 // Un compagno con il personaggio ch ancora in gioco (chi e' senza vite non conta: non rientra).
-bool partner(int i, int ch) {
+bool partner(Game& g, int i, int ch) {
   for (int j = 0; j < MAX_PLAYERS; ++j)
     if (j != i && g.pl[j].active && !g.pl[j].out && g.pl[j].ch == ch) return true;
   return false;
 }
 
 // Chi tiene VAPORE (vale per tutta la squadra): chi ha colpito, se ce l'ha, se no il primo.
-int vapor_owner(int hitter) {
+int vapor_owner(Game& g, int hitter) {
   if (hitter >= 0 && hitter < MAX_PLAYERS && g.pl[hitter].active && has_card(g.pl[hitter], CA_VAPORE)) return hitter;
   for (int j = 0; j < MAX_PLAYERS; ++j)
     if (g.pl[j].active && has_card(g.pl[j], CA_VAPORE)) return j;
   return -1;
 }
 
-bool eligible(int i, int c) {
+bool eligible(Game& g, int i, int c) {
   const Player& p = g.pl[i];
   if (has_card(p, c)) return false;
   switch (c) {
-    case CA_GENEROSO: return count_in_play() >= 2;
+    case CA_GENEROSO: return count_in_play(g) >= 2;
     case CA_PERFORANTE: case CA_RIMBALZO: return p.ch != CH_ZOLFO;   // la fiamma attraversa gia'
-    case CA_COLPI_FUOCO: return p.ch == CH_ASTRO && partner(i, CH_ZOLFO);
-    case CA_COLPI_GELO: return p.ch == CH_ASTRO && partner(i, CH_MARZIO);
-    case CA_SCHEGGE_FUOCO: return p.ch == CH_MOCHI && partner(i, CH_ZOLFO);
-    case CA_SCHEGGE_GELO: return p.ch == CH_MOCHI && partner(i, CH_MARZIO);
+    case CA_COLPI_FUOCO: return p.ch == CH_ASTRO && partner(g, i, CH_ZOLFO);
+    case CA_COLPI_GELO: return p.ch == CH_ASTRO && partner(g, i, CH_MARZIO);
+    case CA_SCHEGGE_FUOCO: return p.ch == CH_MOCHI && partner(g, i, CH_ZOLFO);
+    case CA_SCHEGGE_GELO: return p.ch == CH_MOCHI && partner(g, i, CH_MARZIO);
     case CA_VAPORE:
-      if (vapor_owner(-1) >= 0) return false;                        // c'e' gia' per tutti
-      return (p.ch == CH_MARZIO && partner(i, CH_ZOLFO)) || (p.ch == CH_ZOLFO && partner(i, CH_MARZIO));
+      if (vapor_owner(g, -1) >= 0) return false;                        // c'e' gia' per tutti
+      return (p.ch == CH_MARZIO && partner(g, i, CH_ZOLFO)) || (p.ch == CH_ZOLFO && partner(g, i, CH_MARZIO));
     default: return true;
   }
 }
 
 // Toglie a caso una carta dall'elenco (una sola chiamata al generatore).
-uint8_t draw_from(uint8_t* list, int* n) {
-  const int k = (int)(rng_next() % (uint32_t)*n);
+uint8_t draw_from(Game& g, uint8_t* list, int* n) {
+  const int k = (int)(rng_next(g) % (uint32_t)*n);
   const uint8_t c = list[k];
   list[k] = list[--*n];
   return c;
 }
 
-void make_offer(int i) {
+void make_offer(Game& g, int i) {
   CardOffer& o = g.offer[i];
   memset(&o, 0, sizeof(o));
   uint8_t basic[NCARDS], combo[NCARDS];
   int nb = 0, nc = 0;
   for (int c = 1; c < NCARDS; ++c) {
-    if (!eligible(i, c)) continue;
+    if (!eligible(g, i, c)) continue;
     if (CARDS[c].combo) combo[nc++] = (uint8_t)c;
     else basic[nb++] = (uint8_t)c;
   }
   // Con almeno una combo possibile, meta' delle volte una delle tre e' una combo.
   bool one_combo = false;
-  if (nc > 0) one_combo = rng_f() < 0.5f;
-  while (o.n < (one_combo ? 2 : 3) && nb > 0) o.card[o.n++] = draw_from(basic, &nb);
+  if (nc > 0) one_combo = rng_f(g) < 0.5f;
+  while (o.n < (one_combo ? 2 : 3) && nb > 0) o.card[o.n++] = draw_from(g, basic, &nb);
   bool got_combo = false;
   while (o.n < 3 && nc > 0 && (one_combo || nb == 0)) {
-    o.card[o.n++] = draw_from(combo, &nc);
+    o.card[o.n++] = draw_from(g, combo, &nc);
     got_combo = true;
   }
   if (got_combo && o.n > 1) {          // la combo non sempre in fondo
-    const int pos = (int)(rng_next() % (uint32_t)o.n);
+    const int pos = (int)(rng_next(g) % (uint32_t)o.n);
     const uint8_t t = o.card[pos];
     o.card[pos] = o.card[o.n - 1];
     o.card[o.n - 1] = t;
@@ -128,7 +127,7 @@ void make_offer(int i) {
   plat_log("carte per G%d (%s): %s", i + 1, CHARS[g.pl[i].ch].name, o.n ? buf : "nessuna");
 }
 
-void card_take(int i, int c) {
+void card_take(Game& g, int i, int c) {
   Player& p = g.pl[i];
   p.cards |= 1u << c;
   switch (c) {
@@ -207,7 +206,7 @@ void card_backs(Hud* h, float cx, float cy, float w, float alpha = 1.0f) {
 
 // Riquadro di un giocatore: "G1 ASTRO", le tre carte, la descrizione di quella col cursore e in
 // fondo le carte gia' prese; dopo la scelta "PRESA!". Con h NULL misura soltanto (prove).
-PanelFit draw_panel(Hud* h, int i, int ch, const CardOffer& o, uint32_t owned, bool others, float px, float pw) {
+PanelFit draw_panel(Game& g, Hud* h, int i, int ch, const CardOffer& o, uint32_t owned, bool others, float px, float pw) {
   PanelFit fit = { 0.0f, 0, false, false, false };
   const bool narrow = pw < 180.0f;
   const float pad = narrow ? 12.0f : 14.0f;    // nei riquadri stretti (4 giocatori) un po' di posto in piu'
@@ -342,10 +341,10 @@ void panel_geom(int n, int k, float* px, float* pw) {
 
 // --- interfaccia ----------------------------------------------------------------------
 
-void game_set_cards_enabled(bool on) { g_on = on; }
-bool cards_enabled(void) { return g_on; }
+void game_set_cards_enabled(Game& g, bool on) { g.session.cards_on = on; }
+bool cards_enabled(Game& g) { return g.session.cards_on; }
 
-void cards_map_start(void) {
+void cards_map_start(Game& g) {
   for (int i = 0; i < MAX_PLAYERS; ++i) {
     Player& p = g.pl[i];
     p.cards = 0;
@@ -356,16 +355,16 @@ void cards_map_start(void) {
   g.cards_t = g.cards_due = 0;
 }
 
-void cards_offer(void) {
+void cards_offer(Game& g) {
   g.cards_due = 0;
-  if (!g_on || g.screen != SC_PLAY) return;
+  if (!g.session.cards_on || g.screen != SC_PLAY) return;
   bool any = false;
   for (int i = 0; i < MAX_PLAYERS; ++i) {
     if (!g.pl[i].active || g.pl[i].out) {     // senza vite: niente carte, non rientra in questa mappa
       memset(&g.offer[i], 0, sizeof(CardOffer));
       continue;
     }
-    make_offer(i);
+    make_offer(g, i);
     any |= g.offer[i].on;
   }
   if (!any) return;
@@ -376,16 +375,16 @@ void cards_offer(void) {
   plat_log("carte: si sceglie (mappa %d, zona %d)", g.map_idx + 1, (g.phase == PH_CLEAR ? g.zone + 1 : g.zone) + 1);
 }
 
-void cards_zone_cleared(void) {
-  if (g_on) g.cards_due = CARDS_CLEAR_DELAY;
+void cards_zone_cleared(Game& g) {
+  if (g.session.cards_on) g.cards_due = CARDS_CLEAR_DELAY;
 }
 
-void cards_zone_start(void) {
+void cards_zone_start(Game& g) {
   for (int i = 0; i < MAX_PLAYERS; ++i)
     if (g.pl[i].active && has_card(g.pl[i], CA_SCUDO)) g.pl[i].shield = true;
 }
 
-void cards_update(void) {
+void cards_update(Game& g) {
   bool all = true;
   // Rete di sicurezza: un pad spento non deve tenere fermo il gioco per sempre (la pausa qui non si apre).
   const bool late = ++g.cards_age >= CARDS_TIMEOUT;
@@ -399,7 +398,7 @@ void cards_update(void) {
     // 0.5.4: prima il banner "RITIRA LE TUE CARTE"; ognuno preme A (una pressione nuova, dopo
     // CARDS_BANNER_MIN fotogrammi) e vede le sue tre carte. Quella A non sceglie.
     if (!o.shown) {
-      if (late || (g.cards_age > CARDS_BANNER_MIN && (pad_pressed(i, PAD_A) || g.start_tap[i]))) {
+      if (late || (g.cards_age > CARDS_BANNER_MIN && (pad_pressed(g, i, PAD_A) || g.start_tap[i]))) {
         o.shown = true;
         snd_ui(SND_CARD_OPEN);
       }
@@ -410,11 +409,11 @@ void cards_update(void) {
     }
     if (g.in[i].nav == NAV_UP) { o.sel = (int8_t)((o.sel + o.n - 1) % o.n); snd_ui(SND_UI_MOVE); }
     if (g.in[i].nav == NAV_DOWN) { o.sel = (int8_t)((o.sel + 1) % o.n); snd_ui(SND_UI_MOVE); }
-    if (pad_pressed(i, PAD_A) || g.start_tap[i] || late) {
+    if (pad_pressed(g, i, PAD_A) || g.start_tap[i] || late) {
       if (late) plat_log("G%d non ha scelto entro un minuto: prende quella col cursore", i + 1);
       o.done = true;
       snd_ui(SND_CARD_PICK);
-      card_take(i, o.card[o.sel]);
+      card_take(g, i, o.card[o.sel]);
     } else {
       all = false;
     }
@@ -432,7 +431,7 @@ void cards_update(void) {
 
 // 0.5.4: prima delle carte, finche' nessuno ha premuto A, un banner al centro con le carte coperte:
 // "RITIRA LE TUE CARTE", sotto A per scegliere. Entra in un attimo, sopra il gioco fermo.
-void cards_banner(Hud* h) {
+void cards_banner(Game& g, Hud* h) {
   // Sopra il centro dello schermo, dove di solito c'e' il gruppo.
   const float a = fminf(1.0f, (float)(g.cards_age + 1) / 10.0f), cy = 160.0f;
   ui::overlay(h, 0.55f * a);
@@ -448,7 +447,7 @@ void cards_banner(Hud* h) {
   ui::text(h, x + 30.0f, cy + 30.0f, HF_S15, hud_a(ui::TX, a), sub, 0.5f);
 }
 
-void cards_hud(Hud* h) {
+void cards_hud(Game& g, Hud* h) {
   int who[MAX_PLAYERS], n = 0;
   bool waiting = false, opened = false;
   for (int i = 0; i < MAX_PLAYERS; ++i)
@@ -458,7 +457,7 @@ void cards_hud(Hud* h) {
       opened |= g.offer[i].shown || g.offer[i].done;
     }
   if (!opened) {
-    cards_banner(h);
+    cards_banner(g, h);
     return;
   }
   ui::overlay(h, 0.72f);
@@ -468,19 +467,19 @@ void cards_hud(Hud* h) {
     const int i = who[k];
     float px, pw;
     panel_geom(n, k, &px, &pw);
-    draw_panel(h, i, g.pl[i].ch, g.offer[i], g.pl[i].cards, waiting, px, pw);
+    draw_panel(g, h, i, g.pl[i].ch, g.offer[i], g.pl[i].cards, waiting, px, pw);
   }
   const char* it[4] = { "↑↓", tr("sceglie"), "A", tr("prende") };
   ui::footer(h, it, 4);
 }
 
-void card_lose_all(int i) {
+void card_lose_all(Game& g, int i) {
   Player& p = g.pl[i];
   p.cards = 0;
   p.shield = false;
 }
 
-uint8_t card_shot_fx(int i, int kind) {
+uint8_t card_shot_fx(Game& g, int i, int kind) {
   if (i < 0 || i >= MAX_PLAYERS) return 0;
   const Player& p = g.pl[i];
   uint8_t fx = 0;
@@ -494,7 +493,7 @@ uint8_t card_shot_fx(int i, int kind) {
   return fx;
 }
 
-void card_shot_mods(int i, Shot* s) {
+void card_shot_mods(Game& g, int i, Shot* s) {
   const Player& p = g.pl[i];
   if (!p.cards) return;
   if (has_card(p, CA_PESANTI)) s->dmg *= 1.25f;
@@ -502,17 +501,17 @@ void card_shot_mods(int i, Shot* s) {
     if (has_card(p, CA_PERFORANTE)) s->pierce = 1;
     if (has_card(p, CA_RIMBALZO)) s->bounce = 1;
   }
-  s->fx = card_shot_fx(i, s->kind);
+  s->fx = card_shot_fx(g, i, s->kind);
 }
 
-void card_shot_hit(int k, const Shot& s) {
+void card_shot_hit(Game& g, int k, const Shot& s) {
   Monster& m = g.mo[k];
   // VAPORE: prima si guarda com'era il mostro, poi si aggiunge quello che porta questo colpo.
-  if (s.kind == SK_FLAME || (s.fx & SFX_BURN)) card_elem_hit(k, s.owner, EL_FIRE);
-  if (m.alive && (s.kind == SK_FROST || (s.fx & SFX_SLOW))) card_elem_hit(k, s.owner, EL_SNOW);
+  if (s.kind == SK_FLAME || (s.fx & SFX_BURN)) card_elem_hit(g, k, s.owner, EL_FIRE);
+  if (m.alive && (s.kind == SK_FROST || (s.fx & SFX_SLOW))) card_elem_hit(g, k, s.owner, EL_SNOW);
   if (!m.alive) return;
   if (s.fx & SFX_BURN) {
-    if (m.burn_t <= 0) puff(monster_center(m), PK_FLAME, PC_FIRE, v3(0, 1.5f, 0), 0.8f, 16);
+    if (m.burn_t <= 0) puff(g, monster_center(m), PK_FLAME, PC_FIRE, v3(0, 1.5f, 0), 0.8f, 16);
     m.burn_t = BURN_FRAMES;            // si rinnova, non si somma
     m.burn_by = s.owner;
   }
@@ -521,15 +520,15 @@ void card_shot_hit(int k, const Shot& s) {
       m.slow_k = ICE_SLOW;
       if (m.slow_t < ICE_FRAMES) m.slow_t = ICE_FRAMES;
     }
-    puff(s.pos, PK_SNOW, PC_SNOW, v3(0, 0.6f, 0), 0.8f, 14);
+    puff(g, s.pos, PK_SNOW, PC_SNOW, v3(0, 0.6f, 0), 0.8f, 14);
   }
 }
 
-void card_elem_hit(int k, int owner, int elem) {
+void card_elem_hit(Game& g, int k, int owner, int elem) {
   Monster& m = g.mo[k];
   if (!m.alive || m.rise > 0 || m.vapor_t > 0) return;
   if (elem == EL_FIRE ? m.slow_t <= 0 : (elem != EL_SNOW || m.burn_t <= 0)) return;
-  const int by = vapor_owner(owner);
+  const int by = vapor_owner(g, owner);
   if (by < 0) return;
   // Il mostro rallentato che brucia scoppia in vapore: danni a chi gli sta intorno (lui compreso).
   m.vapor_t = VAPOR_CD;
@@ -540,56 +539,56 @@ void card_elem_hit(int k, int owner, int elem) {
     if (!o.alive || o.rise > 0 || dist2d(o.pos, at) - monster_r(o) > VAPOR_R) continue;
     Vec3 dir = v3(o.pos.x - at.x, 0.0f, o.pos.z - at.z);
     dir = length(dir) > 1e-3f ? normalize(dir) : v3(0, 0, 0);
-    damage_monster(j, VAPOR_DMG, by, dir, 2.0f, false);
+    damage_monster(g, j, VAPOR_DMG, by, dir, 2.0f, false);
     hit++;
   }
   for (int q = 0; q < 10; ++q) {         // nuvola bianca che si allarga e sale
     const float a = D_TWO_PI * (float)q / 10.0f;
-    puff(c, PK_PUFF, PC_WHITE, v3(d_cos(a) * 3.4f, 1.2f + 0.3f * (float)(q & 1), d_sin(a) * 3.4f), 2.4f, 28);
+    puff(g, c, PK_PUFF, PC_WHITE, v3(d_cos(a) * 3.4f, 1.2f + 0.3f * (float)(q & 1), d_sin(a) * 3.4f), 2.4f, 28);
   }
-  puff(c + v3(0, 0.3f, 0), PK_PUFF, PC_WHITE, v3(0, 2.6f, 0), 3.4f, 34);
-  puff(c + v3(0, 0.1f, 0), PK_PUFF, PC_SNOW, v3(0, 1.6f, 0), 3.0f, 30);
-  add_shake(0.06f);
-  snd_at(SND_EXPLODE_SMALL, at);
+  puff(g, c + v3(0, 0.3f, 0), PK_PUFF, PC_WHITE, v3(0, 2.6f, 0), 3.4f, 34);
+  puff(g, c + v3(0, 0.1f, 0), PK_PUFF, PC_SNOW, v3(0, 1.6f, 0), 3.0f, 30);
+  add_shake(g, 0.06f);
+  snd_at(g, SND_EXPLODE_SMALL, at);
   plat_log("vapore! un mostro scoppia (G%d): %d colpiti", by + 1, hit);
 }
 
-void card_burn_tick(int k) {
+void card_burn_tick(Game& g, int k) {
   Monster& m = g.mo[k];
   m.burn_t--;
   if (m.burn_t % 5 == 0) {             // fiammelle che salgono dal mostro
     const float a = (float)(g.tick + (unsigned)k * 7u) * 1.7f, r = monster_r(m) * 0.7f;
-    puff(monster_center(m) + v3(d_cos(a) * r, 0.15f, d_sin(a) * r), PK_FLAME, PC_FIRE, v3(0, 1.6f, 0), 1.2f, 16);
+    puff(g, monster_center(m) + v3(d_cos(a) * r, 0.15f, d_sin(a) * r), PK_FLAME, PC_FIRE, v3(0, 1.6f, 0), 1.2f, 16);
   }
   if (m.burn_t % BURN_EVERY != 0) return;
   const int by = m.burn_by >= 0 && m.burn_by < MAX_PLAYERS && g.pl[m.burn_by].active ? m.burn_by : -1;
-  damage_monster(k, BURN_DMG, by, v3(0, 0, 0), 0.0f, false);     // le bruciature non caricano lo speciale
-  if (m.alive) card_elem_hit(k, by, EL_FIRE);
+  damage_monster(g, k, BURN_DMG, by, v3(0, 0, 0), 0.0f, false);     // le bruciature non caricano lo speciale
+  if (m.alive) card_elem_hit(g, k, by, EL_FIRE);
 }
 
-bool card_shield_hit(int i) {
+bool card_shield_hit(Game& g, int i) {
   Player& p = g.pl[i];
   if (!p.shield) return false;
   p.shield = false;
   p.invuln = SHIELD_INVULN;
   p.sq_v -= 1.5f;
   const Vec3 c = player_chest(p);
-  burst(c, 12, i, 3.5f);
-  burst(c, 6, PC_WHITE, 2.5f);
-  snd_at(SND_CAPSULE_HIT, p.pos);
+  burst(g, c, 12, i, 3.5f);
+  burst(g, c, 6, PC_WHITE, 2.5f);
+  snd_at(g, SND_CAPSULE_HIT, p.pos);
   plat_log("giocatore %d: lo scudo ferma il colpo (mappa %d, zona %d)", i + 1, g.map_idx + 1, g.zone + 1);
   return true;
 }
 
-void card_special_used(int i) {
+void card_special_used(Game& g, int i) {
   const Player& p = g.pl[i];
   if (!has_card(p, CA_GENEROSO)) return;
   int n = 0;
   for (int j = 0; j < MAX_PLAYERS; ++j) {
     const Player& q = g.pl[j];
     if (j == i || !q.active || !q.alive || q.hp >= q.hp_max || dist2d(q.pos, p.pos) > GENEROUS_R) continue;
-    heal_player(j, GENEROUS_HP);
-    burst(player_chest(q), 6, PC_GREEN, 2.0f);
+    heal_player(g, j, GENEROUS_HP);
+    burst(g, player_chest(q), 6, PC_GREEN, 2.0f);
     n++;
   }
   if (n) plat_log("giocatore %d: speciale generoso, %d compagni curati", i + 1, n);
@@ -597,7 +596,7 @@ void card_special_used(int i) {
 
 // Prove: ogni carta, scelta o appena presa, sta nel suo riquadro con 1, 2, 3 e 4 giocatori, anche
 // con cinque carte lunghe gia' prese; e il nome di ogni eroe in alto.
-bool cards_layout_ok(char* why, int n, bool all) {
+bool cards_layout_ok(Game& g, char* why, int n, bool all) {
   why[0] = 0;
   bool good = true;
   // Carte gia' prese: i nomi piu' lunghi, fino a 5 (una mappa personalizzata ha al massimo 6 zone,
@@ -626,7 +625,7 @@ bool cards_layout_ok(char* why, int n, bool all) {
           o.shown = st >= 1;
           o.done = st == 2;
           const char* what = st == 0 ? " (coperte)" : (st == 2 ? " (presa)" : "");
-          const PanelFit f = draw_panel(NULL, 3, ch, o, owned & ~(1u << c), true, px, pw);
+          const PanelFit f = draw_panel(g, NULL, 3, ch, o, owned & ~(1u << c), true, px, pw);
           if (f.cut || f.name_cut || f.head_cut || f.desc_lines > 6 || f.bottom > PANEL_Y + PANEL_H) {
             const char* hc = f.head_cut ? ", nome dell'eroe tagliato" : "";
             if (good)

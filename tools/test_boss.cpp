@@ -23,6 +23,8 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+static Game& g = *game_create();   // the game under test (the game keeps no global state: the test owns it)
+
 static int g_fail = 0;
 static Pad g_pads[MAX_PLAYERS];
 static const char* g_shots;             // --immagini
@@ -43,7 +45,7 @@ static void check(bool ok, const char* what) {
 }
 
 static void step(int n = 1) {
-  for (int k = 0; k < n; ++k) game_update(g_pads);
+  for (int k = 0; k < n; ++k) game_update(g, g_pads);
 }
 
 static int boss_map(void) {
@@ -65,7 +67,7 @@ static const char* save_dir(const char* name) {
 static void quiet(void) {
   memset(g.spawn_left, 0, sizeof(g.spawn_left));
   g.spawn_wait = 1000000;
-  monsters_clear();
+  monsters_clear(g);
   memset(g.sh, 0, sizeof(g.sh));
   memset(g.mk, 0, sizeof(g.mk));
 }
@@ -73,9 +75,9 @@ static void quiet(void) {
 // L'arena con n giocatori (personaggi chars), senza carte; il boss non attacca da solo (pausa
 // lunghissima) finche' la prova non lo vuole.
 static void arena(int n, const char* chars) {
-  game_init();
+  game_init(g);
   memset(g_pads, 0, sizeof(g_pads));
-  game_quick_start(boss_map(), n, chars);
+  game_quick_start(g, boss_map(), n, chars);
   step(3);
   quiet();
   for (int i = 0; i < MAX_PLAYERS; ++i) g.pl[i].invuln = 0;
@@ -136,7 +138,7 @@ static void shot(const char* name) {
   if (!g_shots) return;
   static Hud hud;
   FrameDesc fd{};
-  game_build_frame(&fd, 640, 480, &hud);
+  game_build_frame(g, &fd, 640, 480, &hud);
   RenderStats st;
   const uint32_t* fb = swr_render(&fd, &st);
   char path[512];
@@ -176,12 +178,12 @@ static void test_walk(void) {
   const float v = dist2d(a, g.boss.pos) / (30.0f * DT), d1 = dist2d(g.boss.pos, g.pl[0].pos);
   const float face = fabsf(d_wrap_pi(g.boss.face - yaw_to(g.boss.pos, g.pl[0].pos)));
   snprintf(buf, sizeof(buf), "in 2 secondi da %.1f a %.1f m, a %.2f m/s (fase 1: %.1f), guardandolo (%.2f rad)", (double)d0, (double)d1,
-           (double)v, (double)boss_speed(), (double)face);
+           (double)v, (double)boss_speed(g), (double)face);
   check(d0 - d1 > 3.6f && fabsf(v - 2.4f) < 0.15f && face < 0.15f && g.boss.act == BA_NONE, buf);
   g.boss.stage = 1;
-  const float v1 = boss_speed();
+  const float v1 = boss_speed(g);
   g.boss.stage = 2;
-  const float v2 = boss_speed();
+  const float v2 = boss_speed(g);
   g.boss.stage = 0;
   snprintf(buf, sizeof(buf), "piu' svelto a ogni fase: %.1f e %.1f m/s (gli eroi da 4,7 a 5)", (double)v1, (double)v2);
   check(v1 > 2.65f && v1 < 2.75f && v2 > 2.95f && v2 < 3.05f && v2 < CHARS[CH_MOCHI].speed, buf);
@@ -238,7 +240,7 @@ static void test_sweep(void) {
   g.boss.target = 0;
   g.boss.target_t = 0;
   const float h0 = g.pl[0].hp, h1 = g.pl[1].hp;
-  check(boss_force_act(BA_SWEEP), "comincia il fendente");
+  check(boss_force_act(g, BA_SWEEP), "comincia il fendente");
   const int wind = g.boss.wind;
   const Marker* m = find_marker(MK_SWEEP);
   snprintf(buf, sizeof(buf), "settore rosso a terra verso il bersaglio (%d fotogrammi di preparazione)", wind);
@@ -262,7 +264,7 @@ static void test_sweep(void) {
   put(1, c.x - 3.0f * d_sin(1.9f), c.z + 3.0f * d_cos(1.9f));
   g.boss.stage = 2;
   g.boss.target = 0;
-  boss_force_act(BA_SWEEP);
+  boss_force_act(g, BA_SWEEP);
   g.boss.act_yaw = 0.0f;              // il settore verso sud: uno a 75 gradi, l'altro a 110
   const int w2 = g.boss.wind;
   const float a0 = g.pl[0].hp, a1 = g.pl[1].hp;
@@ -281,7 +283,7 @@ static void test_rush(void) {
     put(0, s.x, s.z + 9.0f);
     g.boss.target = 0;
     const float h0 = g.pl[0].hp;
-    boss_force_act(BA_RUSH);
+    boss_force_act(g, BA_RUSH);
     const Marker* m = find_marker(MK_LANE);
     const float lane = g.boss.lane;
     const int wind = g.boss.wind;
@@ -322,7 +324,7 @@ static void test_crash(void) {
   put(0, s.x + 8.0f, s.z);            // verso est: la colonna o il muro dell'arena
   g.pl[0].invuln = 100000;
   g.boss.target = 0;
-  boss_force_act(BA_RUSH);
+  boss_force_act(g, BA_RUSH);
   const Marker* m = find_marker(MK_LANE);
   const bool crash = g.boss.crash && m && m->crash;
   const float lane = g.boss.lane;
@@ -332,12 +334,12 @@ static void test_crash(void) {
   snprintf(buf, sizeof(buf), "la corsia finisce contro un ostacolo dopo %.1f m: dopo %d fotogrammi e' stordito (\"STORDITO!\")", (double)lane, f);
   check(crash && g.boss.act == BA_STUN && has_float("STORDITO!") && !fits(ahead.x, ahead.z, boss_r()), buf);
   const float hp0 = g.boss.hp;
-  damage_boss(100.0f, 0, false);
+  damage_boss(g, 100.0f, 0, false);
   const float stun_dmg = hp0 - g.boss.hp;
   int t = 1;
   for (; t < 300 && g.boss.act == BA_STUN; ++t) step();
   const float hp1 = g.boss.hp;
-  damage_boss(100.0f, 0, false);
+  damage_boss(g, 100.0f, 0, false);
   snprintf(buf, sizeof(buf), "stordito per %d fotogrammi: 100 di colpo ne tolgono %.0f, dopo %.0f", t, (double)stun_dmg, (double)(hp1 - g.boss.hp));
   check(t >= BOSS_STUN_FRAMES && t <= BOSS_STUN_FRAMES + 2 && fabsf(stun_dmg - 150.0f) < 0.01f && fabsf(hp1 - g.boss.hp - 100.0f) < 0.01f, buf);
 }
@@ -351,30 +353,30 @@ static void test_stages(void) {
   snprintf(buf, sizeof(buf), "a 2/3 della vita: fase %d, ruggisce, \"%s\"", b.stage + 1, g.msg);
   check(b.stage == 1 && b.roar > 0 && !strcmp(g.msg, "SI ARRABBIA!"), buf);
   const float hp0 = b.hp;
-  damage_boss(100.0f, 0, false);
+  damage_boss(g, 100.0f, 0, false);
   snprintf(buf, sizeof(buf), "mentre ruggisce 100 di colpo ne tolgono %.0f", (double)(hp0 - b.hp));
   check(fabsf(hp0 - b.hp - 25.0f) < 0.01f, buf);
   step(70);
   const bool calls = b.act == BA_SUMMON;
   step(40);
-  const int n1 = count_monsters();
+  const int n1 = count_monsters(g);
   snprintf(buf, sizeof(buf), "poi chiama i rinforzi: %d mostri dalle botole", n1);
   check(calls && n1 >= 3 && n1 <= 10, buf);
   // Altri mostri in campo: il massimo resta 10.
-  for (int k = 0; k < 6; ++k) monster_spawn(MO_SCARABEO, false, 0);
+  for (int k = 0; k < 6; ++k) monster_spawn(g, MO_SCARABEO, false, 0);
   for (int k = 0; k < 400 && b.act != BA_NONE; ++k) step();
   b.cd = 1000000;
   b.hp = b.hp_max * 0.32f;
   step();
   const bool roar2 = b.stage == 2 && b.roar > 0 && !strcmp(g.msg, "È FURIOSO!");
   step(115);
-  snprintf(buf, sizeof(buf), "a 1/3: fase %d (\"È FURIOSO!\"), mostri in campo %d (al massimo 10)", b.stage + 1, count_monsters());
-  check(roar2 && count_monsters() <= 10, buf);
+  snprintf(buf, sizeof(buf), "a 1/3: fase %d (\"È FURIOSO!\"), mostri in campo %d (al massimo 10)", b.stage + 1, count_monsters(g));
+  check(roar2 && count_monsters(g) <= 10, buf);
   // Un attacco a meta' non si interrompe: la fase cambia quando e' finito.
   arena(1, "0");
   put(0, g.boss.pos.x, g.boss.pos.z + 3.0f);
   g.boss.target = 0;
-  boss_force_act(BA_SWEEP);
+  boss_force_act(g, BA_SWEEP);
   g.boss.hp = g.boss.hp_max * 0.6f;
   step(5);
   const bool waits = g.boss.stage == 0 && g.boss.act == BA_SWEEP;
@@ -405,7 +407,7 @@ static void test_target(void) {
   check(first && kept && g.boss.target == 1 && g.boss.target_t < 5, buf);
   // G1 lontano lo picchia forte: il gladiatore va da lui.
   step(70);
-  for (int k = 0; k < 4; ++k) damage_boss(60.0f, 0, false);
+  for (int k = 0; k < 4; ++k) damage_boss(g, 60.0f, 0, false);
   step(2);
   snprintf(buf, sizeof(buf), "G1 da lontano gli toglie 240 in un attimo: insegue G1 (bersaglio G%d)", g.boss.target + 1);
   check(g.boss.target == 0, buf);
@@ -418,7 +420,7 @@ static void test_target(void) {
     put(1, s.x + 6.0f, s.z + 9.0f);
     g.boss.stage = st;
     g.boss.target = 0;
-    boss_force_act(BA_JAVELIN);
+    boss_force_act(g, BA_JAVELIN);
     step(g.boss.wind + 1);
     n[st] = 0;
     for (int i = 0; i < MAX_SHOTS; ++i) n[st] += g.sh[i].alive && g.sh[i].kind == SK_JAVELIN;
@@ -441,8 +443,8 @@ static void test_restart(void) {
   g.boss.stage = 1;
   put(0, spawn.x + 4.0f, spawn.z + 9.0f);
   g.boss.target = 0;
-  boss_force_act(BA_SWEEP);
-  hurt_player(0, 1e6f, g.pl[0].pos + v3(1, 0, 0), 0.0f);
+  boss_force_act(g, BA_SWEEP);
+  hurt_player(g, 0, 1e6f, g.pl[0].pos + v3(1, 0, 0), 0.0f);
   step();
   const bool wipe = g.phase == PH_WIPE && !g.wipe_map;
   step(WIPE_ZONE_FRAMES);
@@ -458,14 +460,14 @@ static void test_restart(void) {
   const float hp = g.boss.hp;
   put_boss(spawn.x - 3.0f, spawn.z + 5.0f, 0.0f);
   const Vec3 at = g.boss.pos;
-  hurt_player(1, 1e6f, g.pl[1].pos + v3(1, 0, 0), 0.0f);
+  hurt_player(g, 1, 1e6f, g.pl[1].pos + v3(1, 0, 0), 0.0f);
   step(RESPAWN_FRAMES + 2);
   snprintf(buf, sizeof(buf), "in due, G2 cade e rientra: il boss non torna al suo posto (%.1f m) e tiene la sua vita", (double)dist2d(g.boss.pos, spawn));
   check(g.pl[1].alive && g.boss.hp == hp && dist2d(g.boss.pos, spawn) > 2.0f && dist2d(g.boss.pos, at) < 8.0f, buf);
   // Tutti a terra: mappa da capo, boss da capo.
   g.pl[0].invuln = g.pl[1].invuln = 0;
-  hurt_player(0, 1e6f, g.pl[0].pos + v3(1, 0, 0), 0.0f);
-  hurt_player(1, 1e6f, g.pl[1].pos + v3(1, 0, 0), 0.0f);
+  hurt_player(g, 0, 1e6f, g.pl[0].pos + v3(1, 0, 0), 0.0f);
+  hurt_player(g, 1, 1e6f, g.pl[1].pos + v3(1, 0, 0), 0.0f);
   step();
   const bool map = g.phase == PH_WIPE && g.wipe_map;
   step(WIPE_MAP_FRAMES);
@@ -533,22 +535,22 @@ static void test_kite(int n) {
 
 // Partita con n giocatori automatici dalla mappa del boss; restituisce l'impronta di tutti i fotogrammi.
 static uint64_t bot_run(int n, const char* chars, int frames, int pre, uint64_t* last) {
-  game_init();
+  game_init(g);
   for (int k = 0; k < pre; ++k) {          // qualche fotogramma nel titolo: generatore casuale diverso
     Pad pads[MAX_PLAYERS];
     memset(pads, 0, sizeof(pads));
-    game_update(pads);
+    game_update(g, pads);
   }
-  game_quick_start(boss_map(), n, chars);
+  game_quick_start(g, boss_map(), n, chars);
   uint64_t h = 1469598103934665603ull;
   for (int f = 0; f < frames; ++f) {
     Pad pads[MAX_PLAYERS];
     memset(pads, 0, sizeof(pads));
-    game_bot_pads(pads, n);
-    game_update(pads);
-    h = (h ^ game_state_hash()) * 1099511628211ull;
+    game_bot_pads(g, pads, n);
+    game_update(g, pads);
+    h = (h ^ game_state_hash(g)) * 1099511628211ull;
   }
-  if (last) *last = game_state_hash();
+  if (last) *last = game_state_hash(g);
   return h;
 }
 
@@ -557,10 +559,10 @@ static void test_determinism(void) {
   uint64_t h[2], e[2];
   for (int run = 0; run < 2; ++run) {
     open_game(save_dir(run ? "det2" : "det1"));
-    game_set_cards_enabled(true);
+    game_set_cards_enabled(g, true);
     h[run] = bot_run(3, "023", 5000, 0, &e[run]);
   }
-  game_set_cards_enabled(false);
+  game_set_cards_enabled(g, false);
   snprintf(buf, sizeof(buf), "5000 fotogrammi con 3 giocatori automatici: impronte %016llx e %016llx (ultima %016llx)", (unsigned long long)h[0],
            (unsigned long long)h[1], (unsigned long long)e[0]);
   check(h[0] == h[1] && e[0] == e[1], buf);
@@ -578,21 +580,21 @@ struct Fight {
 static Fight fight(int n, const char* chars, int max_frames, int pre) {
   Fight r;
   memset(&r, 0, sizeof(r));
-  game_init();
+  game_init(g);
   for (int k = 0; k < pre; ++k) {
     Pad pads[MAX_PLAYERS];
     memset(pads, 0, sizeof(pads));
-    game_update(pads);
+    game_update(g, pads);
   }
-  game_quick_start(boss_map(), n, chars);
+  game_quick_start(g, boss_map(), n, chars);
   int prev = BA_NONE;
   float hp[MAX_PLAYERS];
   for (int i = 0; i < MAX_PLAYERS; ++i) hp[i] = g.pl[i].hp;
   for (int f = 0; f < max_frames; ++f) {
     Pad pads[MAX_PLAYERS];
     memset(pads, 0, sizeof(pads));
-    game_bot_pads(pads, n);
-    game_update(pads);
+    game_bot_pads(g, pads, n);
+    game_update(g, pads);
     r.frames = f + 1;
     if (g.boss.alive && g.boss.act != prev && g.boss.act != BA_NONE) r.acts[g.boss.act]++;
     prev = g.boss.alive ? g.boss.act : BA_NONE;
@@ -606,7 +608,7 @@ static Fight fight(int n, const char* chars, int max_frames, int pre) {
       for (int i = 0; i < n; ++i)
         printf(" G%d %5.1f %5.1f d %4.1f v %3.0f%s", i + 1, (double)g.pl[i].pos.x, (double)g.pl[i].pos.z, (double)dist2d(g.pl[i].pos, b.pos),
                (double)g.pl[i].hp, g.pl[i].alive ? "" : "x");
-      printf(" mostri %d\n", count_monsters());
+      printf(" mostri %d\n", count_monsters(g));
     }
     if (g.screen == SC_PLAY && g.phase == PH_MAP_DONE && maps_is_boss(g.map_idx)) {
       r.won = true;
@@ -626,8 +628,8 @@ static void fights(int per, int lag) {
   struct Group { int n; const char* chars; int limit; };
   static const Group G[] = { { 4, "0123", 20000 }, { 2, "01", 30000 }, { 2, "23", 30000 }, { 2, "03", 30000 },
                              { 1, "0", 40000 }, { 1, "1", 40000 }, { 1, "2", 40000 }, { 1, "3", 40000 } };
-  bot_set_lag(lag);
-  game_set_cards_enabled(true);
+  bot_set_lag(g, lag);
+  game_set_cards_enabled(g, true);
   for (const Group& gr : G) {
     if (g_only && strcmp(g_only, gr.chars)) continue;
     for (int k = 0; k < per; ++k) {
@@ -640,8 +642,8 @@ static void fights(int per, int lag) {
       fflush(stdout);
     }
   }
-  bot_set_lag(0);
-  game_set_cards_enabled(false);
+  bot_set_lag(g, 0);
+  game_set_cards_enabled(g, false);
 }
 
 // --- schermate --------------------------------------------------------------------------------
@@ -656,7 +658,7 @@ static void scene(const char* chars) {
   for (int i = 0; i < MAX_PLAYERS; ++i) g.pl[i].invuln = 100000;
   g.boss.target = 0;
   g.msg_t = 0;                       // niente scritta della mappa sopra
-  update_camera(true);
+  update_camera(g, true);
 }
 
 static void pictures(void) {
@@ -678,7 +680,7 @@ static void pictures(void) {
   // Fendente: preparazione e colpo.
   scene("012");
   put(0, g.boss.pos.x + 0.5f, g.boss.pos.z + 3.0f);
-  boss_force_act(BA_SWEEP);
+  boss_force_act(g, BA_SWEEP);
   step(g.boss.wind * 2 / 3);
   shot("02_fendente_preparazione");
   step(g.boss.wind - g.boss.act_t - 1);
@@ -690,7 +692,7 @@ static void pictures(void) {
   // Carica: preparazione, corsa, contro il muro e stordito.
   scene("012");
   put(0, g.boss.pos.x - 1.0f, g.boss.pos.z + 9.5f);
-  boss_force_act(BA_RUSH);
+  boss_force_act(g, BA_RUSH);
   step(g.boss.wind * 3 / 4);
   shot("06_carica_preparazione");
   put(0, g.boss.pos.x - 4.0f, g.boss.pos.z + 8.0f);
@@ -701,7 +703,7 @@ static void pictures(void) {
   put(0, g.boss.pos.x + 8.5f, g.boss.pos.z + 1.5f);
   put(1, g.boss.pos.x - 4.0f, g.boss.pos.z + 5.0f);
   put(2, g.boss.pos.x + 2.0f, g.boss.pos.z + 7.0f);
-  boss_force_act(BA_RUSH);
+  boss_force_act(g, BA_RUSH);
   step(g.boss.wind / 2);
   shot("08_carica_verso_la_colonna");
   for (int k = 0; k < 200 && g.boss.act == BA_RUSH; ++k) step();
@@ -715,14 +717,14 @@ static void pictures(void) {
   scene("012");
   g.boss.stage = 2;
   put(0, g.boss.pos.x + 2.0f, g.boss.pos.z + 10.0f);
-  boss_force_act(BA_JAVELIN);
+  boss_force_act(g, BA_JAVELIN);
   step(g.boss.wind - 6);
   shot("12_giavellotti_carica");
   step(20);
   shot("13_giavellotti_in_volo");
   scene("012");
   put(0, g.boss.pos.x + 1.0f, g.boss.pos.z + 7.0f);
-  boss_force_act(BA_SLAM);
+  boss_force_act(g, BA_SLAM);
   step(g.boss.wind + 4);
   shot("14_spaccaterra_colpo");
   step(26);
@@ -762,8 +764,8 @@ int main(int argc, char** argv) {
     return 1;
   }
   open_game(save_dir("prove"));
-  game_set_cards_enabled(false);
-  game_init();
+  game_set_cards_enabled(g, false);
+  game_init(g);
   if (boss_map() < 0) {
     printf("manca l'arena del boss\n");
     return 1;
@@ -781,7 +783,7 @@ int main(int argc, char** argv) {
   }
   if (g_shots) pictures();
   if (per > 0) fights(per, lag);
-  game_shutdown();
+  game_shutdown(g);
   if (g_shots) swr_shutdown();
   char cmd[160];
   snprintf(cmd, sizeof(cmd), "rm -rf %s", g_base);

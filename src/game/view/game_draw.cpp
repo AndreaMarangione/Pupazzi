@@ -39,16 +39,16 @@ Xform ground_at(Vec3 p, float s) { return xf_mul(xf_translate(p), xf_scale(s, 1.
 // quelli fuori dal campo visivo): un rettangolo attorno al punto inquadrato che contiene il
 // terreno visibile con la telecamera di gioco a distanza d (inclinazione 0,98, campo 0,87):
 // di lato circa 0,93 d, verso la telecamera 0,45 d, in fondo 0,86 d (a 21 m: 19,5 - 9,2 - 18,1).
-bool near_view(Vec3 p, float margin) {
+bool near_view(Game& g, Vec3 p, float margin) {
   const float d = fmaxf(g.cam_dist, 17.0f);
   return fabsf(p.x - g_view.x) < 0.95f * d + margin && p.z - g_view.z < 0.55f * d + margin && g_view.z - p.z < d + margin;
 }
 
-float ground_under(Vec3 p) { return level_ground(&g.L, p.x, p.z, p.y, PL_STEP); }
+float ground_under(Game& g, Vec3 p) { return level_ground(&g.L, p.x, p.z, p.y, PL_STEP); }
 
 // Ombra a disco della misura k (piccola, media, grande, boss) nel tono del terreno della mappa:
 // prato, sabbia o pietra, scelto una volta per mappa dal colore medio del pavimento.
-const Mesh* shadow(int k) {
+const Mesh* shadow(Game& g, int k) {
   static uint32_t seen = 0;
   static int tone = -1;
   if (g.L.nchunks > 0 && g.L.chunk[0].id != seen) {
@@ -168,7 +168,7 @@ void draw_char(int ch, int col, Vec3 pos, float yaw, const Anim& a, Vec3* tip = 
   }
 }
 
-void push_aim(int i) {
+void push_aim(Game& g, int i) {
   const Player& p = g.pl[i];
   const CharDef& cd = CHARS[p.ch];
   const float y = p.pos.y + 0.02f, range = pl_range(p);   // LUNGA GITTATA: la striscia e' lunga quanto il colpo
@@ -187,13 +187,13 @@ void push_aim(int i) {
   if (cd.aim_sp == AIM_LOB) {
     const float dist = fmaxf(p.ch == CH_MOCHI ? 1.5f : 2.0f, p.aim_k * cd.sp_range);
     const Vec3 t = p.pos + dir_yaw(p.aim_yaw) * dist;
-    push(&M.aim_ring[3], xf_mul(xf_translate(v3(t.x, ground_under(v3(t.x, 9.0f, t.z)) , t.z)), xf_scale(cd.sp_w, 1.0f, cd.sp_w)));
+    push(&M.aim_ring[3], xf_mul(xf_translate(v3(t.x, ground_under(g, v3(t.x, 9.0f, t.z)) , t.z)), xf_scale(cd.sp_w, 1.0f, cd.sp_w)));
   } else if (cd.aim_sp == AIM_AREA) {
     push(&M.aim_ring[3], xf_mul(xf_translate(v3(p.pos.x, y, p.pos.z)), xf_scale(cd.sp_range, 1.0f, cd.sp_range)));
   }
 }
 
-void push_player(int i) {
+void push_player(Game& g, int i) {
   const Player& p = g.pl[i];
   if (!p.active || (p.out && p.down >= OUT_VANISH)) return;   // senza vite: sparito in uno sbuffo
   Anim a;
@@ -218,8 +218,8 @@ void push_player(int i) {
   const float bob = p.grounded ? 0.03f * fabsf(a.swing) : 0.0f;
   Vec3 tip[2];
   draw_char(p.ch, i, p.pos + v3(0, bob, 0), p.yaw, a, tip);
-  const float gy = ground_under(p.pos);
-  push(shadow(0), xf_translate(v3(p.pos.x, gy, p.pos.z)));
+  const float gy = ground_under(g, p.pos);
+  push(shadow(g, 0), xf_translate(v3(p.pos.x, gy, p.pos.z)));
   push(&M.ring[i], xf_translate(v3(p.pos.x, gy, p.pos.z)));
   if (p.shield) {
     // SCUDO: una bolla del colore del giocatore che pulsa, cioe' un anello rivolto verso la
@@ -256,7 +256,7 @@ void push_player(int i) {
       push(&M.pw_ring[k], scaled(xf_mul(at(cc + v3(0, -0.15f, 0), (float)g.ui_tick * 0.05f), xf_rot_x(0.35f)), s * 1.05f, s, s * 1.05f));
     }
   }
-  if (p.aiming && !p.frozen) push_aim(i);
+  if (p.aiming && !p.frozen) push_aim(g, i);
   if (p.blizzard_t > 0) {
     const float r = CHARS[CH_MARZIO].sp_range;
     const float k = p.blizzard_t > 20 ? 1.0f : (float)p.blizzard_t / 20.0f;
@@ -337,7 +337,7 @@ Vec3 elbow_ik(Vec3 s, Vec3* h, float a, float b, Vec3 hint) {
 Xform hang(Vec3 p, Vec3 q) { return xf_mul(xf_translate(p), xf_align_y(normalize(p - q))); }
 
 // Scorpione: zampette che zampettano a coppie alterne, chele che pizzicano, coda inarcata.
-void draw_scorpion(const Monster& m, int k, uint8_t flash, float rise, float sy, float sxz) {
+void draw_scorpion(Game& g, const Monster& m, int k, uint8_t flash, float rise, float sy, float sxz) {
   const float tk = (float)g.tick;
   float yaw = m.yaw, pitch = 0.0f, y = m.pos.y - 1.1f * rise;
   float ph = m.phase * 1.2f, step = 0.3f, lift = 0.4f;
@@ -424,13 +424,13 @@ void draw_scorpion(const Monster& m, int k, uint8_t flash, float rise, float sy,
       push(&M.stars, at(head.x + 0.3f * d_cos(a), head.y + 0.05f * d_sin(a * 2.0f), head.z + 0.3f * d_sin(a), a * 1.5f));
     }
   }
-  if (m.rise == 0) push(shadow(2), at(m.pos.x, 0.0f, m.pos.z, m.yaw));
+  if (m.rise == 0) push(shadow(g, 2), at(m.pos.x, 0.0f, m.pos.z, m.yaw));
 }
 
 // Arciere di terracotta. Cammina con l'arco nella sinistra; per tirare si inginocchia (ginocchio
 // destro a terra), si gira di fianco, alza l'arco verso il cielo e tende la corda fino al mento con
 // la freccia incoccata; scoccata, la corda vibra e la mano va indietro, poi abbassa l'arco e si rialza.
-void draw_archer(const Monster& m, uint8_t flash, float rise, float sy, float sxz) {
+void draw_archer(Game& g, const Monster& m, uint8_t flash, float rise, float sy, float sxz) {
   float kneel = 0.0f, raise = 0.0f, pull = 0.0f, rel = 0.0f;
   if (m.windup > 0) {
     const float u = 1.0f - (float)m.windup / (float)ARCHER_DRAW_FRAMES;
@@ -509,11 +509,11 @@ void draw_archer(const Monster& m, uint8_t flash, float rise, float sy, float sx
   const Vec3 el = elbow_ik(sr, &hand, ARCHER_UPPER, ARCHER_FORE, hint);
   push(&M.archer_upper_r, xf_mul(root, hang(sr, el)), flash);
   push(&M.archer_fore_r, xf_mul(root, hang(el, hand)), flash);
-  if (m.rise == 0) push(shadow(1), xf_translate(v3(m.pos.x, 0.0f, m.pos.z)));
+  if (m.rise == 0) push(shadow(g, 1), xf_translate(v3(m.pos.x, 0.0f, m.pos.z)));
 }
 
 // Corpo del mostro con le sue animazioni.
-void draw_monster(const Monster& m, int k) {
+void draw_monster(Game& g, const Monster& m, int k) {
   uint8_t flash = m.hurt > 0 ? (uint8_t)(m.hurt >= 4 ? 200 : 70) : 0;
   const float rise = m.rise > 0 ? (float)m.rise / 36.0f : 0.0f;
   if (m.rise > 0) {
@@ -523,8 +523,8 @@ void draw_monster(const Monster& m, int k) {
   const float sy = 1.0f + m.sq, sxz = 1.0f - 0.5f * m.sq;
   const float tk = (float)g.tick;
   switch (m.type) {
-    case MO_SCORPIONE: draw_scorpion(m, k, flash, rise, sy, sxz); break;
-    case MO_ARCIERE: draw_archer(m, flash, rise, sy, sxz); break;
+    case MO_SCORPIONE: draw_scorpion(g, m, k, flash, rise, sy, sxz); break;
+    case MO_ARCIERE: draw_archer(g, m, flash, rise, sy, sxz); break;
     case MO_SCARABEO: {
       const float y = m.rise > 0 ? m.fly * (1.0f - rise) : m.fly;
       const Xform root = scaled(xf_mul(at(m.pos.x, y, m.pos.z, m.yaw), xf_rot_x(0.15f)), sxz, sy, sxz);
@@ -532,7 +532,7 @@ void draw_monster(const Monster& m, int k) {
       const float w = 0.55f * d_sin(tk * 1.9f + (float)k);
       push(&M.scarab_wing_r, xf_mul(root, xf_rot_z(w)), flash);
       push(&M.scarab_wing_l, xf_mul(root, xf_rot_z(-w)), flash);
-      push(shadow(0), xf_mul(xf_translate(v3(m.pos.x, 0.0f, m.pos.z)), xf_scale(0.7f, 1.0f, 0.7f)));
+      push(shadow(g, 0), xf_mul(xf_translate(v3(m.pos.x, 0.0f, m.pos.z)), xf_scale(0.7f, 1.0f, 0.7f)));
       break;
     }
     default: {
@@ -574,7 +574,7 @@ void draw_monster(const Monster& m, int k) {
       push(&M.halberd, xf_mul(root, xf_mul(xf_translate(xf_point(ar, v3(0, -WARRIOR_ARM, 0.04f))), xf_rot_x(halb))), flash);
       push(&M.warrior_leg, part(root, -WARRIOR_HIP_X, WARRIOR_HIP_Y, 0.0f, d_sin(m.phase) * 0.6f), flash);
       push(&M.warrior_leg, part(root, WARRIOR_HIP_X, WARRIOR_HIP_Y, 0.0f, -d_sin(m.phase) * 0.6f), flash);
-      if (m.rise == 0) push(shadow(2), xf_translate(v3(m.pos.x, 0.0f, m.pos.z)));
+      if (m.rise == 0) push(shadow(g, 2), xf_translate(v3(m.pos.x, 0.0f, m.pos.z)));
       break;
     }
   }
@@ -591,11 +591,11 @@ void draw_monster(const Monster& m, int k) {
   }
 }
 
-void push_monster(int k) {
+void push_monster(Game& g, int k) {
   const Monster& m = g.mo[k];
-  if (!m.alive || !near_view(m.pos, 2.0f)) return;
-  if (!monster_drawn(m)) return;
-  draw_monster(m, k);
+  if (!m.alive || !near_view(g, m.pos, 2.0f)) return;
+  if (!monster_drawn(g, m)) return;
+  draw_monster(g, m, k);
 }
 
 // Posa del Gladiatore gigante, calcolata solo dal suo stato (camminata, azione in corso, ruggito,
@@ -641,7 +641,7 @@ void rush_pose(BossPose* p, float u, float s, float run) {
   p->leg_r = lerpf(0.45f * u, -0.85f * s, run);
 }
 
-void boss_pose(const Boss& b, BossPose* p) {
+void boss_pose(Game& g, const Boss& b, BossPose* p) {
   const float br = d_sin((float)g.tick * 0.05f);           // respiro
   p->lean = 0.0f; p->twist = 0.0f; p->drop = 0.03f * br;
   p->arm_r = BOSS_REST_R + 0.05f * br; p->arm_l = BOSS_REST_L; p->roll_r = 0.0f; p->roll_l = BOSS_REST_ROLL_L;
@@ -799,7 +799,7 @@ void boss_pose(const Boss& b, BossPose* p) {
   }
 }
 
-void push_boss(void) {
+void push_boss(Game& g) {
   const Boss& b = g.boss;
   const bool dying = !b.alive && b.dead_t > 0 && b.dead_t < 72;
   if (!b.alive && !dying) return;
@@ -813,7 +813,7 @@ void push_boss(void) {
     dim = (uint8_t)clampf((float)(b.dead_t - 8) * 4.0f, 0.0f, 150.0f);
   }
   BossPose p;
-  boss_pose(b, &p);
+  boss_pose(g, b, &p);
   const float sy = 1.0f + b.sq * 0.5f, sxz = 1.0f - 0.25f * b.sq;
   const Xform base = scaled(xf_mul(at(b.pos + v3(0, -p.drop, 0), b.face), xf_rot_x(p.lean)), sxz, sy, sxz);
   // Gambe (non girano col busto), poi il busto girato attorno ai fianchi con testa, braccia e armi.
@@ -844,18 +844,18 @@ void push_boss(void) {
       push(&M.stars, scaled(at(c.x + 1.0f * d_cos(a), c.y + 0.15f * d_sin(a * 2.0f), c.z + 1.0f * d_sin(a), a * 1.5f), 4.6f, 4.6f, 4.6f));
     }
   }
-  if (b.alive) push(shadow(3), xf_translate(v3(b.pos.x, 0.0f, b.pos.z)));
+  if (b.alive) push(shadow(g, 3), xf_translate(v3(b.pos.x, 0.0f, b.pos.z)));
 }
 
 // Mano del gladiatore quando lascia i giavellotti (coordinate del boss): da li' partono quelli disegnati.
-Vec3 boss_throw_hand(const Boss& b) {
+Vec3 boss_throw_hand(Game& g, const Boss& b) {
   Boss t = b;
   t.alive = true;
   t.roar = 0;
   t.act = BA_JAVELIN;
   t.act_t = t.wind = b.act == BA_JAVELIN && b.wind > 0 ? b.wind : (int)BOSS_ACT_THROW;
   BossPose p;
-  boss_pose(t, &p);
+  boss_pose(g, t, &p);
   const Xform base = xf_mul(at(b.pos + v3(0, -p.drop, 0), b.face), xf_rot_x(p.lean));
   const Xform up = xf_mul(base, about(v3(0, BOSS_HIP_Y, 0), xf_rot_y(p.twist)));
   return xf_point(xf_mul(up, limb(xf_identity(), BOSS_SH_X, BOSS_SH_Y, 0.0f, p.arm_r, p.roll_r)), v3(0, -BOSS_ARM, 0.05f));
@@ -865,7 +865,7 @@ Vec3 boss_throw_hand(const Boss& b) {
 
 // Capsula dell'esploratore: chiusa con lui dentro che saltella e la lucina dell'antenna che
 // lampeggia; poi aperta, vuota, con un filo di fumo.
-void push_capsule(const DynCell& dc, int d, Vec3 c) {
+void push_capsule(Game& g, const DynCell& dc, int d, Vec3 c) {
   if (dc.hp > 0.0f) {
     const float hit = (float)g.crate_hit[d] / 10.0f;
     const float wob = 0.05f * hit * d_sin((float)g.crate_hit[d] * 2.0f);
@@ -885,7 +885,7 @@ void push_capsule(const DynCell& dc, int d, Vec3 c) {
   }
 }
 
-void push_world(void) {
+void push_world(Game& g) {
   for (int i = 0; i < g.L.nchunks; ++i) push(&g.L.chunk[i], xf_identity(), 0, 0, ITEM_STATIC);
   for (int i = 0; i < g.L.nscenery; ++i) push(&g.L.scenery[i], xf_identity(), 0, 0, ITEM_STATIC);   // paesaggio lontano
   // Cancelli a battente (0.5.4): ogni battente gira attorno al suo cardine, dalla posizione da chiuso.
@@ -894,7 +894,7 @@ void push_world(void) {
       Vec3 h, d, c;
       float len;
       level_gate_leaf(&g.L, i, side, gate_theta(g.L.gates[i], side), &h, &d, &len, &c);
-      if (!near_view(h, 2.5f)) continue;
+      if (!near_view(g, h, 2.5f)) continue;
       const float co = c.x * d.x + c.z * d.z, si = c.z * d.x - c.x * d.z;   // rotazione attorno a Y che porta c in d
       Xform xf = xf_translate(h);
       xf.r[0] = co;
@@ -908,7 +908,7 @@ void push_world(void) {
   for (int d = 0; d < g.L.ndyn; ++d) {
     const DynCell& dc = g.L.dyn[d];
     const Vec3 c = cell_center(&g.L, dc.cx, dc.cz);
-    if (!near_view(c, 1.0f)) continue;
+    if (!near_view(g, c, 1.0f)) continue;
     uint32_t hh = (uint32_t)dc.cx * 374761393u ^ (uint32_t)dc.cz * 668265263u;
     hh = (hh ^ (hh >> 13)) * 1274126177u;
     hh ^= hh >> 16;
@@ -927,7 +927,7 @@ void push_world(void) {
       }
       case C_BREAK: {
         if (dc.capsule) {
-          push_capsule(dc, d, c);
+          push_capsule(g, dc, d, c);
           break;
         }
         if (dc.hp <= 0.0f) break;
@@ -954,7 +954,7 @@ void push_world(void) {
     if (!g.item_on[it]) continue;
     const MapItem& mi = g.L.items[it];
     const Vec3 c = cell_center(&g.L, mi.cx, mi.cz);
-    if (!near_view(c, 1.0f)) continue;
+    if (!near_view(g, c, 1.0f)) continue;
     const float pop = clampf((float)g.item_t[it] / 15.0f, 0.0f, 1.0f);
     if (mi.kind == IT_TALISMAN) {
       const float ph = (float)g.ui_tick * 0.06f + (float)it * 2.0f;
@@ -973,10 +973,10 @@ void push_world(void) {
       push(&M.pw_coin[k], scaled(xf_mul(xf_translate(v3(c.x, y, c.z)), face), s, s, s));
       const float r = 0.62f + 0.06f * d_sin(ph * 2.0f);
       push(&M.pw_ring[k], xf_mul(xf_translate(v3(c.x, mi.y, c.z)), xf_scale(r, 1.0f, r)));
-      push(shadow(0), xf_translate(v3(c.x, mi.y, c.z)));
+      push(shadow(g, 0), xf_translate(v3(c.x, mi.y, c.z)));
     } else {
       push(&M.bomb, at(c.x, mi.y, c.z, 0.6f));
-      push(shadow(0), xf_translate(v3(c.x, mi.y, c.z)));
+      push(shadow(g, 0), xf_translate(v3(c.x, mi.y, c.z)));
     }
   }
   for (int i = 0; i < MAX_BOMBS; ++i) {
@@ -989,35 +989,35 @@ void push_world(void) {
     const uint8_t fl = (b.fuse < 60 ? ((b.fuse >> 2) & 1) : ((b.fuse >> 4) & 1)) ? 160 : 0;
     push(&M.bomb, scaled(at(b.pos, 0.6f), k, k, k), fl);
     push(&M.bomb_spark, at(b.pos + v3(0.09f * k, 0.55f * k, 0.0f), 0.0f));
-    push(shadow(0), xf_translate(v3(b.pos.x, ground_under(b.pos), b.pos.z)));
+    push(shadow(g, 0), xf_translate(v3(b.pos.x, ground_under(g, b.pos), b.pos.z)));
   }
 }
 
 // L'esploratore salvato: salta di gioia davanti alla capsula, poi se ne va saltellando.
-void push_explorer(void) {
-  if (g.expl_t < 0 || !near_view(g.expl_pos, 2.0f)) return;
+void push_explorer(Game& g) {
+  if (g.expl_t < 0 || !near_view(g, g.expl_pos, 2.0f)) return;
   const float t = (float)g.expl_t;
   const float hop = g.expl_t < 70 ? 0.45f * fabsf(d_sin(t * 0.16f)) : 0.22f * fabsf(d_sin(t * 0.38f));
   const float shrink = g.expl_t > 200 ? clampf((float)(220 - g.expl_t) / 20.0f, 0.0f, 1.0f) : 1.0f;
   const float sq = g.expl_t < 70 ? 0.08f * d_sin(t * 0.32f) : 0.0f;
-  push(&M.explorer, scaled(at(g.expl_pos.x, ground_under(g.expl_pos) + hop, g.expl_pos.z, g.expl_yaw), shrink * (1.0f - 0.5f * sq),
+  push(&M.explorer, scaled(at(g.expl_pos.x, ground_under(g, g.expl_pos) + hop, g.expl_pos.z, g.expl_yaw), shrink * (1.0f - 0.5f * sq),
                            shrink * (1.0f + sq), shrink * (1.0f - 0.5f * sq)));
-  push(shadow(0), xf_translate(v3(g.expl_pos.x, ground_under(g.expl_pos), g.expl_pos.z)));
+  push(shadow(g, 0), xf_translate(v3(g.expl_pos.x, ground_under(g, g.expl_pos), g.expl_pos.z)));
   if (g.expl_t < 70 && (g.expl_t / 5) % 2 == 0)
-    push(&M.stars, at(g.expl_pos.x, ground_under(g.expl_pos) + hop + 1.05f, g.expl_pos.z, t * 0.2f));
+    push(&M.stars, at(g.expl_pos.x, ground_under(g, g.expl_pos) + hop + 1.05f, g.expl_pos.z, t * 0.2f));
 }
 
 // Colpi. I giavellotti appena lanciati dal gladiatore partono dalla mano disegnata: per i primi
 // fotogrammi si spostano un po' verso li' (solo nel disegno; il gioco li fa partire da
 // boss_javelin_start, launch_javelins). Le frecce degli arcieri partono gia' dall'arco disegnato
 // (ARCHER_NOCK_*, shoot_arrow).
-void push_shots(void) {
+void push_shots(Game& g) {
   const Boss& b = g.boss;
   bool hand_ok = false;
   Vec3 hand = v3(0, 0, 0);
   for (int i = 0; i < MAX_SHOTS; ++i) {
     const Shot& s = g.sh[i];
-    if (!s.alive || !near_view(s.pos, 1.0f)) continue;
+    if (!s.alive || !near_view(g, s.pos, 1.0f)) continue;
     switch (s.kind) {
       case SK_BULLET: push(&M.bullet, at(s.pos, s.yaw)); break;
       case SK_SHARD: push(&M.shard, xf_mul(at(s.pos, s.yaw), xf_rot_z((float)s.life * 0.35f))); break;
@@ -1032,7 +1032,7 @@ void push_shots(void) {
         const Xform r = xf_mul(at(s.pos, s.yaw), xf_rot_x(-d_atan2(s.vel.y, hv)));
         if (s.life > 0) {
           push(&M.arrow, r);
-          push(shadow(0), xf_mul(xf_translate(v3(s.pos.x, ground_under(v3(s.pos.x, 9.0f, s.pos.z)) + 0.01f, s.pos.z)),
+          push(shadow(g, 0), xf_mul(xf_translate(v3(s.pos.x, ground_under(g, v3(s.pos.x, 9.0f, s.pos.z)) + 0.01f, s.pos.z)),
                                  xf_scale(0.55f, 1.0f, 0.55f)));
         } else {
           const float sink = 0.32f + 0.3f * clampf(1.0f + (float)s.life / 8.0f, 0.0f, 1.0f);
@@ -1052,7 +1052,7 @@ void push_shots(void) {
         // Inclinato lungo la traiettoria, punta in avanti.
         Vec3 p = s.pos;
         if (s.owner == -2 && s.life < 12) {
-          if (!hand_ok) { hand = boss_throw_hand(b); hand_ok = true; }
+          if (!hand_ok) { hand = boss_throw_hand(g, b); hand_ok = true; }
           const float u = 1.0f - (float)s.life / 12.0f;
           p = p + (hand - boss_javelin_start(b)) * (u * u);
         }
@@ -1070,11 +1070,11 @@ void push_shots(void) {
       default: break;
     }
     if (s.kind == SK_LAVA || s.kind == SK_JAVELIN || s.kind == SK_ROCKET)
-      push(shadow(0), xf_mul(xf_translate(v3(s.pos.x, ground_under(v3(s.pos.x, 9.0f, s.pos.z)) + 0.01f, s.pos.z)), xf_scale(0.6f, 1.0f, 0.6f)));
+      push(shadow(g, 0), xf_mul(xf_translate(v3(s.pos.x, ground_under(g, v3(s.pos.x, 9.0f, s.pos.z)) + 0.01f, s.pos.z)), xf_scale(0.6f, 1.0f, 0.6f)));
   }
 }
 
-void push_markers(void) {
+void push_markers(Game& g) {
   for (int i = 0; i < MAX_MARKERS; ++i) {
     const Marker& m = g.mk[i];
     if (!m.alive) continue;
@@ -1140,7 +1140,7 @@ void push_markers(void) {
           const float k = m.r * (0.35f + 0.13f * (float)m.t);
           push(&M.blast, scaled(at(m.pos + v3(0, 0.3f, 0), 0.0f), k, k * 0.8f, k));
         }
-        push(&M.mark_blast, ground_at(v3(m.pos.x, 0.0f, m.pos.z) + v3(0, ground_under(m.pos), 0), m.r * (0.4f + 0.6f * f)));
+        push(&M.mark_blast, ground_at(v3(m.pos.x, 0.0f, m.pos.z) + v3(0, ground_under(g, m.pos), 0), m.r * (0.4f + 0.6f * f)));
         break;
       }
       default:
@@ -1150,7 +1150,7 @@ void push_markers(void) {
   }
 }
 
-void push_particles(void) {
+void push_particles(Game& g) {
   for (int i = 0; i < MAX_PARTICLES; ++i) {
     const Particle& q = g.pa[i];
     if (!q.alive) continue;
@@ -1190,7 +1190,7 @@ void push_particles(void) {
 }
 
 // Menu: i personaggi alla partenza della mappa, rivolti verso la telecamera.
-void push_menu_chars(void) {
+void push_menu_chars(Game& g) {
   for (int i = 0; i < MAX_PLAYERS; ++i) {
     int ch = i;
     bool show = true, ready = false;
@@ -1200,7 +1200,7 @@ void push_menu_chars(void) {
       ready = g.ready[i];
     }
     if (!show) continue;
-    const Vec3 base = menu_spot(i);
+    const Vec3 base = menu_spot(g, i);
     Anim a;
     memset(&a, 0, sizeof(a));
     const float t = (float)g.ui_tick * 0.08f + (float)i * 1.7f;
@@ -1216,12 +1216,12 @@ void push_menu_chars(void) {
     a.sq = 0.03f * d_sin(t * 1.5f);
     a.swing = 0.15f * d_sin(t);
     draw_char(ch, i, base + v3(0, hop, 0), D_PI + 0.25f * d_sin(t * 0.3f), a);
-    push(shadow(0), xf_translate(base));
+    push(shadow(g, 0), xf_translate(base));
     if (g.screen == SC_CHARS) push(&M.ring_big[i], xf_translate(base));
   }
 }
 
-void push_stats_chars(void) {
+void push_stats_chars(Game& g) {
   for (int i = 0; i < MAX_PLAYERS; ++i) {
     const Player& p = g.pl[i];
     if (!p.active) continue;
@@ -1232,9 +1232,9 @@ void push_stats_chars(void) {
     a.cheer = 1.0f;
     const float hop = (i == g.mvp ? 0.45f : 0.25f) * fabsf(d_sin(t));
     a.sq = 0.06f * d_sin(t * 2.0f);
-    const Vec3 base = v3(p.pos.x, ground_under(p.pos), p.pos.z);
+    const Vec3 base = v3(p.pos.x, ground_under(g, p.pos), p.pos.z);
     draw_char(p.ch, i, base + v3(0, hop, 0), 0.0f, a);
-    push(shadow(0), xf_translate(base));
+    push(shadow(g, 0), xf_translate(base));
     push(i == g.mvp ? &M.ring_big[i] : &M.ring[i], xf_translate(base));
   }
   if (g.explorer_free) {
@@ -1245,9 +1245,9 @@ void push_stats_chars(void) {
     if (n > 0.0f) {
       const Vec3 base = v3(mx + 1.1f, 0.0f, s.z / n + 0.3f);
       const float t = (float)g.ui_tick * 0.13f;
-      const Vec3 pos = v3(base.x, ground_under(v3(base.x, s.y / n + 0.5f, base.z)), base.z);
+      const Vec3 pos = v3(base.x, ground_under(g, v3(base.x, s.y / n + 0.5f, base.z)), base.z);
       push(&M.explorer, at(pos + v3(0, 0.3f * fabsf(d_sin(t)), 0), 0.25f * d_sin(t * 0.5f)));
-      push(shadow(0), xf_translate(pos));
+      push(shadow(g, 0), xf_translate(pos));
     }
   }
 }
@@ -1257,7 +1257,7 @@ void push_stats_chars(void) {
 
 const float HX = 24.0f, HY = 16.0f;
 
-bool blink(unsigned period) { return ((g.ui_tick / period) & 1u) != 0; }
+bool blink(Game& g, unsigned period) { return ((g.ui_tick / period) & 1u) != 0; }
 inline uint32_t O(uint32_t rgb) { return HUD_OPAQUE(rgb); }
 inline uint32_t A(uint32_t rgb, float a) { return hud_a(rgb, a); }
 
@@ -1287,7 +1287,7 @@ bool to_px(const Camera& cam, Vec3 p, float* x, float* y) {
   return true;
 }
 
-void player_bars(Hud* h, const Camera& cam, int i) {
+void player_bars(Game& g, Hud* h, const Camera& cam, int i) {
   const Player& p = g.pl[i];
   const CharDef& cd = CHARS[p.ch];
   float sx, sy;
@@ -1299,7 +1299,7 @@ void player_bars(Hud* h, const Camera& cam, int i) {
   const char num[2] = { (char)('1' + i), 0 };
   ui::text(h, x0 - 11.5f, y0 + 6.5f, HF_B11, O(i == 3 ? 0x06102E : 0xFFFFFF), num, 0.0f, 0);
   const float hw = clampf(p.hp / p.hp_max, 0.0f, 1.0f) * W;
-  hud_rect(h, x0, y0, hw, 6.0f, p.hurt > 0 ? 0xFFFFFF : (p.hp < p.hp_max * 0.3f && blink(8) ? 0xFF5A4A : 0x5CE07A));
+  hud_rect(h, x0, y0, hw, 6.0f, p.hurt > 0 ? 0xFFFFFF : (p.hp < p.hp_max * 0.3f && blink(g, 8) ? 0xFF5A4A : 0x5CE07A));
   hud_rect(h, x0 + hw, y0, W - hw, 6.0f, 0x2E1E3A);
   const uint32_t ac = p.locked ? 0xC04A3A : ui::L1;
   if (cd.ammo_max <= 10.0f) {
@@ -1317,9 +1317,9 @@ void player_bars(Hud* h, const Camera& cam, int i) {
   }
   const float cost = pl_special_cost(p);   // SUPER CARICA: la barra si riempie prima
   const bool ready = p.charge >= cost;
-  hud_rect(h, x0, y0 + 11.0f, clampf(p.charge / cost, 0.0f, 1.0f) * W, 2.0f, ready && blink(6) ? 0xFFFFFF : ui::STAR);
+  hud_rect(h, x0, y0 + 11.0f, clampf(p.charge / cost, 0.0f, 1.0f) * W, 2.0f, ready && blink(g, 6) ? 0xFFFFFF : ui::STAR);
   if (ready) {
-    hud_box(h, x0 + W + 4.0f, y0 - 2.0f, 21.0f, 17.0f, 3.0f, O(blink(6) ? 0xFFFFFF : ui::STAR));
+    hud_box(h, x0 + W + 4.0f, y0 - 2.0f, 21.0f, 17.0f, 3.0f, O(blink(g, 6) ? 0xFFFFFF : ui::STAR));
     ui::text(h, x0 + W + 14.5f, y0 + 6.5f, HF_B10, O(ui::ON), "L1", 0.0f, 0);
   }
   for (int k = 0; k < p.bombs; ++k) {
@@ -1335,7 +1335,7 @@ void player_bars(Hud* h, const Camera& cam, int i) {
 // Restituisce dove finiscono a destra.
 const float CARD = 40.0f, CARD_STEP = 46.0f;
 
-float player_icons(Hud* h) {
+float player_icons(Game& g, Hud* h) {
   float x = HX;
   for (int i = 0; i < MAX_PLAYERS; ++i) {
     const Player& p = g.pl[i];
@@ -1343,7 +1343,7 @@ float player_icons(Hud* h) {
     const bool down = !p.alive && !p.out, out = p.out;
     const uint32_t c = out ? 0x6A6470 : (down ? mix_rgb(ui::PLAYER[i], 0x101418, 0.45f) : ui::PLAYER[i]);
     // In rete (0.5.4) la scheda di questa console ha il bordo bianco.
-    if (i == net_local()) hud_frame(h, x - 2.0f, HY - 2.0f, CARD + 4.0f, CARD + 4.0f, 8.0f, 2.0f, 0xFFFFFFFFu);
+    if (i == net_local(g)) hud_frame(h, x - 2.0f, HY - 2.0f, CARD + 4.0f, CARD + 4.0f, 8.0f, 2.0f, 0xFFFFFFFFu);
     hud_box_grad(h, x, HY, CARD, CARD, 7.0f, O(c), O(mix_rgb(c, 0x101418, 0.4f)), 135.0f);
     hud_box(h, x, HY, CARD, CARD, 7.0f, ui::SOLID, 2.0f);
     ui::face(h, x + 5.0f, HY + 5.0f, 30, p.ch, out ? 2 : (down ? 1 : 0));
@@ -1357,8 +1357,8 @@ float player_icons(Hud* h) {
       hud_rect(h, x + 5.0f, HY + CARD - 9.0f, (CARD - 10.0f) * k, 4.0f, 0xFF2E2E);
     }
     // In rete: la sua console non risponde da un po' (lampeggia la rete sulla faccia).
-    if ((net_silent() >> i) & 1u) {
-      if (blink(10)) {
+    if ((net_silent(g) >> i) & 1u) {
+      if (blink(g, 10)) {
         hud_box(h, x + CARD - 21.0f, HY + 1.0f, 20.0f, 16.0f, 3.0f, A(0x101418, 0.85f));
         hud_icon(h, HI_WIFI, x + CARD - 20.0f, HY + 2.0f, O(0xFF4A3A));
       }
@@ -1400,7 +1400,7 @@ float player_icons(Hud* h) {
 
 // Riga in alto, a destra delle schede: pianeta e mappa, giro, zona, mostri che mancano; nell'arena
 // la vita del boss al posto della zona.
-void top_line(Hud* h, float x) {
+void top_line(Game& g, Hud* h, float x) {
   char buf[128];
   const float cy = HY + 14.0f;
   const int w = g.L.world >= 0 && g.L.world < NWORLDS ? g.L.world : 0;
@@ -1417,7 +1417,7 @@ void top_line(Hud* h, float x) {
   if (g.phase == PH_CLEAR) {
     const char* go = tr("VAI AVANTI");
     const float tw = hud_text_w(HF_B13, go, 1.5f);
-    if (blink(20)) {
+    if (blink(g, 20)) {
       stext(h, xr - 14.0f, cy, HF_B13, ui::L1, go, 1.5f, 1);
       ui::chev(h, xr - 8.0f, cy - 6.0f, true, ui::L1);
     }
@@ -1426,8 +1426,8 @@ void top_line(Hud* h, float x) {
     snprintf(buf, sizeof(buf), tr("MOSTRI %d"), g.enemies_left);
     stext(h, xr, cy, HF_B13, ui::A2, buf, 1.5f, 1);
     xr -= hud_text_w(HF_B13, buf, 1.5f) + 12.0f;
-  } else if (g.boss.alive && count_monsters() > 0) {
-    snprintf(buf, sizeof(buf), "+%d", count_monsters());
+  } else if (g.boss.alive && count_monsters(g) > 0) {
+    snprintf(buf, sizeof(buf), "+%d", count_monsters(g));
     stext(h, xr, cy, HF_B13, ui::A2, buf, 1.0f, 1);
     xr -= hud_text_w(HF_B13, buf, 1.0f) + 10.0f;
   }
@@ -1450,8 +1450,8 @@ void top_line(Hud* h, float x) {
 
 // In rete (0.5.4) ogni console inquadra il suo eroe: per ogni compagno fuori dallo schermo una
 // freccia nel suo colore sul bordo, verso di lui, con il suo numero.
-void mate_arrows(Hud* h, const Camera& cam) {
-  const int me = net_local();
+void mate_arrows(Game& g, Hud* h, const Camera& cam) {
+  const int me = net_local(g);
   if (me < 0) return;
   const float X0 = 40.0f, X1 = 600.0f, Y0 = 96.0f, Y1 = 428.0f, CX = 320.0f, CY = 262.0f;
   for (int i = 0; i < MAX_PLAYERS; ++i) {
@@ -1495,17 +1495,17 @@ void mate_arrows(Hud* h, const Camera& cam) {
 }
 
 // In rete, sulle console che aspettano i fotogrammi di chi ha creato la partita: "rete lenta".
-void net_wait_badge(Hud* h) {
-  if (net_wait_frames() < 12) return;
+void net_wait_badge(Game& g, Hud* h) {
+  if (net_wait_frames(g) < 12) return;
   const char* t = tr("rete lenta...");
   const float w = 18.0f + 8.0f + hud_text_w(HF_S13, t, 0.5f) + 24.0f, x = 320.0f - w * 0.5f, cy = 480.0f - HY - 44.0f;
   hud_box(h, x, cy - 13.0f, w, 26.0f, 6.0f, A(ui::SCRIM, 0.85f));
-  hud_icon(h, HI_WIFI, x + 12.0f, cy - 7.0f, O(blink(10) ? 0xFF4A3A : ui::L1));
+  hud_icon(h, HI_WIFI, x + 12.0f, cy - 7.0f, O(blink(g, 10) ? 0xFF4A3A : ui::L1));
   ui::text(h, x + 38.0f, cy, HF_S13, O(ui::TX), t, 0.5f);
 }
 
 // Messaggio grande al centro, su una fascia scura che sfuma ai lati.
-void center_msg(Hud* h) {
+void center_msg(Game& g, Hud* h) {
   const float cy = 140.0f, has2 = g.msg2[0] ? 1.0f : 0.0f;
   const float bh = 54.0f + 26.0f * has2, by = cy - 30.0f;
   hud_box_grad(h, 0, by, 320, bh, 0, A(ui::SCRIM, 0.0f), A(ui::SCRIM, 0.6f), 90.0f);
@@ -1519,12 +1519,12 @@ void center_msg(Hud* h) {
   if (g.msg2[0]) stext(h, 320, cy + 32.0f, HF_S15, ui::TX, ui::fit(sub, sizeof(sub), g.msg2, HF_S15, 0.5f, 600.0f), 0.5f, 0);
 }
 
-void build_play_hud(Hud* h, const Camera& cam) {
+void build_play_hud(Game& g, Hud* h, const Camera& cam) {
   char buf[64];
   // Sopra i mostri colpiti: quanta vita resta.
   for (int k = 0; k < MAX_MONSTERS; ++k) {
     const Monster& m = g.mo[k];
-    if (!m.alive || m.rise > 0 || m.shown <= 0 || !monster_drawn(m)) continue;
+    if (!m.alive || m.rise > 0 || m.shown <= 0 || !monster_drawn(g, m)) continue;
     float sx, sy;
     const float top = MONS[m.type].flying ? m.fly + 0.45f : monster_draw_top(m) + 0.1f;
     if (!to_px(cam, v3(m.pos.x, top, m.pos.z), &sx, &sy)) continue;
@@ -1536,7 +1536,7 @@ void build_play_hud(Hud* h, const Camera& cam) {
     const Player& p = g.pl[i];
     if (!p.active) continue;
     if (p.alive) {
-      player_bars(h, cam, i);
+      player_bars(g, h, cam, i);
     } else if (p.respawn > 0 && g.phase != PH_WIPE) {
       float sx, sy;
       if (to_px(cam, v3(p.pos.x, p.pos.y + 1.0f, p.pos.z), &sx, &sy)) {
@@ -1558,15 +1558,15 @@ void build_play_hud(Hud* h, const Camera& cam) {
   // Sotto la pausa e le carte no: si scontrerebbe con i titoli (e il gioco e' fermo).
   if (!g.paused && !g.cards_open) {
     ui::scrim_top(h, 96.0f);
-    const float right = n > 0 ? player_icons(h) : HX - 12.0f;
-    top_line(h, right + 12.0f);
+    const float right = n > 0 ? player_icons(g, h) : HX - 12.0f;
+    top_line(g, h, right + 12.0f);
   }
 
   // Messaggi grandi al centro (non sotto le carte: si vedono dopo, il gioco e' fermo).
-  if (g.msg_t > 0 && !g.paused && !g.cards_open) center_msg(h);
+  if (g.msg_t > 0 && !g.paused && !g.cards_open) center_msg(g, h);
   bool waiting = false, joining = false;
   for (int i = 0; i < MAX_PLAYERS; ++i) {
-    waiting |= !g.pl[i].active && !g.pl[i].joining && net_console(i);
+    waiting |= !g.pl[i].active && !g.pl[i].joining && net_console(g, i);
     joining |= g.pl[i].joining;
   }
   if (!g.paused && !g.cards_open && !joining && waiting && g.zone == 0 && g.tick < 900 && g.map_idx == 0) {
@@ -1574,19 +1574,19 @@ void build_play_hud(Hud* h, const Camera& cam) {
     const float cy = 480.0f - HY - 11.0f;
     float ww = 4.0f + hud_text_w(HF_S13, msg, 1.0f);
     for (int i = 0; i < MAX_PLAYERS; ++i)
-      if (!g.pl[i].active && net_console(i)) ww += 30.0f;
+      if (!g.pl[i].active && net_console(g, i)) ww += 30.0f;
     ui::scrim_bottom(h, 70.0f);
     float x = 320.0f - ww * 0.5f;
     for (int i = 0; i < MAX_PLAYERS; ++i)
-      if (!g.pl[i].active && net_console(i)) x += ui::gp(h, x, cy, i) + 6.0f;
+      if (!g.pl[i].active && net_console(g, i)) x += ui::gp(h, x, cy, i) + 6.0f;
     stext(h, x + 4.0f, cy, HF_S13, ui::FTX, msg, 1.0f);
   }
   if (!g.paused && !g.cards_open) {
-    mate_arrows(h, cam);
-    net_wait_badge(h);
+    mate_arrows(g, h, cam);
+    net_wait_badge(g, h);
   }
-  if (g.cards_open) cards_hud(h);      // scelta delle carte al posto di pausa e finestre per entrare
-  else play_menus_hud(h);
+  if (g.cards_open) cards_hud(g, h);      // scelta delle carte al posto di pausa e finestre per entrare
+  else play_menus_hud(g, h);
   // La batteria della console in alto a destra, sempre (anche in pausa e con le carte).
   const SysBattery bat = sys_battery(plat_now_ms());
   if (bat.present) ui::battery(h, 640.0f - HX, HY + 14.0f, bat.percent, bat.charging, g.ui_tick);
@@ -1610,24 +1610,24 @@ bool to_screen(const Camera& c, Vec3 p, int* sx, int* sy) {
   return true;
 }
 
-void game_build_frame(FrameDesc* fd, int w, int h, Hud* hud) {
+void game_build_frame(Game& g, FrameDesc* fd, int w, int h, Hud* hud) {
   g_n = 0;
   g_view = g.cam_target;
   if (g.level_ok) {
-    push_world();
+    push_world(g);
     if (g.screen == SC_PLAY) {
-      for (int i = 0; i < MAX_PLAYERS; ++i) push_player(i);
-      for (int k = 0; k < MAX_MONSTERS; ++k) push_monster(k);
-      push_explorer();
-      push_boss();
-      push_shots();
-      push_markers();
+      for (int i = 0; i < MAX_PLAYERS; ++i) push_player(g, i);
+      for (int k = 0; k < MAX_MONSTERS; ++k) push_monster(g, k);
+      push_explorer(g);
+      push_boss(g);
+      push_shots(g);
+      push_markers(g);
     } else if (g.screen == SC_STATS) {
-      push_stats_chars();
+      push_stats_chars(g);
     } else {
-      push_menu_chars();
+      push_menu_chars(g);
     }
-    push_particles();
+    push_particles(g);
   }
   Vec3 target = g.cam_target;
   if (g.shake > 0.0f) {
@@ -1647,8 +1647,8 @@ void game_build_frame(FrameDesc* fd, int w, int h, Hud* hud) {
   fd->hud_scale = h / 240 > 0 ? h / 240 : 1;
   if (!hud) return;
   hud_reset(hud);
-  if (g.screen == SC_PLAY) build_play_hud(hud, fd->cam);
-  else menu_build_hud(hud, fd->cam);
+  if (g.screen == SC_PLAY) build_play_hud(g, hud, fd->cam);
+  else menu_build_hud(g, hud, fd->cam);
   // Caratteri che il gioco non sa disegnare (si vedono come '?'; nomi di mappe personalizzate, o
   // testi cambiati senza rigenerare i caratteri): una volta nel registro.
   static bool missing_logged = false;

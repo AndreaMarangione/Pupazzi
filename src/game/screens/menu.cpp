@@ -20,24 +20,20 @@
 namespace {
 
 const int CHARS_START_DELAY = 50;
-int g_info_t;                 // avviso temporaneo nei menu ("in arrivo")
-char g_info[256];
-int g_net_err_seen;           // errori della rete gia' mostrati (NetView::error_seq)
-bool g_lobby_join;            // la sala d'attesa e' quella di chi cerca (per tornare alla voce giusta)
 
-bool confirm(int i) { return pad_pressed(i, PAD_A) || g.start_tap[i]; }
-bool back(int i) { return pad_pressed(i, PAD_B); }
-bool any_confirm(int* who) {
+bool confirm(Game& g, int i) { return pad_pressed(g, i, PAD_A) || g.start_tap[i]; }
+bool back(Game& g, int i) { return pad_pressed(g, i, PAD_B); }
+bool any_confirm(Game& g, int* who) {
   for (int i = 0; i < MAX_PLAYERS; ++i)
-    if (confirm(i)) { *who = i; return true; }
+    if (confirm(g, i)) { *who = i; return true; }
   return false;
 }
-bool any_back(void) {
+bool any_back(Game& g) {
   for (int i = 0; i < MAX_PLAYERS; ++i)
-    if (back(i)) return true;
+    if (back(g, i)) return true;
   return false;
 }
-int any_nav(void) {
+int any_nav(Game& g) {
   for (int i = 0; i < MAX_PLAYERS; ++i)
     if (g.in[i].nav) {
       snd_ui(SND_UI_MOVE);
@@ -45,23 +41,21 @@ int any_nav(void) {
     }
   return NAV_NONE;
 }
-void info(const char* s) {
-  snprintf(g_info, sizeof(g_info), "%s", s);
-  g_info_t = 120;
+void info(Game& g, const char* s) {
+  snprintf(g.session.info, sizeof(g.session.info), "%s", s);
+  g.session.info_t = 120;
 }
 
 // --- salvataggi (0.5.3) ----------------------------------------------------------------------
 
 // Cosa si mostra di ogni posto: il pianeta piu' lontano raggiunto con il suo giro, le stelle del giro,
 // le mappe aperte, il tempo di gioco.
-struct SlotView { int state, world, giro, stars, smax, open, total; uint32_t seconds; char name[SAVE_NAME_LEN]; };
-SlotView g_slot_view[SAVE_SLOTS];
 
-void slots_refresh(void) {
+void slots_refresh(Game& g) {
   save_write();                    // la partita attiva com'e' adesso (il tempo di gioco)
   static SaveData d;
   for (int i = 0; i < SAVE_SLOTS; ++i) {
-    SlotView& v = g_slot_view[i];
+    SlotView& v = g.session.slot_view[i];
     memset(&v, 0, sizeof(v));
     v.state = save_slot_peek(i, &d);
     int w = 0;
@@ -81,119 +75,119 @@ void slots_refresh(void) {
 }
 
 // Nome da mostrare: quello dato o "PARTITA N".
-const char* slot_name(int i, char* buf, int n) {
-  if (i >= 0 && i < SAVE_SLOTS && g_slot_view[i].state == SAVE_LETTO && g_slot_view[i].name[0]) return g_slot_view[i].name;
+const char* slot_name(Game& g, int i, char* buf, int n) {
+  if (i >= 0 && i < SAVE_SLOTS && g.session.slot_view[i].state == SAVE_LETTO && g.session.slot_view[i].name[0]) return g.session.slot_view[i].name;
   snprintf(buf, (size_t)n, tr("PARTITA %d"), i + 1);
   return buf;
 }
 
-int first_free_slot(void) {
+int first_free_slot(Game& g) {
   for (int i = 0; i < SAVE_SLOTS; ++i)
-    if (g_slot_view[i].state == SAVE_NUOVO) return i;
+    if (g.session.slot_view[i].state == SAVE_NUOVO) return i;
   return -1;
 }
 
-int used_slots(void) {
+int used_slots(Game& g) {
   int n = 0;
-  for (int i = 0; i < SAVE_SLOTS; ++i) n += g_slot_view[i].state != SAVE_NUOVO;
+  for (int i = 0; i < SAVE_SLOTS; ++i) n += g.session.slot_view[i].state != SAVE_NUOVO;
   return n;
 }
 
 // Tastiera del nome (0.5.4): per una partita nuova (che si crea solo quando si conferma il nome) o
 // per cambiare il nome di una che c'e'.
-void enter_name(int mode, int slot, int who, bool overwrite) {
+void enter_name(Game& g, int mode, int slot, int who, bool overwrite) {
   g.name_mode = mode;
   g.name_slot = slot;
   g.name_overwrite = overwrite;
   g.menu_owner = who;
   g.slots_pop = SP_NONE;
   g.name_buf[0] = 0;
-  if (mode == NM_RENAME) memcpy(g.name_buf, g_slot_view[slot].name, sizeof(g.name_buf));
+  if (mode == NM_RENAME) memcpy(g.name_buf, g.session.slot_view[slot].name, sizeof(g.name_buf));
   g.name_buf[SAVE_NAME_LEN - 1] = 0;
   g.name_row = 2;                    // sulla A
   g.name_col = 0;
-  go_screen(SC_NAME);
+  go_screen(g, SC_NAME);
 }
 
 // Le schermate si preparano prima di andarci: gia' il primo fotogramma e' quello giusto (posti
 // aggiornati, cursore al suo posto, nessuna finestra aperta). All'avvio il titolo si prepara nel
 // suo primo aggiornamento (i salvataggi si aprono dopo).
-void back_to_title(int item) {
-  go_screen(SC_TITLE);
-  slots_refresh();
+void back_to_title(Game& g, int item) {
+  go_screen(g, SC_TITLE);
+  slots_refresh(g);
   g.menu_sel = item;
 }
 
-void enter_slots(int mode) {
+void enter_slots(Game& g, int mode) {
   g.slots_mode = mode;
-  go_screen(SC_SLOTS);
-  slots_refresh();
+  go_screen(g, SC_SLOTS);
+  slots_refresh(g);
   g.slots_pop = SP_NONE;
   g.slots_sel = 0;
   if (mode == SL_NET) {                             // in rete: la partita attiva, o la prima usata, o il primo posto
     if (save_slot() >= 0) g.slots_sel = save_slot();
     else
       for (int i = SAVE_SLOTS - 1; i >= 0; --i)
-        if (g_slot_view[i].state != SAVE_NUOVO) g.slots_sel = i;
+        if (g.session.slot_view[i].state != SAVE_NUOVO) g.slots_sel = i;
   } else if (mode != SL_OVERWRITE) {                // il cursore sul primo posto usato
-    while (g.slots_sel < SAVE_SLOTS - 1 && g_slot_view[g.slots_sel].state == SAVE_NUOVO) g.slots_sel++;
+    while (g.slots_sel < SAVE_SLOTS - 1 && g.session.slot_view[g.slots_sel].state == SAVE_NUOVO) g.slots_sel++;
   }
 }
 
-void enter_lang(void) {
-  go_screen(SC_LANG);
+void enter_lang(Game& g) {
+  go_screen(g, SC_LANG);
   g.lang_sel = lang_get();
 }
 
-void title_update(void) {
-  if (g.screen_t == 1) slots_refresh();
-  const int nav = any_nav();
+void title_update(Game& g) {
+  if (g.screen_t == 1) slots_refresh(g);
+  const int nav = any_nav(g);
   if (nav == NAV_UP) g.menu_sel = (g.menu_sel + TITLE_ITEMS - 1) % TITLE_ITEMS;
   if (nav == NAV_DOWN) g.menu_sel = (g.menu_sel + 1) % TITLE_ITEMS;
   int who;
-  if (!any_confirm(&who)) return;
+  if (!any_confirm(g, &who)) return;
   switch (g.menu_sel) {
     case TI_NEW: {
       snd_ui(SND_UI_OK);
-      const int free = first_free_slot();
-      if (free >= 0) enter_name(NM_NEW, free, who, false);
-      else enter_slots(SL_OVERWRITE);
+      const int free = first_free_slot(g);
+      if (free >= 0) enter_name(g, NM_NEW, free, who, false);
+      else enter_slots(g, SL_OVERWRITE);
       break;
     }
     case TI_LOAD:
     case TI_MANAGE:
-      if (used_slots() == 0) {
+      if (used_slots(g) == 0) {
         snd_ui(SND_UI_BACK);
-        info(tr("nessun salvataggio: comincia una nuova partita"));
+        info(g, tr("nessun salvataggio: comincia una nuova partita"));
       } else {
         snd_ui(SND_UI_OK);
         g.menu_owner = who;
-        enter_slots(g.menu_sel == TI_LOAD ? SL_LOAD : SL_MANAGE);
+        enter_slots(g, g.menu_sel == TI_LOAD ? SL_LOAD : SL_MANAGE);
       }
       break;
     case TI_LANG:
       snd_ui(SND_UI_OK);
-      enter_lang();
+      enter_lang(g);
       break;
     case TI_NET:
       snd_ui(SND_UI_OK);
       g.menu_owner = who;
-      go_screen(SC_NET);
+      go_screen(g, SC_NET);
       break;
     default:
       snd_ui(SND_UI_OK);
       plat_log("scelto Esci dal titolo");
-      game_request_quit();
+      game_request_quit(g);
       break;
   }
 }
 
-void slots_update(void) {
-  const int nav = any_nav();
+void slots_update(Game& g) {
+  const int nav = any_nav(g);
   int who;
-  const bool ok = any_confirm(&who), no = !ok && any_back();
+  const bool ok = any_confirm(g, &who), no = !ok && any_back(g);
   const int sel = g.slots_sel;
-  const SlotView& v = g_slot_view[sel];
+  const SlotView& v = g.session.slot_view[sel];
   char buf[256];
   switch (g.slots_pop) {
     case SP_NONE:
@@ -207,21 +201,21 @@ void slots_update(void) {
           // In rete: con un salvataggio che c'e' si crea subito la partita; un posto libero prima il nome.
           snd_ui(SND_UI_OK);
           if (v.state == SAVE_NUOVO) {
-            enter_name(NM_NET, sel, who, false);
+            enter_name(g, NM_NET, sel, who, false);
           } else {
             save_slot_load(sel);
-            net_req(NR_HOST, sel);
-            go_screen(SC_LOBBY);
-            g_lobby_join = false;
+            net_req(g, NR_HOST, sel);
+            go_screen(g, SC_LOBBY);
+            g.session.lobby_join = false;
           }
         } else if (v.state == SAVE_NUOVO) {
           snd_ui(SND_UI_BACK);
-          info(tr("posto libero"));
+          info(g, tr("posto libero"));
         } else if (g.slots_mode == SL_LOAD) {
           snd_ui(SND_UI_OK);
           save_slot_load(sel);
           g.menu_owner = who;
-          go_screen(SC_MODE);
+          go_screen(g, SC_MODE);
         } else {
           snd_ui(SND_UI_OK);
           g.slots_pop = SP_ACTIONS;
@@ -229,8 +223,8 @@ void slots_update(void) {
         }
       } else if (no) {
         snd_ui(SND_UI_BACK);
-        if (g.slots_mode == SL_NET) go_screen(SC_NET);
-        else back_to_title(g.slots_mode == SL_LOAD ? TI_LOAD : (g.slots_mode == SL_MANAGE ? TI_MANAGE : TI_NEW));
+        if (g.slots_mode == SL_NET) go_screen(g, SC_NET);
+        else back_to_title(g, g.slots_mode == SL_LOAD ? TI_LOAD : (g.slots_mode == SL_MANAGE ? TI_MANAGE : TI_NEW));
       }
       break;
     case SP_ACTIONS:
@@ -246,25 +240,25 @@ void slots_update(void) {
           g.slots_pop = SP_NONE;
           if (v.state != SAVE_LETTO) {
             snd_ui(SND_UI_BACK);
-            info(tr("salvataggio illeggibile: non si può rinominare"));
+            info(g, tr("salvataggio illeggibile: non si può rinominare"));
           } else {
             snd_ui(SND_UI_OK);
-            enter_name(NM_RENAME, sel, who, false);
+            enter_name(g, NM_RENAME, sel, who, false);
           }
           break;
         }
-        const int free = first_free_slot();
+        const int free = first_free_slot(g);
         if (free < 0) {
           snd_ui(SND_UI_BACK);
-          info(tr("nessun posto libero: elimina prima un salvataggio"));
+          info(g, tr("nessun posto libero: elimina prima un salvataggio"));
         } else if (save_slot_copy(sel, free)) {
           snd_ui(SND_UI_OK);
           snprintf(buf, sizeof(buf), tr("copiato nel posto %d"), free + 1);
-          info(buf);
-          slots_refresh();
+          info(g, buf);
+          slots_refresh(g);
         } else {
           snd_ui(SND_UI_BACK);
-          info(tr("copia non riuscita"));
+          info(g, tr("copia non riuscita"));
         }
         g.slots_pop = SP_NONE;
       } else if (no) {
@@ -276,16 +270,16 @@ void slots_update(void) {
       if (ok) {
         if (g.slots_pop == SP_OVERWRITE) {
           snd_ui(SND_UI_OK);
-          enter_name(NM_NEW, sel, who, true);
+          enter_name(g, NM_NEW, sel, who, true);
           break;
         }
         const bool done = save_slot_delete(sel);
         snd_ui(done ? SND_UI_OK : SND_UI_BACK);
         snprintf(buf, sizeof(buf), done ? tr("salvataggio %d eliminato") : tr("non riesco a eliminare il salvataggio %d"), sel + 1);
-        info(buf);
-        slots_refresh();
+        info(g, buf);
+        slots_refresh(g);
         g.slots_pop = SP_NONE;
-        if (used_slots() == 0) back_to_title(TI_NEW);    // non resta niente da gestire
+        if (used_slots(g) == 0) back_to_title(g, TI_NEW);    // non resta niente da gestire
       } else if (no) {
         snd_ui(SND_UI_BACK);
         g.slots_pop = SP_NONE;
@@ -294,65 +288,65 @@ void slots_update(void) {
   }
 }
 
-void lang_update(void) {
-  const int nav = any_nav();
+void lang_update(Game& g) {
+  const int nav = any_nav(g);
   if (nav == NAV_UP) g.lang_sel = (g.lang_sel + NLANGS - 1) % NLANGS;
   if (nav == NAV_DOWN) g.lang_sel = (g.lang_sel + 1) % NLANGS;
   int who;
-  if (any_confirm(&who)) {
+  if (any_confirm(g, &who)) {
     snd_ui(SND_UI_OK);
     if (g.lang_sel != lang_get()) {
-      g_info_t = 0;                                // un avviso ancora a schermo era nella lingua di prima
+      g.session.info_t = 0;                                // un avviso ancora a schermo era nella lingua di prima
       lang_set(g.lang_sel);
       save_data()->lang = (uint8_t)g.lang_sel;
       save_write();
       plat_log("lingua: %s", save_lang_id(g.lang_sel));
     }
-    back_to_title(TI_LANG);
-  } else if (any_back()) {
+    back_to_title(g, TI_LANG);
+  } else if (any_back(g)) {
     snd_ui(SND_UI_BACK);
-    back_to_title(TI_LANG);
+    back_to_title(g, TI_LANG);
   }
 }
 
 // --- gioco in rete (0.5.4) ----------------------------------------------------------------------
 
 // GIOCO IN RETE: crea una partita (poi il salvataggio con cui giocarla) o unisciti (si cerca subito).
-void net_update(void) {
-  const int nav = any_nav();
+void net_update(Game& g) {
+  const int nav = any_nav(g);
   if (nav != NAV_NONE) g.menu_sel ^= 1;
   int who;
-  if (any_confirm(&who)) {
+  if (any_confirm(g, &who)) {
     snd_ui(SND_UI_OK);
     g.menu_owner = who;
     if (g.menu_sel == 0) {
-      enter_slots(SL_NET);
+      enter_slots(g, SL_NET);
     } else {
-      net_req(NR_SEARCH, 0);
-      go_screen(SC_LOBBY);
+      net_req(g, NR_SEARCH, 0);
+      go_screen(g, SC_LOBBY);
       g.lobby_sel = 0;
-      g_lobby_join = true;
+      g.session.lobby_join = true;
     }
-  } else if (any_back()) {
+  } else if (any_back(g)) {
     snd_ui(SND_UI_BACK);
-    back_to_title(TI_NET);
+    back_to_title(g, TI_NET);
   }
 }
 
 // Sala d'attesa: chi ha creato la partita la fa cominciare (A, con almeno un'altra console) o la
 // annulla (B); chi cerca sceglie una partita (A) o torna indietro (B); chi si e' unito aspetta (B esce).
-void lobby_update(void) {
-  const NetView& v = net_view();
-  if (v.error_seq != g_net_err_seen) {
-    g_net_err_seen = v.error_seq;
+void lobby_update(Game& g) {
+  const NetView& v = net_view(g);
+  if (v.error_seq != g.session.net_err_seen) {
+    g.session.net_err_seen = v.error_seq;
     char buf[256];
     if (v.error != NE_NONE) {
       snd_ui(SND_UI_BACK);
-      info(net_error_text(v.error, buf, sizeof(buf)));
+      info(g, net_error_text(g, v.error, buf, sizeof(buf)));
     }
   }
   int who;
-  const bool ok = any_confirm(&who), no = !ok && any_back();
+  const bool ok = any_confirm(g, &who), no = !ok && any_back(g);
   switch (v.mode) {
     case NV_HOST: {
       int n = 0;
@@ -360,20 +354,20 @@ void lobby_update(void) {
       if (ok) {
         if (n < 2) {
           snd_ui(SND_UI_BACK);
-          info(tr("aspetta almeno un'altra console"));
+          info(g, tr("aspetta almeno un'altra console"));
         } else {
           snd_ui(SND_UI_OK);
-          net_req(NR_START, 0);
+          net_req(g, NR_START, 0);
         }
       } else if (no) {
         snd_ui(SND_UI_BACK);
-        net_req(NR_LEAVE, 0);
-        go_screen(SC_NET);
+        net_req(g, NR_LEAVE, 0);
+        go_screen(g, SC_NET);
       }
       break;
     }
     case NV_SEARCH: {
-      const int nav = any_nav();
+      const int nav = any_nav(g);
       if (v.ngames > 0) {
         if (nav == NAV_UP) g.lobby_sel = (g.lobby_sel + v.ngames - 1) % v.ngames;
         if (nav == NAV_DOWN) g.lobby_sel = (g.lobby_sel + 1) % v.ngames;
@@ -381,13 +375,13 @@ void lobby_update(void) {
       if (g.lobby_sel >= v.ngames) g.lobby_sel = v.ngames > 0 ? v.ngames - 1 : 0;
       if (ok && v.ngames > 0) {
         snd_ui(SND_UI_OK);
-        net_req(NR_JOIN, g.lobby_sel);
+        net_req(g, NR_JOIN, g.lobby_sel);
       } else if (ok) {
         snd_ui(SND_UI_BACK);
       } else if (no) {
         snd_ui(SND_UI_BACK);
-        net_req(NR_LEAVE, 0);
-        go_screen(SC_NET);
+        net_req(g, NR_LEAVE, 0);
+        go_screen(g, SC_NET);
         g.menu_sel = 1;
       }
       break;
@@ -396,13 +390,13 @@ void lobby_update(void) {
     case NV_JOINED:
       if (no) {
         snd_ui(SND_UI_BACK);
-        net_req(NR_LEAVE, 0);
+        net_req(g, NR_LEAVE, 0);
       }
       break;
     default:      // la rete non si e' aperta (o si e' chiusa): di nuovo GIOCO IN RETE
       if (g.screen_t > 3) {
-        go_screen(SC_NET);
-        g.menu_sel = g_lobby_join ? 1 : 0;
+        go_screen(g, SC_NET);
+        g.menu_sel = g.session.lobby_join ? 1 : 0;
       }
       break;
   }
@@ -418,7 +412,7 @@ enum { KA_SPACE = 0, KA_DEL, KA_OK };
 const int KA_COL0[3] = { 0, 4, 7 }, KA_COLS[3] = { 4, 3, 3 };
 int kb_action(int col) { return col < 4 ? KA_SPACE : (col < 7 ? KA_DEL : KA_OK); }
 
-void name_type(char c) {
+void name_type(Game& g, char c) {
   const int len = (int)strlen(g.name_buf);
   if (len >= KB_NAME_MAX || (c == ' ' && (len == 0 || g.name_buf[len - 1] == ' '))) {
     snd_ui(SND_UI_BACK);                         // pieno, o spazio all'inizio o doppio
@@ -429,43 +423,43 @@ void name_type(char c) {
   snd_ui(SND_UI_MOVE);
 }
 
-void name_cancel(void) {
+void name_cancel(Game& g) {
   snd_ui(SND_UI_BACK);
   const int slot = g.name_slot;
   if (g.name_mode == NM_RENAME || g.name_overwrite || g.name_mode == NM_NET) {
-    enter_slots(g.name_mode == NM_RENAME ? SL_MANAGE : (g.name_mode == NM_NET ? SL_NET : SL_OVERWRITE));
+    enter_slots(g, g.name_mode == NM_RENAME ? SL_MANAGE : (g.name_mode == NM_NET ? SL_NET : SL_OVERWRITE));
     g.slots_sel = slot;
   } else {
-    back_to_title(TI_NEW);
+    back_to_title(g, TI_NEW);
   }
 }
 
-void name_done(void) {
+void name_done(Game& g) {
   snd_ui(SND_UI_OK);
   const int slot = g.name_slot;
   if (g.name_mode == NM_NEW || g.name_mode == NM_NET) {
     save_slot_new(slot, g.name_buf);             // la partita nasce adesso, con il suo nome
     if (g.name_mode == NM_NET) {                 // ... e si crea la partita in rete
-      net_req(NR_HOST, slot);
-      go_screen(SC_LOBBY);
-      g_lobby_join = false;
+      net_req(g, NR_HOST, slot);
+      go_screen(g, SC_LOBBY);
+      g.session.lobby_join = false;
     } else {
-      go_screen(SC_MODE);
+      go_screen(g, SC_MODE);
     }
     return;
   }
   const bool ok = save_slot_rename(slot, g.name_buf);
-  enter_slots(SL_MANAGE);
+  enter_slots(g, SL_MANAGE);
   g.slots_sel = slot;
   if (!ok) {
     char buf[256];
     snprintf(buf, sizeof(buf), tr("non riesco a rinominare il salvataggio %d"), slot + 1);
-    info(buf);
+    info(g, buf);
   }
 }
 
-void name_update(void) {
-  const int nav = any_nav();
+void name_update(Game& g) {
+  const int nav = any_nav(g);
   int& r = g.name_row;
   int& c = g.name_col;
   if (nav == NAV_UP) r = (r + KB_ROWS - 1) % KB_ROWS;
@@ -474,21 +468,21 @@ void name_update(void) {
   if (nav == NAV_RIGHT) c = r == 4 ? KA_COL0[(kb_action(c) + 1) % 3] : (c + 1) % KB_COLS;
   bool a = false, b = false, done = false;
   for (int i = 0; i < MAX_PLAYERS; ++i) {
-    a |= pad_pressed(i, PAD_A);
-    b |= pad_pressed(i, PAD_B);
+    a |= pad_pressed(g, i, PAD_A);
+    b |= pad_pressed(g, i, PAD_B);
     done |= g.start_tap[i];
   }
   if (done) {
-    name_done();
+    name_done(g);
     return;
   }
   if (a) {
     if (r < 4) {
-      name_type(KB_KEYS[r][c]);
+      name_type(g, KB_KEYS[r][c]);
     } else if (kb_action(c) == KA_SPACE) {
-      name_type(' ');
+      name_type(g, ' ');
     } else if (kb_action(c) == KA_OK) {
-      name_done();
+      name_done(g);
       return;
     } else {
       b = true;                                  // CANCELLA come B, ma senza uscire
@@ -501,7 +495,7 @@ void name_update(void) {
   if (b) {
     const int len = (int)strlen(g.name_buf);
     if (len == 0) {
-      name_cancel();
+      name_cancel(g);
       return;
     }
     g.name_buf[len - 1] = 0;
@@ -511,75 +505,75 @@ void name_update(void) {
 
 // Le due schede stanno affiancate: si cambia con destra/sinistra (e anche su/giu'). In rete B apre
 // la finestra "finire la partita in rete?" (si' porta tutte le console al titolo).
-void mode_update(void) {
+void mode_update(Game& g) {
   int who;
   if (g.net_pop) {
-    if (any_confirm(&who)) {
+    if (any_confirm(g, &who)) {
       snd_ui(SND_UI_OK);
       g.net_pop = false;
       plat_log("partita in rete finita da COME SI GIOCA? (giocatore %d)", who + 1);
-      back_to_title(TI_NET);
-    } else if (any_back()) {
+      back_to_title(g, TI_NET);
+    } else if (any_back(g)) {
       snd_ui(SND_UI_BACK);
       g.net_pop = false;
     }
     return;
   }
-  const int nav = any_nav();
+  const int nav = any_nav(g);
   if (nav != NAV_NONE) g.menu_sel ^= 1;
-  if (any_confirm(&who)) {
+  if (any_confirm(g, &who)) {
     if (g.menu_sel == 0) {
       snd_ui(SND_UI_OK);
-      go_screen(SC_MAPS);
+      go_screen(g, SC_MAPS);
     } else {
       snd_ui(SND_UI_BACK);
-      info(tr("CONTRO arriva con la versione 0.6"));
+      info(g, tr("CONTRO arriva con la versione 0.6"));
     }
-  } else if (any_back()) {
+  } else if (any_back(g)) {
     snd_ui(SND_UI_BACK);
     if (g.net) g.net_pop = true;
-    else back_to_title(TI_NEW);
+    else back_to_title(g, TI_NEW);
   }
 }
 
-void maps_update(void) {
+void maps_update(Game& g) {
   const int n = maps_count();
-  const int nav = any_nav();
+  const int nav = any_nav(g);
   if (nav == NAV_UP) { g.map_sel = (g.map_sel + n - 1) % n; g.map_load_t = 0; }
   if (nav == NAV_DOWN) { g.map_sel = (g.map_sel + 1) % n; g.map_load_t = 0; }
   if (g.map_shown != g.map_sel && ++g.map_load_t > 10) {
-    load_map_preview(g.map_sel);
-    update_camera(true);
+    load_map_preview(g, g.map_sel);
+    update_camera(g, true);
   }
   int who;
-  if (any_confirm(&who)) {
+  if (any_confirm(g, &who)) {
     if (!map_unlocked(g.map_sel)) {
       snd_ui(SND_UI_BACK);
       const int w = maps_world(g.map_sel);
       if (map_in_world(g.map_sel) > 0 && world_first_map(w) >= 0 && map_unlocked(world_first_map(w))) {
-        info(tr("si apre finendo la mappa prima"));
+        info(g, tr("si apre finendo la mappa prima"));
       } else if (w > 0 && w < NWORLDS) {
         char buf[128];
         snprintf(buf, sizeof(buf), tr("si apre battendo il boss di %s"), tr(WORLD_NAMES[w - 1]));
-        info(buf);
+        info(g, buf);
       } else {
-        info(tr("mappa chiusa"));
+        info(g, tr("mappa chiusa"));
       }
       return;
     }
     snd_ui(SND_UI_OK);
-    load_map_preview(g.map_sel);
-    go_screen(SC_CHARS);
-  } else if (any_back()) {
+    load_map_preview(g, g.map_sel);
+    go_screen(g, SC_CHARS);
+  } else if (any_back(g)) {
     snd_ui(SND_UI_BACK);
-    go_screen(SC_MODE);
+    go_screen(g, SC_MODE);
   }
 }
 
-void chars_update(void) {
+void chars_update(Game& g) {
   for (int i = 0; i < MAX_PLAYERS; ++i) {
     if (!g.joined[i]) {
-      if (confirm(i)) {
+      if (confirm(g, i)) {
         g.joined[i] = true;
         g.ready[i] = false;
         snd_ui(SND_UI_OK);
@@ -589,16 +583,16 @@ void chars_update(void) {
     if (!g.ready[i]) {
       if (g.in[i].nav == NAV_LEFT) { g.pick[i] = (g.pick[i] + NCHARS - 1) % NCHARS; snd_ui(SND_UI_MOVE); }
       if (g.in[i].nav == NAV_RIGHT) { g.pick[i] = (g.pick[i] + 1) % NCHARS; snd_ui(SND_UI_MOVE); }
-      if (confirm(i)) { g.ready[i] = true; snd_ui(SND_UI_OK); }
-      else if (back(i)) {
+      if (confirm(g, i)) { g.ready[i] = true; snd_ui(SND_UI_OK); }
+      else if (back(g, i)) {
         snd_ui(SND_UI_BACK);
         g.joined[i] = false;
-        if (g.pl[i].active) player_leave(i);
+        if (g.pl[i].active) player_leave(g, i);
         bool any = false;
         for (int j = 0; j < MAX_PLAYERS; ++j) any |= g.joined[j];
-        if (!any) { go_screen(SC_MAPS); return; }
+        if (!any) { go_screen(g, SC_MAPS); return; }
       }
-    } else if (back(i)) {
+    } else if (back(g, i)) {
       g.ready[i] = false;
       snd_ui(SND_UI_BACK);
     }
@@ -611,10 +605,10 @@ void chars_update(void) {
   if (joined > 0 && ready == joined) {
     if (++g.chars_t >= CHARS_START_DELAY) {
       for (int i = 0; i < MAX_PLAYERS; ++i) {
-        if (g.joined[i]) player_join(i, g.pick[i], false);
-        else if (g.pl[i].active) player_leave(i);
+        if (g.joined[i]) player_join(g, i, g.pick[i], false);
+        else if (g.pl[i].active) player_leave(g, i);
       }
-      start_map(g.map_sel);
+      start_map(g, g.map_sel);
     }
   } else {
     g.chars_t = 0;
@@ -625,13 +619,13 @@ void chars_update(void) {
 // l'ultima stella.
 const int STAR_T0 = 40, STAR_STEP = 26, STATS_READY = STAR_T0 + 2 * STAR_STEP + 12;
 
-void stats_update(void) {
+void stats_update(Game& g) {
   for (int k = 0; k < 3; ++k)
     if (g.screen_t == STAR_T0 + STAR_STEP * k && ((g.stars_got >> k) & 1)) snd_ui(SND_STAR);
   if (g.screen_t == STATS_READY && g.giro_up) snd_ui(SND_ZONE_CLEAR);
   if (g.screen_t < STATS_READY) return;
   int who;
-  if (any_confirm(&who)) {
+  if (any_confirm(g, &who)) {
     snd_ui(SND_UI_OK);
     // Avanti nella campagna: la mappa dopo dello stesso pianeta (finita questa, e' aperta). Dopo
     // il boss di un pianeta si va al pianeta dopo, se c'e' gia', altrimenti si torna alla prima
@@ -647,11 +641,11 @@ void stats_update(void) {
       plat_log("si torna alla prima mappa di %s (giro %d)", WORLD_NAMES[w >= 0 && w < NWORLDS ? w : 0], world_giro(w));
     }
     g.map_sel = next;
-    load_map_preview(next);
-    go_screen(SC_CHARS);
-  } else if (any_back()) {
+    load_map_preview(g, next);
+    go_screen(g, SC_CHARS);
+  } else if (any_back(g)) {
     snd_ui(SND_UI_BACK);
-    go_screen(SC_MAPS);
+    go_screen(g, SC_MAPS);
   }
 }
 
@@ -659,7 +653,7 @@ void stats_update(void) {
 
 inline uint32_t O(uint32_t rgb) { return HUD_OPAQUE(rgb); }
 inline uint32_t A(uint32_t rgb, float a) { return hud_a(rgb, a); }
-bool blinking(unsigned period) { return ((g.ui_tick / period) & 1u) == 0u; }
+bool blinking(Game& g, unsigned period) { return ((g.ui_tick / period) & 1u) == 0u; }
 
 // Avviso al posto del piede (in arrivo, mappa chiusa, errore di una mappa personalizzata): fino a
 // tre righe, larghe al massimo 440 pixel (a destra resta il posto per il numero della versione).
@@ -673,9 +667,9 @@ void toast(Hud* h, const char* s, uint32_t color) {
   for (int k = 0; k < n; ++k) ui::text(h, 320.0f, y + 15.0f + 18.0f * (float)k, HF_S14, O(color), L[k], 0.5f, 0);
 }
 
-void footer(Hud* h, const char* a_label, const char* b_label) {
-  if (g_info_t > 0) {
-    toast(h, g_info, ui::L1);
+void footer(Game& g, Hud* h, const char* a_label, const char* b_label) {
+  if (g.session.info_t > 0) {
+    toast(h, g.session.info, ui::L1);
   } else {
     const char* it[4] = { "A", a_label, "B", b_label };
     ui::footer(h, it, b_label ? 4 : 2);
@@ -683,7 +677,7 @@ void footer(Hud* h, const char* a_label, const char* b_label) {
   ui::version(h);
 }
 
-void title_hud(Hud* h) {
+void title_hud(Game& g, Hud* h) {
   ui::scrim_top(h);
   ui::scrim_bottom(h);
   // L'orbita intorno al nome, con il pianetino ciano.
@@ -708,7 +702,7 @@ void title_hud(Hud* h) {
   ui::panel(h, PX, PY, PW, 16.0f + RH * (float)TITLE_ITEMS);
   static const char* const LABEL[TITLE_ITEMS] = { N_("NUOVA PARTITA"), N_("CARICA SALVATAGGIO"), N_("GIOCO IN RETE"), N_("GESTISCI SALVATAGGI"),
                                                   N_("LINGUA"), N_("ESCI") };
-  const bool none = used_slots() == 0;
+  const bool none = used_slots(g) == 0;
   for (int k = 0; k < TITLE_ITEMS; ++k) {
     const float y = PY + 8.0f + RH * (float)k, cy2 = y + RH * 0.5f;
     const bool sel = k == g.menu_sel, off = none && (k == TI_LOAD || k == TI_MANAGE);
@@ -727,7 +721,7 @@ void title_hud(Hud* h) {
     ui::fit(tag, sizeof(tag), tr(LABEL[k]), HF_S16, 1.0f, room);
     ui::text(h, tx, cy2, HF_S16, c, tag, 1.0f);
   }
-  if (g_info_t > 0) toast(h, g_info, ui::L1);
+  if (g.session.info_t > 0) toast(h, g.session.info, ui::L1);
   else {
     const char* it[2] = { "A", tr("conferma") };
     ui::footer(h, it, 2);
@@ -743,8 +737,8 @@ void play_time(char* buf, int n, uint32_t s) {
 }
 
 // Un posto: numero, nome; sotto pianeta e giro, stelle, mappe aperte, tempo; vuoto o illeggibile.
-void slot_row(Hud* h, float x, float y, float w, float hh, int i, bool sel) {
-  const SlotView& v = g_slot_view[i];
+void slot_row(Game& g, Hud* h, float x, float y, float w, float hh, int i, bool sel) {
+  const SlotView& v = g.session.slot_view[i];
   char buf[256], t[64];
   if (sel) ui::bar_sel(h, x, y, w, hh);
   const float cy = y + hh * 0.5f;
@@ -766,7 +760,7 @@ void slot_row(Hud* h, float x, float y, float w, float hh, int i, bool sel) {
     return;
   }
   char wn[96], nm[64];
-  ui::text(h, tx, cy - 9.0f, HF_B16, mc, slot_name(i, nm, sizeof(nm)), 1.5f);
+  ui::text(h, tx, cy - 9.0f, HF_B16, mc, slot_name(g, i, nm, sizeof(nm)), 1.5f);
   hud_upper(wn, tr(WORLD_NAMES[v.world]), sizeof(wn));
   snprintf(t, sizeof(t), tr("%s · GIRO %d"), wn, v.giro);
   float lx = tx;
@@ -801,7 +795,7 @@ void yes_no(Hud* h, float cy) {
 }
 
 // Finestra sopra i posti: titolo e una o due righe; con le voci (azioni) o "A si' / B no".
-void slots_popup(Hud* h) {
+void slots_popup(Game& g, Hud* h) {
   char buf[256];
   ui::overlay(h, 0.5f);
   const float W = 380.0f, X = 130.0f;
@@ -814,7 +808,7 @@ void slots_popup(Hud* h) {
     ui::text(h, X + 22.0f, Y + 30.0f, HF_B22, O(ui::TX), buf, 3.0f);
     const float nw = hud_text_w(HF_B22, buf, 3.0f);
     ui::text(h, X + 22.0f + nw + 14.0f, Y + 31.0f, HF_S14, O(ui::L1),
-             ui::fit(t, sizeof(t), slot_name(i, nm, sizeof(nm)), HF_S14, 1.0f, W - 58.0f - nw), 1.0f);
+             ui::fit(t, sizeof(t), slot_name(g, i, nm, sizeof(nm)), HF_S14, 1.0f, W - 58.0f - nw), 1.0f);
     ui::sep(h, X + 22.0f, Y + 56.0f, W - 44.0f);
     static const char* const ACT[SA_COUNT] = { N_("DUPLICA"), N_("RINOMINA"), N_("ELIMINA") };
     static const char* const HINT[SA_COUNT] = { N_("una copia nel primo posto libero"), N_("gli dai un nome nuovo"),
@@ -834,10 +828,10 @@ void slots_popup(Hud* h) {
   snprintf(q, sizeof(q), g.slots_pop == SP_DELETE ? tr("ELIMINARE IL SALVATAGGIO %d?") : tr("SOVRASCRIVERE IL SALVATAGGIO %d?"), i + 1);
   ui::fit(fitted, sizeof(fitted), q, HF_B16, 1.5f, W - 44.0f);
   ui::text(h, 320.0f, Y + 32.0f, HF_B16, O(g.slots_pop == SP_DELETE ? ui::L2 : ui::TX), fitted, 1.5f, 0);
-  const SlotView& v = g_slot_view[i];
+  const SlotView& v = g.session.slot_view[i];
   if (v.state == SAVE_LETTO) {
     char wn[96], t[64], nm[64];
-    ui::text(h, 320.0f, Y + 58.0f, HF_S14, O(ui::L1), ui::fit(fitted, sizeof(fitted), slot_name(i, nm, sizeof(nm)), HF_S14, 1.0f, W - 44.0f),
+    ui::text(h, 320.0f, Y + 58.0f, HF_S14, O(ui::L1), ui::fit(fitted, sizeof(fitted), slot_name(g, i, nm, sizeof(nm)), HF_S14, 1.0f, W - 44.0f),
              1.0f, 0);
     hud_upper(wn, tr(WORLD_NAMES[v.world]), sizeof(wn));
     play_time(t, sizeof(t), v.seconds);
@@ -848,7 +842,7 @@ void slots_popup(Hud* h) {
   yes_no(h, Y + 116.0f);
 }
 
-void slots_hud(Hud* h) {
+void slots_hud(Game& g, Hud* h) {
   ui::scrim_top(h);
   ui::scrim_bottom(h);
   static const char* const TITLE[4] = { N_("CARICA SALVATAGGIO"), N_("GESTISCI SALVATAGGI"), N_("DOVE SALVARE?"), N_("CON QUALE SALVATAGGIO?") };
@@ -870,14 +864,14 @@ void slots_hud(Hud* h) {
   for (int i = 0; i < SAVE_SLOTS; ++i) {
     const float y = PY + 10.0f + (RH + GAP) * (float)i;
     if (i > 0) ui::sep(h, PX + 24.0f, y - GAP * 0.5f, PW - 48.0f);
-    slot_row(h, PX + 10.0f, y, PW - 20.0f, RH, i, i == g.slots_sel);
+    slot_row(g, h, PX + 10.0f, y, PW - 20.0f, RH, i, i == g.slots_sel);
   }
   if (g.slots_pop != SP_NONE) {
-    slots_popup(h);
+    slots_popup(g, h);
     return;
   }
-  if (g_info_t > 0) {
-    toast(h, g_info, ui::L1);
+  if (g.session.info_t > 0) {
+    toast(h, g.session.info, ui::L1);
     ui::version(h);
     return;
   }
@@ -887,7 +881,7 @@ void slots_hud(Hud* h) {
   ui::version(h);
 }
 
-void lang_hud(Hud* h) {
+void lang_hud(Game& g, Hud* h) {
   ui::scrim_top(h);
   ui::scrim_bottom(h);
   ui::title(h, 320, 26, HF_T32, tr("LINGUA"), 3.0f);
@@ -910,7 +904,7 @@ void lang_hud(Hud* h) {
 
 // Tastiera del nome: il campo con il nome (o "PARTITA N" in grigio finche' e' vuoto) e il cursore che
 // lampeggia, sotto la tastiera.
-void name_hud(Hud* h) {
+void name_hud(Game& g, Hud* h) {
   ui::scrim_top(h);
   ui::scrim_bottom(h);
   ui::title(h, 320, 26, HF_T32, tr("NOME DELLA PARTITA"), 3.0f);
@@ -926,7 +920,7 @@ void name_hud(Hud* h) {
     ui::text(h, cx, fcy, HF_B22, O(ui::TX), g.name_buf, 3.0f);
     cx += hud_text_w(HF_B22, g.name_buf, 3.0f) + 3.0f;
   }
-  if (blinking(16)) hud_box(h, cx, fcy - 12.0f, 3.0f, 24.0f, 0.0f, O(ui::L1));
+  if (blinking(g, 16)) hud_box(h, cx, fcy - 12.0f, 3.0f, 24.0f, 0.0f, O(ui::L1));
   snprintf(buf, sizeof(buf), "%d/%d", len, KB_NAME_MAX);
   ui::text(h, FX + FW - 16.0f, fcy, HF_S13, O(ui::MU), buf, 0.5f, 1);
   // La tastiera.
@@ -957,8 +951,8 @@ void name_hud(Hud* h) {
       }
     }
   }
-  if (g_info_t > 0) {
-    toast(h, g_info, ui::L1);
+  if (g.session.info_t > 0) {
+    toast(h, g.session.info, ui::L1);
   } else {
     const char* it[6] = { "A", tr("scrivi"), "B", tr("cancella"), "START", tr("fatto") };
     ui::footer(h, it, 6);
@@ -989,14 +983,14 @@ void mode_card(Hud* h, float x, float y, bool insieme, bool sel) {
   }
 }
 
-void mode_hud(Hud* h) {
+void mode_hud(Game& g, Hud* h) {
   ui::scrim_top(h);
   ui::scrim_bottom(h);
   ui::title(h, 320, 36, HF_T38, tr("COME SI GIOCA?"), 3.0f);
   mode_card(h, 52, 308, true, g.menu_sel == 0);
   mode_card(h, 326, 308, false, g.menu_sel == 1);
   if (!g.net_pop) {
-    footer(h, tr("conferma"), g.net ? tr("esci dalla rete") : tr("indietro"));
+    footer(g, h, tr("conferma"), g.net ? tr("esci dalla rete") : tr("indietro"));
     return;
   }
   // In rete: B chiede se finire la partita per tutti.
@@ -1015,8 +1009,8 @@ void mode_hud(Hud* h) {
 // Indirizzo di questa console nella rete (o l'avviso che non c'e' una rete), centrato su cx; in
 // basso, sopra il piede (sulla velatura scura: sopra gli eroi non si leggerebbe).
 const float NET_IP_Y = 414.0f, NET_HINT_Y = 390.0f;
-void net_ip_line(Hud* h, float cx, float cy) {
-  const NetView& v = net_view();
+void net_ip_line(Game& g, Hud* h, float cx, float cy) {
+  const NetView& v = net_view(g);
   char buf[160];
   if (v.ip[0]) snprintf(buf, sizeof(buf), tr("questa console: %s"), v.ip);
   else snprintf(buf, sizeof(buf), "%s", tr("nessuna rete: collega la console alla Wi-Fi"));
@@ -1053,7 +1047,7 @@ void net_game_where(const NetGame& gm, char* buf, int n) {
   snprintf(buf, (size_t)n, tr("%s · GIRO %d"), wn, gm.giro);
 }
 
-void net_hud(Hud* h) {
+void net_hud(Game& g, Hud* h) {
   ui::scrim_top(h);
   ui::scrim_bottom(h);
   ui::title(h, 320, 26, HF_T32, tr("GIOCO IN RETE"), 3.0f);
@@ -1078,8 +1072,8 @@ void net_hud(Hud* h) {
     ui::text(h, PX + 92.0f, cy - 10.0f, HF_B16, O(sel ? ui::ON : ui::TX), ui::fit(t, sizeof(t), tr(LABEL[k]), HF_B16, 1.5f, PW - 116.0f), 1.5f);
     ui::text(h, PX + 92.0f, cy + 13.0f, HF_S13, O(sel ? ui::ON : ui::MU), ui::fit(t, sizeof(t), tr(HINT[k]), HF_S13, 0.5f, PW - 116.0f), 0.5f);
   }
-  net_ip_line(h, 320.0f, NET_IP_Y);
-  footer(h, tr("conferma"), tr("indietro"));
+  net_ip_line(g, h, 320.0f, NET_IP_Y);
+  footer(g, h, tr("conferma"), tr("indietro"));
 }
 
 // Sala d'attesa: i 4 posti, chi c'e' e chi e' questa console.
@@ -1103,12 +1097,12 @@ void lobby_places(Hud* h, const NetView& v, float PX, float PY, float PW) {
   }
 }
 
-void lobby_hud(Hud* h) {
-  const NetView& v = net_view();
+void lobby_hud(Game& g, Hud* h) {
+  const NetView& v = net_view(g);
   ui::scrim_top(h);
   ui::scrim_bottom(h);
   char buf[256], nm[64], where[128];
-  if (v.mode == NV_SEARCH || (v.mode == NV_OFF && g_lobby_join)) {
+  if (v.mode == NV_SEARCH || (v.mode == NV_OFF && g.session.lobby_join)) {
     ui::title(h, 320, 26, HF_T32, tr("PARTITE IN RETE"), 3.0f);
     // "cerco nella stessa Wi-Fi..." con i puntini che crescono.
     const int dots = (int)((g.ui_tick / 20u) % 4u);
@@ -1121,7 +1115,7 @@ void lobby_hud(Hud* h) {
       char L[2][ui::WRAP_LEN];
       const int nl = ui::wrap(tr("su un'altra console: GIOCO IN RETE, poi CREA UNA PARTITA"), PW - 48.0f, HF_S13, 0.5f, L, 2);
       for (int k = 0; k < nl; ++k) ui::text(h, 320.0f, PY + 64.0f + 18.0f * (float)k, HF_S13, O(ui::FTX), L[k], 0.5f, 0);
-      net_ip_line(h, 320.0f, NET_IP_Y);
+      net_ip_line(g, h, 320.0f, NET_IP_Y);
     } else {
       const float RH = 52.0f;
       ui::panel(h, PX, PY, PW, 16.0f + RH * (float)v.ngames);
@@ -1148,13 +1142,13 @@ void lobby_hud(Hud* h) {
         if (tag) ui::tag(h, PX + PW - 26.0f, cy, tag, sel ? ui::ON : ui::A2, HF_B11, 1.5f, 6.0f, 21.0f, 1);
         else if (sel) ui::chev(h, PX + PW - 34.0f, cy - 6.0f, true, ui::ON);
       }
-      net_ip_line(h, 320.0f, NET_IP_Y);
+      net_ip_line(g, h, 320.0f, NET_IP_Y);
     }
-    if (g_info_t > 0) {
-      toast(h, g_info, ui::L1);
+    if (g.session.info_t > 0) {
+      toast(h, g.session.info, ui::L1);
       ui::version(h);
     } else if (v.ngames > 0) {
-      footer(h, tr("unisciti"), tr("indietro"));
+      footer(g, h, tr("unisciti"), tr("indietro"));
     } else {
       const char* it[2] = { "B", tr("indietro") };
       ui::footer(h, it, 2);
@@ -1177,12 +1171,12 @@ void lobby_hud(Hud* h) {
   ui::fit(t, sizeof(t), hint, HF_S14, 0.5f, 576.0f);
   ui::text(h, 321, NET_HINT_Y + 1.0f, HF_S14, A(ui::SCRIM, 0.9f), t, 0.5f, 0);
   ui::text(h, 320, NET_HINT_Y, HF_S14, O(v.mode == NV_HOST ? ui::FTX : ui::L1), t, 0.5f, 0);
-  net_ip_line(h, 320.0f, NET_IP_Y);
-  if (g_info_t > 0) {
-    toast(h, g_info, ui::L1);
+  net_ip_line(g, h, 320.0f, NET_IP_Y);
+  if (g.session.info_t > 0) {
+    toast(h, g.session.info, ui::L1);
     ui::version(h);
   } else if (v.mode == NV_HOST) {
-    footer(h, tr("inizia"), tr("annulla"));
+    footer(g, h, tr("inizia"), tr("annulla"));
   } else {
     const char* it[2] = { "B", v.mode == NV_JOINING ? tr("annulla") : tr("esci") };
     ui::footer(h, it, 2);
@@ -1209,7 +1203,7 @@ void giro_text(char* buf, int n, const Giro& gr) {
   else snprintf(buf, (size_t)n, tr("%d → GIRO %d"), gr.need, gr.giro + 1);
 }
 
-void maps_hud(Hud* h) {
+void maps_hud(Game& g, Hud* h) {
   char buf[128], name[128];
   ui::scrim_top(h);
   ui::scrim_bottom(h);
@@ -1223,7 +1217,7 @@ void maps_hud(Hud* h) {
   for (int k = 0; k < NWORLDS; ++k)
     if (world_maps(k) == 0) soon[ns++] = k;
   // Con la nota di una mappa personalizzata (fino a tre righe al posto del piede) niente pianeti in arrivo.
-  const bool note = maps_note(g.map_sel)[0] && g_info_t <= 0;
+  const bool note = maps_note(g.map_sel)[0] && g.session.info_t <= 0;
   if (note) ns = 0;
   const int soon_rows = (ns + 3) / 4;
   const float PX = 120.0f, PW = 400.0f, IX = PX + 14.0f, IW = PW - 28.0f;
@@ -1309,11 +1303,11 @@ void maps_hud(Hud* h) {
     toast(h, maps_note(g.map_sel), ui::A2);
     ui::version(h);
   } else {
-    footer(h, tr("gioca"), tr("indietro"));
+    footer(g, h, tr("gioca"), tr("indietro"));
   }
 }
 
-void chars_hud(Hud* h) {
+void chars_hud(Game& g, Hud* h) {
   char buf[256], name[128];
   ui::scrim_top(h);
   ui::scrim_bottom(h, 160.0f);
@@ -1359,11 +1353,11 @@ void chars_hud(Hud* h) {
     if (!g.joined[i]) {
       ui::panel_off(h, x, y, W, H, 12.0f);
       ui::gp(h, x + 12.0f, y + 16.0f, i);
-      if (!net_console(i)) {                   // in rete: nessuna console a questo posto
+      if (!net_console(g, i)) {                   // in rete: nessuna console a questo posto
         ui::text(h, cx, y + 52.0f, HF_S13, O(ui::DIS), tr("nessuna console"), 0.5f, 0);
         continue;
       }
-      if (blinking(20)) {
+      if (blinking(g, 20)) {
         const char* t = tr("entra");
         const float kw = 22.0f + 7.0f + hud_text_w(HF_S13, t, 0.5f);
         ui::key(h, cx - kw * 0.5f, y + 52.0f, "A");
@@ -1395,7 +1389,7 @@ void chars_hud(Hud* h) {
   ui::footer(h, it, 6);
 }
 
-void stats_hud(Hud* h) {
+void stats_hud(Game& g, Hud* h) {
   char buf[256], name[128];
   const bool boss = maps_is_boss(g.map_idx);
   const int w = maps_world(g.map_idx), wn = w >= 0 && w < NWORLDS ? w : 0;
@@ -1490,13 +1484,13 @@ void stats_hud(Hud* h) {
 
 }  // namespace
 
-void menu_info(const char* s) { info(s); }
+void menu_info(Game& g, const char* s) { info(g, s); }
 
-const char* net_error_text(int e, char* buf, int n) {
+const char* net_error_text(Game& g, int e, char* buf, int n) {
   const char* s = "";
   switch (e) {
     case NE_VERSION:
-      snprintf(buf, (size_t)n, tr("versione diversa: su quella console c'è la %s"), net_view().game.version);
+      snprintf(buf, (size_t)n, tr("versione diversa: su quella console c'è la %s"), net_view(g).game.version);
       return buf;
     case NE_MAPS: s = tr("mappe diverse sulle due console: non si può giocare insieme"); break;
     case NE_FULL: s = tr("la partita è piena"); break;
@@ -1517,34 +1511,34 @@ const char* net_error_text(int e, char* buf, int n) {
   return buf;
 }
 
-void menu_update(void) {
-  if (g_info_t > 0) g_info_t--;
+void menu_update(Game& g) {
+  if (g.session.info_t > 0) g.session.info_t--;
   switch (g.screen) {
-    case SC_TITLE: title_update(); break;
-    case SC_MODE: mode_update(); break;
-    case SC_MAPS: maps_update(); break;
-    case SC_CHARS: chars_update(); break;
-    case SC_STATS: stats_update(); break;
-    case SC_SLOTS: slots_update(); break;
-    case SC_LANG: lang_update(); break;
-    case SC_NAME: name_update(); break;
-    case SC_NET: net_update(); break;
-    case SC_LOBBY: lobby_update(); break;
+    case SC_TITLE: title_update(g); break;
+    case SC_MODE: mode_update(g); break;
+    case SC_MAPS: maps_update(g); break;
+    case SC_CHARS: chars_update(g); break;
+    case SC_STATS: stats_update(g); break;
+    case SC_SLOTS: slots_update(g); break;
+    case SC_LANG: lang_update(g); break;
+    case SC_NAME: name_update(g); break;
+    case SC_NET: net_update(g); break;
+    case SC_LOBBY: lobby_update(g); break;
     default: break;
   }
 }
 
 // Dopo la pausa o l'ingresso in partita il tasto con cui si e' confermato e' ancora premuto:
 // per il gioco non deve contare come una pressione nuova (A lascerebbe una bomba, B salterebbe).
-static void swallow_held(int i) { g.pl[i].prev_btn = g.in[i].btn; }
+static void swallow_held(Game& g, int i) { g.pl[i].prev_btn = g.in[i].btn; }
 
-static void unpause(void) {
+static void unpause(Game& g) {
   g.paused = false;
   g.pause_help = false;
-  for (int j = 0; j < MAX_PLAYERS; ++j) swallow_held(j);
+  for (int j = 0; j < MAX_PLAYERS; ++j) swallow_held(g, j);
 }
 
-void play_menus_update(void) {
+void play_menus_update(Game& g) {
   // START breve: pausa (chi la apre la comanda), oppure la chiude.
   for (int i = 0; i < MAX_PLAYERS; ++i) {
     if (!g.start_tap[i] || g.pl[i].joining) continue;
@@ -1557,7 +1551,7 @@ void play_menus_update(void) {
       snd_ui(SND_PAUSE);
       plat_log("pausa (giocatore %d)", i + 1);
     } else {
-      unpause();
+      unpause(g);
       plat_log("fine della pausa");
     }
     break;
@@ -1570,7 +1564,7 @@ void play_menus_update(void) {
     g.pause_owner = o;
     // Riquadro dei comandi aperto: A o B lo chiudono (START chiude anche la pausa, vedi sopra).
     if (g.pause_help) {
-      if (back(o) || pad_pressed(o, PAD_A)) {
+      if (back(g, o) || pad_pressed(g, o, PAD_A)) {
         g.pause_help = false;
         snd_ui(SND_UI_BACK);
       }
@@ -1578,20 +1572,20 @@ void play_menus_update(void) {
       // Voci: riprendi, comandi, mira, antialias, musica, effetti, lascia la partita, torna al menu.
       if (g.in[o].nav == NAV_UP) { g.pause_sel = (g.pause_sel + PAUSE_ITEMS - 1) % PAUSE_ITEMS; snd_ui(SND_UI_MOVE); }
       if (g.in[o].nav == NAV_DOWN) { g.pause_sel = (g.pause_sel + 1) % PAUSE_ITEMS; snd_ui(SND_UI_MOVE); }
-      const bool left = g.in[o].nav == NAV_LEFT, right = g.in[o].nav == NAV_RIGHT || pad_pressed(o, PAD_A);
+      const bool left = g.in[o].nav == NAV_LEFT, right = g.in[o].nav == NAV_RIGHT || pad_pressed(g, o, PAD_A);
       // In rete antialias e volumi sono di chi comanda la pausa: si cambiano solo sulla sua console.
-      const bool here = !g.net || o == net_local();
+      const bool here = !g.net || o == net_local(g);
       // Mira: con sinistra/destra (o A) si sceglie quanto e' pronta la levetta destra di chi comanda.
       if (g.pause_sel == PS_AIM) {
-        int lvl = aim_level_of(o);
+        int lvl = aim_level_of(g, o);
         if (left) lvl = (lvl + NAIMLEVELS - 1) % NAIMLEVELS;
         if (right) lvl = (lvl + 1) % NAIMLEVELS;
         if (lvl != g.aim_level[o]) {
           g.aim_level[o] = (uint8_t)lvl;
           if (!g.net && o < SAVE_PLAYERS) save_data()->aim[o] = (uint8_t)lvl;
-          else if (g.net && o == net_local()) save_data()->aim[0] = (uint8_t)lvl;   // in rete: la mira di questa console
+          else if (g.net && o == net_local(g)) save_data()->aim[0] = (uint8_t)lvl;   // in rete: la mira di questa console
           snd_ui(SND_UI_MOVE);
-          settings_changed();
+          settings_changed(g);
           plat_log("giocatore %d: mira %s", o + 1, AIM_TUNE[lvl].name);
         }
       }
@@ -1602,14 +1596,14 @@ void play_menus_update(void) {
         vals[nv++] = 0;
         vals[nv++] = g.aa_max >= 4 ? 4 : g.aa_max;
         if (g.aa_max >= 8) vals[nv++] = 8;
-        const int now = game_aa_wanted();
+        const int now = game_aa_wanted(g);
         int k = 0;
         while (k < nv - 1 && vals[k] != now) k++;
         k = left ? (k + nv - 1) % nv : (k + 1) % nv;
         g.aa_level = vals[k];
         save_data()->antialias = (uint8_t)vals[k];
         snd_ui(SND_UI_MOVE);
-        settings_changed();
+        settings_changed(g);
         if (vals[k] > 0) plat_log("antialias %dx (giocatore %d)", vals[k], o + 1);
         else plat_log("antialias spento (giocatore %d)", o + 1);
       }
@@ -1622,31 +1616,31 @@ void play_menus_update(void) {
         else v = (uint8_t)(v < 10 ? v + 1 : 0);
         audio_set_volume(sd->music_vol, sd->sfx_vol);
         snd_ui(SND_UI_MOVE);
-        settings_changed();
+        settings_changed(g);
         plat_log("volume %s %d", g.pause_sel == PS_MUSIC ? "musica" : "effetti", (int)v);
       }
-      if (back(o)) {
+      if (back(g, o)) {
         snd_ui(SND_UI_BACK);
-        unpause();
-      } else if (pad_pressed(o, PAD_A) && g.pause_sel == PS_CONTROLS) {
+        unpause(g);
+      } else if (pad_pressed(g, o, PAD_A) && g.pause_sel == PS_CONTROLS) {
         g.pause_help = true;
         snd_ui(SND_UI_OK);
-      } else if (pad_pressed(o, PAD_A) && (g.pause_sel == PS_RESUME || g.pause_sel == PS_LEAVE || g.pause_sel == PS_MENU)) {
+      } else if (pad_pressed(g, o, PAD_A) && (g.pause_sel == PS_RESUME || g.pause_sel == PS_LEAVE || g.pause_sel == PS_MENU)) {
         snd_ui(SND_UI_OK);
         if (g.pause_sel == PS_RESUME) {
-          unpause();
+          unpause(g);
         } else if (g.pause_sel == PS_LEAVE) {
-          player_leave(o);
+          player_leave(g, o);
           g.joined[o] = g.ready[o] = false;
-          unpause();
-          if (count_active() == 0) {
-            back_to_title(TI_NEW);
+          unpause(g);
+          if (count_active(g) == 0) {
+            back_to_title(g, TI_NEW);
             return;
           }
         } else {
           plat_log("partita interrotta dalla pausa");
           g.pause_help = false;
-          go_screen(SC_MAPS);
+          go_screen(g, SC_MAPS);
           return;
         }
       }
@@ -1666,31 +1660,31 @@ void play_menus_update(void) {
     }
     if (g.in[i].nav == NAV_LEFT) p.join_pick = (p.join_pick + NCHARS - 1) % NCHARS;
     if (g.in[i].nav == NAV_RIGHT) p.join_pick = (p.join_pick + 1) % NCHARS;
-    if (confirm(i)) {
+    if (confirm(g, i)) {
       const int ch = p.join_pick;
       g.pick[i] = ch;
       g.joined[i] = true;
-      player_join(i, ch, true);
-      swallow_held(i);
-    } else if (back(i)) {
+      player_join(g, i, ch, true);
+      swallow_held(g, i);
+    } else if (back(g, i)) {
       p.joining = false;
     }
   }
 }
 
-void menu_build_hud(Hud* h, const Camera& cam) {
+void menu_build_hud(Game& g, Hud* h, const Camera& cam) {
   (void)cam;
   switch (g.screen) {
-    case SC_TITLE: title_hud(h); break;
-    case SC_MODE: mode_hud(h); break;
-    case SC_MAPS: maps_hud(h); break;
-    case SC_CHARS: chars_hud(h); break;
-    case SC_STATS: stats_hud(h); break;
-    case SC_SLOTS: slots_hud(h); break;
-    case SC_LANG: lang_hud(h); break;
-    case SC_NAME: name_hud(h); break;
-    case SC_NET: net_hud(h); break;
-    case SC_LOBBY: lobby_hud(h); break;
+    case SC_TITLE: title_hud(g, h); break;
+    case SC_MODE: mode_hud(g, h); break;
+    case SC_MAPS: maps_hud(g, h); break;
+    case SC_CHARS: chars_hud(g, h); break;
+    case SC_STATS: stats_hud(g, h); break;
+    case SC_SLOTS: slots_hud(g, h); break;
+    case SC_LANG: lang_hud(g, h); break;
+    case SC_NAME: name_hud(g, h); break;
+    case SC_NET: net_hud(g, h); break;
+    case SC_LOBBY: lobby_hud(g, h); break;
     default: break;
   }
   // La batteria della console in alto a destra (0.5.4), sopra i titoli.
@@ -1699,7 +1693,7 @@ void menu_build_hud(Hud* h, const Camera& cam) {
 }
 
 // Finestre di chi entra a partita iniziata (anche in pausa: allora sopra la pausa).
-bool join_panels(Hud* h) {
+bool join_panels(Game& g, Hud* h) {
   bool any = false;
   for (int i = 0; i < MAX_PLAYERS; ++i) {
     const Player& p = g.pl[i];
@@ -1772,15 +1766,15 @@ void pause_help_hud(Hud* h) {
 
 }  // namespace
 
-void play_menus_hud(Hud* h) {
+void play_menus_hud(Game& g, Hud* h) {
   if (!g.paused) {
-    join_panels(h);
+    join_panels(g, h);
     return;
   }
   bool joining = false, waiting = false;
   for (int i = 0; i < MAX_PLAYERS; ++i) {
     joining |= !g.pl[i].active && g.pl[i].joining;
-    waiting |= !g.pl[i].active && !g.pl[i].joining && net_console(i);
+    waiting |= !g.pl[i].active && !g.pl[i].joining && net_console(g, i);
   }
   ui::overlay(h, 0.72f);
   const float ta = g.pause_help ? 0.3f : 1.0f;
@@ -1819,7 +1813,7 @@ void play_menus_hud(Hud* h) {
       switch (k) {
         case PS_CONTROLS: ui::chev(h, rx - 8.0f, cy - 6.0f, true, sel ? ui::ON : ui::L1); break;
         case PS_AIM: {
-          const char* v = tr(aim_tune(g.pause_owner).label);
+          const char* v = tr(aim_tune(g, g.pause_owner).label);
           if (sel) {
             const float vw = hud_text_w(HF_S13, v, 0.8f);
             ui::chev(h, rx - 8.0f, cy - 6.0f, true, ui::ON);
@@ -1835,7 +1829,7 @@ void play_menus_hud(Hud* h) {
             ui::text(h, rx, cy, HF_S13, O(sel ? ui::ON : ui::DIS), tr("ASSENTE"), 0.8f, 1);
           } else {
             char v[16];
-            const int now = game_aa_wanted();
+            const int now = game_aa_wanted(g);
             if (now > 0) snprintf(v, sizeof(v), "%dX", now);
             else snprintf(v, sizeof(v), "%s", tr("NO"));
             if (sel) {
@@ -1863,16 +1857,16 @@ void play_menus_hud(Hud* h) {
   }
   // Chi non gioca puo' entrare (anche con il riquadro dei comandi aperto, che finisce sopra).
   if (joining) {
-    join_panels(h);
+    join_panels(g, h);
   } else if (waiting) {
     const char* msg = tr("premete un tasto per entrare");
     const float cy = 480.0f - ui::SAFE_Y - 11.0f;
     float ww = 4.0f + hud_text_w(HF_S13, msg, 1.0f);
     for (int i = 0; i < MAX_PLAYERS; ++i)
-      if (!g.pl[i].active && !g.pl[i].joining && net_console(i)) ww += 30.0f;
+      if (!g.pl[i].active && !g.pl[i].joining && net_console(g, i)) ww += 30.0f;
     float x = 320.0f - ww * 0.5f;
     for (int i = 0; i < MAX_PLAYERS; ++i)
-      if (!g.pl[i].active && !g.pl[i].joining && net_console(i)) x += ui::gp(h, x, cy, i) + 6.0f;
+      if (!g.pl[i].active && !g.pl[i].joining && net_console(g, i)) x += ui::gp(h, x, cy, i) + 6.0f;
     ui::text(h, x + 4.0f, cy, HF_S13, O(ui::FTX), msg, 1.0f);
   }
 }

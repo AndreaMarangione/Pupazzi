@@ -94,6 +94,7 @@ static struct {
   char out_dir[256];
   int hdmi_force;             // PUPAZZI_HDMI=0/1 (prove): schermo fisso; -1 si legge dal sistema
   int hdmi_src;               // da dove: 0 niente (si resta come con l'HDMI), 1 extcon, 2 switch
+  Game* game;                 // the game (created in retro_init, destroyed in retro_deinit)
 } A;
 
 // HDMI collegato? Lo stesso file che legge il RetroArch della console ("HDMI=1"); su altri kernel
@@ -134,7 +135,7 @@ static void hdmi_poll(bool first) {
     plat_log("HDMI: %s, da %s", on < 0 ? "non si sa" : (on ? "collegato" : "staccato"), SRC[src]);
     A.hdmi_src = src;
   }
-  if (on >= 0) game_set_hdmi(on != 0);
+  if (on >= 0) game_set_hdmi(*A.game, on != 0);
 }
 
 static void log_sink(const char* line) {
@@ -173,7 +174,7 @@ static void write_status(void) {
   FILE* f = fopen(path, "w");
   if (!f) return;
   GameInfo gi;
-  game_info(&gi);
+  game_info(*A.game, &gi);
   fprintf(f, "uscita=%s\nfotogrammi=%u\nrenderer=%s\narch=%s\nmappa=%d\ngiro=%d\nzona=%d\ngiocatori=%d\nmostri_sconfitti=%d\ncadute=%d\nmappe_completate=%d\n"
              "zone_rifatte=%d\nmappe_da_capo=%d\n",
           A.exit_reason ? A.exit_reason : "frontend", A.frame, A.use_gl ? "gpu" : "software", PUPAZZI_ARCH, gi.map, gi.loop, gi.zone,
@@ -497,7 +498,7 @@ static void log_stick_stats(void) {
       snprintf(jit, sizeof(jit), "tremolio a levetta inclinata: meta' sotto %.2f gradi, 9 su 10 sotto %.2f (%d letture)",
                (double)jit_quantile(s.jit, s.jit_n, 0.5f), (double)jit_quantile(s.jit, s.jit_n, 0.9f), s.jit_n);
     plat_log("levetta destra giocatore %d: x da %.2f a %.2f, y da %.2f a %.2f, a riposo fino a %.2f; %s; mira %s",
-             p + 1, (double)s.x0, (double)s.x1, (double)s.y0, (double)s.y1, (double)s.rest, jit, game_aim_name(p));
+             p + 1, (double)s.x0, (double)s.x1, (double)s.y0, (double)s.y1, (double)s.rest, jit, game_aim_name(*A.game, p));
   }
 }
 
@@ -572,7 +573,7 @@ static void handle_controls(void) {
     A.start_hold[p] = 0;
     // In rete lo START breve del pad di questa console viaggia con i suoi comandi (vale su tutte).
     if (tap && net_session()) A.net_tap |= p == 0;
-    else if (tap) game_start_tap(p);
+    else if (tap) game_start_tap(*A.game, p);
   }
   if (sel) {
     if (A.sel_hold < 10000) A.sel_hold++;
@@ -588,13 +589,13 @@ static void handle_controls(void) {
 // resto della sessione e lo si scrive nel registro; dalla pausa si puo' sempre scegliere 8X.
 static void aa_adapt(void) {
   static int slow;
-  if (!A.aa_adapt || !A.use_gl || !A.gl_ready || game_aa_level() != 1 || game_aa_wanted() < 8 || !game_playing()) {
+  if (!A.aa_adapt || !A.use_gl || !A.gl_ready || game_aa_level(*A.game) != 1 || game_aa_wanted(*A.game) < 8 || !game_playing(*A.game)) {
     slow = 0;
     return;
   }
   slow = A.fps > 0.0f && A.fps < 55.0f ? slow + 1 : 0;
   if (slow >= 3) {
-    game_aa_cap(4);
+    game_aa_cap(*A.game, 4);
     plat_log("antialias: con 8 campioni %.1f fotogrammi al secondo, si passa a 4 (dalla pausa si sceglie di nuovo 8X)", (double)A.fps);
     slow = 0;
   }
@@ -617,7 +618,7 @@ static void perf_overlay(Hud* h) {
     cpu.ncore = 4;
   }
   char buf[160], rend[16];
-  const int aa = A.use_gl ? game_aa_wanted() : 0;
+  const int aa = A.use_gl ? game_aa_wanted(*A.game) : 0;
   if (aa > 0) snprintf(rend, sizeof(rend), "GPU+%dX", aa);
   else snprintf(rend, sizeof(rend), "%s", A.use_gl ? "GPU" : "CPU");
   snprintf(buf, sizeof(buf), "%.1f fps · %.1f ms (max %.1f) · %s %.1f ms · tri %d/%d", (double)A.fps, (double)A.frame_avg,
@@ -655,14 +656,14 @@ static void context_reset(void) {
   plat_log("context_reset: il frontend ha creato il contesto GL");
   A.gl_ready = glr_init((glr_get_proc_t)hw.get_proc_address);
   if (!A.gl_ready) plat_log("GL: preparazione fallita, lo schermo restera' nero");
-  game_set_aa_available(A.gl_ready ? glr_aa_max() : 0);
+  game_set_aa_available(*A.game, A.gl_ready ? glr_aa_max() : 0);
 }
 
 static void context_destroy(void) {
   plat_log("context_destroy");
   glr_context_lost();
   A.gl_ready = false;
-  game_set_aa_available(0);
+  game_set_aa_available(*A.game, 0);
 }
 
 static bool try_hw_render(void) {
@@ -735,7 +736,7 @@ static void quick_start(void) {
   const int map = env_int("PUPAZZI_MAPPA", 0);
   if (A.net_auto || (!A.bots && map <= 0)) return;
   const int players = A.bots ? A.bots : env_int("PUPAZZI_GIOCATORI", 1);
-  game_quick_start(map > 0 ? map - 1 : 0, players, getenv("PUPAZZI_PERSONAGGI"));
+  game_quick_start(*A.game, map > 0 ? map - 1 : 0, players, getenv("PUPAZZI_PERSONAGGI"));
 }
 
 RETRO_API void retro_init(void) {
@@ -760,7 +761,8 @@ RETRO_API void retro_init(void) {
     audio_init(AUDIO_RATE);
     plat_log("sonoro pronto in %.0f ms", plat_now_ms() - t);
   }
-  game_init();
+  A.game = game_create();
+  game_init(*A.game);
   snprintf(g_aa_try.path, sizeof(g_aa_try.path), "%s/aa_in_prova.txt", A.out_dir);
   g_aa_try.frames = -1;
   g_aa_try.passed = false;
@@ -768,7 +770,7 @@ RETRO_API void retro_init(void) {
   if (FILE* f = fopen(g_aa_try.path, "r")) {
     fclose(f);
     remove(g_aa_try.path);
-    game_set_aa_level(0);
+    game_set_aa_level(*A.game, 0);
     g_aa_try.crashed = true;
     plat_log("antialias spento all'avvio: la volta scorsa il gioco si e' chiuso mentre lo provava (si riaccende dalla pausa)");
   }
@@ -804,7 +806,7 @@ RETRO_API void retro_deinit(void) {
   remote_close();    // se il frontend non ha chiamato retro_unload_game
   log_stick_stats();
   GameInfo gi;
-  game_info(&gi);
+  game_info(*A.game, &gi);
   plat_log("fine sessione dopo %u fotogrammi (uscita: %s): mappa %d (giro %d) zona %d, %d giocatori, mostri sconfitti %d, cadute %d, zone rifatte %d, mappe ricominciate da capo %d, mappe completate %d",
            A.frame, A.exit_reason ? A.exit_reason : "frontend", gi.map, gi.loop, gi.zone, gi.players, gi.kills, gi.deaths, gi.wipes, gi.restarts,
            gi.maps_done);
@@ -812,7 +814,9 @@ RETRO_API void retro_deinit(void) {
   save_write();      // cio' che il gioco ha cambiato e non ha ancora scritto (se nulla e' cambiato non tocca il file)
   glr_shutdown();
   swr_shutdown();
-  game_shutdown();
+  game_shutdown(*A.game);
+  game_destroy(A.game);
+  A.game = NULL;
   plat_log_close();
 }
 
@@ -860,13 +864,13 @@ static void open_save(void) {
       save_data()->lang = (uint8_t)l;
       plat_log("lingua (PUPAZZI_LINGUA): %s", lg);
     }
-  game_save_loaded();
+  game_save_loaded(*A.game);
   save_data()->lang = saved_lang;
   // PUPAZZI_MIRA=0..3: mira extra morbida, morbida, media o rapida per tutti (prove; in gioco si
   // sceglie nella pausa). Vale piu' della mira salvata.
   const int mira = env_int("PUPAZZI_MIRA", -1);
   if (mira >= 0)
-    for (int p = 0; p < MAX_PLAYERS; ++p) game_set_aim_level(p, mira);
+    for (int p = 0; p < MAX_PLAYERS; ++p) game_set_aim_level(*A.game, p, mira);
 }
 
 // Nomi dei tasti per il menu dei comandi di RetroArch, nella lingua del gioco; per cinese,
@@ -941,7 +945,7 @@ RETRO_API bool retro_load_game(const struct retro_game_info* info) {
   send_descriptors();
   remote_close();    // retro_load_game di nuovo senza retro_unload_game: le porte di prima
   remote_open();
-  net_init();
+  net_init(*A.game);
   return true;
 }
 
@@ -958,7 +962,7 @@ RETRO_API void retro_reset(void) {
   plat_log("reset: si torna al titolo");
   net_shutdown();
   audio_reset();
-  game_reset();
+  game_reset(*A.game);
   quick_start();
 }
 RETRO_API unsigned retro_get_region(void) { return RETRO_REGION_NTSC; }
@@ -993,7 +997,7 @@ RETRO_API void retro_run(void) {
   read_input();
   if (lang_get() != g_desc_lang) send_descriptors();
   if (A.frame % 60 == 59 && A.hdmi_force < 0 && A.hdmi_src != 0) hdmi_poll(false);   // ogni secondo: si puo' staccare in partita
-  if (A.bots && !A.net_auto && !net_session()) game_bot_pads(A.pads, A.bots);
+  if (A.bots && !A.net_auto && !net_session()) game_bot_pads(*A.game, A.pads, A.bots);
   handle_controls();
   if (A.use_gl && !A.gl_ready && ++A.gl_wait == 600) {
     plat_log("ERRORE: dopo 600 fotogrammi il contesto GL non e' ancora pronto");
@@ -1006,40 +1010,40 @@ RETRO_API void retro_run(void) {
     // Partita in rete: i comandi di questa console partono, i fotogrammi si fanno quando ci sono i
     // comandi di tutti (chi ha creato la partita: sempre uno; le altre: da nessuno a qualcuno in piu').
     Pad mine = A.pads[0];
-    if (A.bots) game_bot_pad(game_net_local(), &mine);
+    if (A.bots) game_bot_pad(*A.game, game_net_local(*A.game), &mine);
     net_local_pad(mine, A.net_tap);
     A.net_tap = false;
     Pad pads[MAX_PLAYERS];
     bool taps[MAX_PLAYERS];
     uint8_t consoles = 0, silent = 0;
     while (net_step(pads, taps, &consoles, &silent)) {
-      game_net_frame(consoles, silent, taps);
-      game_update(pads);
-      const uint64_t hh = game_state_hash();
+      game_net_frame(*A.game, consoles, silent, taps);
+      game_update(*A.game, pads);
+      const uint64_t hh = game_state_hash(*A.game);
       net_step_done(hh);
       if (A.trace) plat_log("rete traccia %u %016llx", net_frame_no(), (unsigned long long)hh);
       if (A.trace_m) {
         plat_log("fotogramma rete %u", net_frame_no());
-        game_trace_monsters([](const char* line) { plat_log("%s", line); });
+        game_trace_monsters(*A.game, [](const char* line) { plat_log("%s", line); });
       }
       if (!net_session()) break;
     }
   } else {
     A.net_tap = false;
-    game_update(A.pads);
-    if (A.trace) plat_log("traccia %u %016llx", A.frame, (unsigned long long)game_state_hash());
+    game_update(*A.game, A.pads);
+    if (A.trace) plat_log("traccia %u %016llx", A.frame, (unsigned long long)game_state_hash(*A.game));
     if (A.trace_m) {
       plat_log("fotogramma %u", A.frame);
-      game_trace_monsters([](const char* line) { plat_log("%s", line); });
+      game_trace_monsters(*A.game, [](const char* line) { plat_log("%s", line); });
     }
   }
   int req_arg = 0;
-  const int req = game_net_request(&req_arg);
+  const int req = game_net_request(*A.game, &req_arg);
   if (req != NR_NONE) net_request(req, req_arg);
   net_frame_end();
-  if (game_wants_quit()) request_shutdown("menu: Esci", "giocatore");
+  if (game_wants_quit(*A.game)) request_shutdown("menu: Esci", "giocatore");
   FrameDesc fd;
-  game_build_frame(&fd, A.w, A.h, A.hud_off ? NULL : &g_hud);
+  game_build_frame(*A.game, &fd, A.w, A.h, A.hud_off ? NULL : &g_hud);
   if (!A.hud_off && A.perf) {
     if (A.hud_fixed) A.fps = A.frame_avg = A.frame_max = A.e_core = 0.0f;
     perf_overlay(&g_hud);
@@ -1051,10 +1055,10 @@ RETRO_API void retro_run(void) {
   double t2;
   if (A.use_gl) {
     if (A.gl_ready) {
-      fd.aa = game_aa_wanted();
+      fd.aa = game_aa_wanted(*A.game);
       if (!g_aa_try.passed && (fd.aa > 0) != (g_aa_try.frames >= 0)) aa_try_mark(fd.aa > 0);
       glr_render(&fd, (unsigned)hw.get_current_framebuffer(), &st, false);
-      game_set_aa_available(glr_aa_max());   // se la GPU ha rifiutato l'antialias (o gli 8 campioni), la pausa lo sa
+      game_set_aa_available(*A.game, glr_aa_max());   // se la GPU ha rifiutato l'antialias (o gli 8 campioni), la pausa lo sa
       if (g_aa_try.frames >= 0 && ++g_aa_try.frames >= AA_TRY_FRAMES) {
         aa_try_mark(false);
         g_aa_try.passed = true;
@@ -1087,7 +1091,7 @@ RETRO_API void retro_run(void) {
   // Riga di stato periodica: prestazioni e situazione della partita.
   if (A.frame % STAT_PERIOD == 0) {
     GameInfo gi;
-    game_info(&gi);
+    game_info(*A.game, &gi);
     static const char* const SCREEN[] = { "titolo", "modalita'", "mappe", "personaggi", "partita", "fine mappa", "salvataggi",
                                           "lingua", "nome", "rete", "sala d'attesa" };
     static_assert(sizeof(SCREEN) / sizeof(SCREEN[0]) == 11, "un nome per ogni schermata (SC_* in game_int.h)");
@@ -1101,11 +1105,11 @@ RETRO_API void retro_run(void) {
     for (int p = 0; p < MAX_PLAYERS; ++p)
       nl += snprintf(lives + nl, sizeof(lives) - (size_t)nl, gi.lives[p] >= 0 ? "%s%d" : "%s-", p ? " " : "", gi.lives[p] < 99 ? gi.lives[p] : 99);
     char aa_s[12] = "";
-    if (A.use_gl && game_aa_wanted() > 0) snprintf(aa_s, sizeof(aa_s), " aa%d", game_aa_wanted());
+    if (A.use_gl && game_aa_wanted(*A.game) > 0) snprintf(aa_s, sizeof(aa_s), " aa%d", game_aa_wanted(*A.game));
     plat_log("stato: f=%u fps %.1f, frame %.1f (max %.1f) | core %.2f = sim %.2f + disegno %.2f | audio %.2f (voci %d, scartate %u) | RA %.2f | tri %d/%d%s | %s, mappa %d (giro %d) zona %d mostri %d giocatori %d/%d vite %s%s",
              A.frame, (double)A.fps, (double)A.frame_avg, (double)A.frame_max, (double)A.e_core, (double)A.e_sim, (double)(A.e_geo + A.e_ras),
              (double)A.e_audio, as.voices_peak, as.dropped, (double)A.e_video, st.tris_drawn, st.tris_in, aa_s,
              SCREEN[gi.screen < NSCREEN && gi.screen >= 0 ? gi.screen : 0], gi.map, gi.loop, gi.zone, gi.enemies, gi.alive, gi.players, lives,
-             game_paused() ? " (pausa)" : "");
+             game_paused(*A.game) ? " (pausa)" : "");
   }
 }

@@ -24,6 +24,8 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+static Game& g = *game_create();   // the game under test (the game keeps no global state: the test owns it)
+
 static int g_fail = 0;
 static Pad g_pads[MAX_PLAYERS];
 static char g_base[64] = "/tmp/pupazzi_test_maps_XXXXXX";
@@ -55,7 +57,7 @@ static float hfloat(uint32_t a, uint32_t b, uint32_t c) { return (float)(hmix(a,
 static void quiet(void) {
   memset(g.spawn_left, 0, sizeof(g.spawn_left));
   g.spawn_wait = 1000000;
-  monsters_clear();
+  monsters_clear(g);
   memset(g.sh, 0, sizeof(g.sh));
   memset(g.mk, 0, sizeof(g.mk));
   g.boss.alive = false;
@@ -65,9 +67,9 @@ static void clear_zone(void) {
   memset(g.spawn_left, 0, sizeof(g.spawn_left));
   g.wave = g.L.zones[g.zone].nwaves - 1;
   g.spawn_wait = 0;
-  monsters_clear();
+  monsters_clear(g);
   g.boss.alive = false;
-  for (int k = 0; k < 10 && g.phase != PH_CLEAR && g.phase != PH_MAP_DONE; ++k) game_update(g_pads);
+  for (int k = 0; k < 10 && g.phase != PH_CLEAR && g.phase != PH_MAP_DONE; ++k) game_update(g, g_pads);
 }
 
 static int cell_type(const Level* L, int cx, int cz) { return cx < 0 || cz < 0 || cx >= L->W || cz >= L->H ? (int)C_VOID : (int)L->cell[cz][cx]; }
@@ -364,7 +366,7 @@ static void walker_pads(Walker* w, uint32_t seed, int frame, int target_zone, bo
     // ogni tanto una spinta forte come quella di una bomba (verso muri, acqua, cancelli, cenote)
     if (hmix(seed, (uint32_t)frame, (uint32_t)i + 200u) % 97u == 0u) {
       const float a = D_TWO_PI * hfloat(seed, (uint32_t)frame, (uint32_t)i + 300u), k = 3.0f + 7.0f * hfloat(seed, (uint32_t)frame, (uint32_t)i + 400u);
-      push_player(i, d_cos(a) * k, d_sin(a) * k, 0);
+      push_player(g, i, d_cos(a) * k, d_sin(a) * k, 0);
     }
   }
 }
@@ -378,7 +380,7 @@ static void fuzz_step(Fuzz& F, const Walker* w, Vec3* prev, float* prev_y, bool*
     prev_alive[i] = g.pl[i].alive;
   }
   const int zone0 = g.zone, phase0 = g.phase;
-  game_update(g_pads);
+  game_update(g, g_pads);
   F.frames++;
   if (g.phase == PH_WIPE && phase0 != PH_WIPE) F.wipes++;
   if (getenv("TEST_MAPS_DEBUG") && (g.zone != zone0 || g.phase != phase0))
@@ -387,7 +389,7 @@ static void fuzz_step(Fuzz& F, const Walker* w, Vec3* prev, float* prev_y, bool*
   memset(g.spawn_left, 0, sizeof(g.spawn_left));
   g.spawn_wait = 1000000;
   g.boss.alive = false;
-  monsters_clear();
+  monsters_clear(g);
   const Level* L = &g.L;
   for (int i = 0; i < MAX_PLAYERS; ++i) {
     Player& p = g.pl[i];
@@ -450,10 +452,10 @@ static void fuzz_step(Fuzz& F, const Walker* w, Vec3* prev, float* prev_y, bool*
 static void fuzz_map(int map, int per_zone, Fuzz& F) {
   memset(&F, 0, sizeof(F));
   F.map = map;
-  game_init();
+  game_init(g);
   memset(g_pads, 0, sizeof(g_pads));
-  game_quick_start(map, 4, "0123");
-  game_update(g_pads);
+  game_quick_start(g, map, 4, "0123");
+  game_update(g, g_pads);
   quiet();
   Walker w[MAX_PLAYERS];
   memset(w, 0, sizeof(w));
@@ -484,7 +486,7 @@ static void fuzz_map(int map, int per_zone, Fuzz& F) {
       // non ci sono arrivati da soli (il guinzaglio, un ostacolo): li porta la prova
       for (int i = 0; i < MAX_PLAYERS; ++i)
         if (g.pl[i].active && g.pl[i].alive) g.pl[i].pos = g.L.zones[next].start[i];
-      for (int k = 0; k < 400 && !(g.phase == PH_FIGHT && g.zone == next); ++k) game_update(g_pads);
+      for (int k = 0; k < 400 && !(g.phase == PH_FIGHT && g.zone == next); ++k) game_update(g, g_pads);
     }
     quiet();
   }
@@ -519,7 +521,7 @@ static bool run_at(int i, float tx, float tz, int n, int jump_mode, char* why, i
     const bool jump = jump_mode == 0 ? (f % 50) < 32 : (jump_mode == 1 ? (f % 9) < 2 : (f % 40) < 36);
     if (jump) g_pads[i].btn = (uint16_t)(1u << PAD_R2);
     const float y0 = p.pos.y;
-    game_update(g_pads);
+    game_update(g, g_pads);
     quiet();
     p.invuln = 1000;
     p.hp = p.hp_max;
@@ -533,10 +535,10 @@ static bool run_at(int i, float tx, float tz, int n, int jump_mode, char* why, i
 }
 
 static void fresh(int map, int players) {
-  game_init();
+  game_init(g);
   memset(g_pads, 0, sizeof(g_pads));
-  game_quick_start(map, players, "0123");
-  game_update(g_pads);
+  game_quick_start(g, map, players, "0123");
+  game_update(g, g_pads);
   quiet();
 }
 
@@ -724,7 +726,7 @@ static void test_custom(void) {
         memset(g_pads, 0, sizeof(g_pads));
         g_pads[0].ly = -1.0f;
         const float y0 = g.pl[0].pos.y;
-        game_update(g_pads);
+        game_update(g, g_pads);
         quiet();
         if (g.pl[0].tramp_t > 0) launched = true;
         char what[200];
@@ -756,9 +758,9 @@ static void test_custom(void) {
     // Cancello: uno che resta nel passaggio quando la zona 2 comincia viene riportato dentro.
     clear_zone();
     put(0, 7, 3);
-    for (int k = 0; k < 400 && !(g.phase == PH_FIGHT && g.zone == 1); ++k) game_update(g_pads);
+    for (int k = 0; k < 400 && !(g.phase == PH_FIGHT && g.zone == 1); ++k) game_update(g, g_pads);
     quiet();
-    for (int k = 0; k < 60; ++k) game_update(g_pads);
+    for (int k = 0; k < 60; ++k) game_update(g, g_pads);
     const int zz = level_zone_at(&g.L, g.pl[0].pos.x, g.pl[0].pos.z);
     snprintf(buf, sizeof(buf), "zona 2 cominciata e cancello chiuso: G1 nella zona 2 (zona %d)", zz + 1);
     check(g.zone == 1 && zz == 1 && level_body_ok(&g.L, g.pl[0].pos.x, g.pl[0].pos.z, 0.0f, PL_R, PL_STEP, BODY_WALK), buf);
@@ -775,17 +777,17 @@ static void test_custom(void) {
     for (; f < 200 && p.alive; ++f) {
       memset(g_pads, 0, sizeof(g_pads));
       g_pads[0].ly = -1.0f;
-      game_update(g_pads);
+      game_update(g, g_pads);
       quiet();
     }
     int cx = -1, cz = -1;
     level_cell(&g.L, p.pos.x, p.pos.z, &cx, &cz);
     snprintf(buf, sizeof(buf), "camminando nel cenote si cade: vite %d -> %d, casella %d,%d, \"%s\"", lives, p.lives, cx, cz, g.msg);
     check(!p.alive && p.lives == lives - 1 && g.L.cell[cz][cx] == C_PIT && g.phase == PH_WIPE, buf);
-    for (int k = 0; k < 30; ++k) game_update(g_pads);
+    for (int k = 0; k < 30; ++k) game_update(g, g_pads);
     snprintf(buf, sizeof(buf), "affonda sotto l'acqua del pozzo (quota %.2f)", p.pos.y);
     check(p.pos.y < -1.0f, buf);
-    for (int k = 0; k < WIPE_ZONE_FRAMES + 5; ++k) game_update(g_pads);
+    for (int k = 0; k < WIPE_ZONE_FRAMES + 5; ++k) game_update(g, g_pads);
     quiet();
     check(p.alive && !level_pit_near(&g.L, p.pos.x, p.pos.z, PL_R + 0.5f), "si riparte dalla partenza della zona, lontano dal pozzo");
     // sopra il cenote stretto (una casella) si salta senza cadere
@@ -796,7 +798,7 @@ static void test_custom(void) {
       memset(g_pads, 0, sizeof(g_pads));
       g_pads[0].lx = 1.0f;
       if (k < 30) g_pads[0].btn = (uint16_t)(1u << PAD_R2);
-      game_update(g_pads);
+      game_update(g, g_pads);
       quiet();
       if (!p.alive) fell = true;
       if (level_pit_at(&g.L, p.pos.x, p.pos.z)) over = true;
@@ -810,7 +812,7 @@ static void test_custom(void) {
     p.pos.x = cell_center(&g.L, 7, 3).x - 0.45f;     // a 5 cm dal pozzo
     for (int k = 0; k < 30; ++k) {
       memset(g_pads, 0, sizeof(g_pads));
-      game_update(g_pads);
+      game_update(g, g_pads);
       quiet();
     }
     check(p.alive, "sull'orlo del cenote, col centro fuori, si resta in piedi");
@@ -818,7 +820,7 @@ static void test_custom(void) {
     put(0, 9, 8);
     const int kills = p.kills;
     Vec3 at = cell_center(&g.L, 7, 3);
-    monster_spawn(MO_SCORPIONE, false, &at);
+    monster_spawn(g, MO_SCORPIONE, false, &at);
     int mk = -1;
     for (int k = 0; k < MAX_MONSTERS; ++k)
       if (g.mo[k].alive) mk = k;
@@ -827,10 +829,10 @@ static void test_custom(void) {
       g.mo[mk].rise = 0;
       g.mo[mk].hp = g.mo[mk].hp_max = 1000.0f;
       g.spawn_wait = 1000000;
-      damage_monster(mk, 1.0f, 0, v3(-1, 0, 0), 9.0f, false);
+      damage_monster(g, mk, 1.0f, 0, v3(-1, 0, 0), 9.0f, false);
       for (int k = 0; k < 60 && g.mo[mk].alive; ++k) {
         memset(g_pads, 0, sizeof(g_pads));
-        game_update(g_pads);
+        game_update(g, g_pads);
         g.spawn_wait = 1000000;
         memset(g.spawn_left, 0, sizeof(g.spawn_left));
       }
@@ -842,7 +844,7 @@ static void test_custom(void) {
     quiet();
     put(0, 2, 3);
     at = cell_center(&g.L, 8, 3);
-    monster_spawn(MO_SCORPIONE, false, &at);
+    monster_spawn(g, MO_SCORPIONE, false, &at);
     mk = -1;
     for (int k = 0; k < MAX_MONSTERS; ++k)
       if (g.mo[k].alive) mk = k;
@@ -852,7 +854,7 @@ static void test_custom(void) {
       for (int k = 0; k < 300; ++k) {
         memset(g_pads, 0, sizeof(g_pads));
         g.pl[0].invuln = 1000;
-        game_update(g_pads);
+        game_update(g, g_pads);
         g.spawn_wait = 1000000;
         memset(g.spawn_left, 0, sizeof(g.spawn_left));
         if (!g.mo[mk].alive) { alive = false; break; }
@@ -868,7 +870,7 @@ static void test_custom(void) {
     for (int k = 0; k < 200 && g.pl[1].alive; ++k) {
       memset(g_pads, 0, sizeof(g_pads));
       g_pads[1].ly = -1.0f;
-      game_update(g_pads);
+      game_update(g, g_pads);
       quiet();
       g.pl[0].invuln = 1000;
     }
@@ -878,7 +880,7 @@ static void test_custom(void) {
     for (int k = 0; k < RESPAWN_FRAMES + 200; ++k) {
       memset(g_pads, 0, sizeof(g_pads));
       if (k == RESPAWN_FRAMES + 60) g.pl[0].pos = cell_center(&g.L, 13, 8);   // G1 si allontana dall'orlo
-      game_update(g_pads);
+      game_update(g, g_pads);
       quiet();
       g.pl[0].invuln = 1000;
       if (g.pl[1].alive) {
@@ -895,8 +897,8 @@ static void test_custom(void) {
     put(0, 3, 6);
     g.pl[0].invuln = 0;
     g.pl[0].shield = false;
-    hurt_player(0, 100000.0f, g.pl[0].pos + v3(1, 0, 0), 0.0f);
-    for (int k = 0; k < WIPE_ZONE_FRAMES + 5; ++k) game_update(g_pads);
+    hurt_player(g, 0, 100000.0f, g.pl[0].pos + v3(1, 0, 0), 0.0f);
+    for (int k = 0; k < WIPE_ZONE_FRAMES + 5; ++k) game_update(g, g_pads);
     quiet();
     snprintf(buf, sizeof(buf), "cassa rotta, rimessa a posto alla ripartenza: G1 fuori dalla cassa (%.2f,%.2f)", g.pl[0].pos.x, g.pl[0].pos.z);
     check(d >= 0 && g.L.dyn[d].hp > 0.0f && g.pl[0].alive && level_body_ok(&g.L, g.pl[0].pos.x, g.pl[0].pos.z, 0.0f, PL_R, PL_STEP, BODY_WALK), buf);
@@ -913,7 +915,7 @@ int main(int argc, char** argv) {
     return 1;
   }
   open_game(g_base);
-  game_set_cards_enabled(false);
+  game_set_cards_enabled(g, false);
   test_static();
   test_fuzz(per_zone);
   test_targeted();

@@ -5,6 +5,12 @@
 #define PUPAZZI_VERSION "0.5.4"   // unico posto: core, menu e Makefile la leggono da qui
 #define MAX_PLAYERS 4
 
+// The whole state of a game (defined in game/sim/game_int.h). The frontend creates one with
+// game_create and passes it to every game_* function.
+struct Game;
+Game* game_create(void);
+void game_destroy(Game* g);
+
 // Personaggi disponibili (i 4 iniziali, uno per mondo).
 enum { CH_ASTRO = 0, CH_MOCHI, CH_MARZIO, CH_ZOLFO, NCHARS };
 
@@ -27,44 +33,44 @@ struct GameInfo {
   char map_name[40];
 };
 
-void game_init(void);
-void game_shutdown(void);
-void game_reset(void);                              // di nuovo dal titolo
+void game_init(Game& g);
+void game_shutdown(Game& g);
+void game_reset(Game& g);                              // di nuovo dal titolo
 // Prove: subito in partita sulla mappa map (0 = la prima), senza menu; chars sceglie i
 // personaggi (per esempio "0213"), NULL o vuoto: uno diverso per giocatore.
-void game_quick_start(int map, int players, const char* chars);
-void game_update(const Pad pads[MAX_PLAYERS]);      // un passo di 1/60 di secondo
-void game_start_tap(int player);                    // START premuto e lasciato subito
-bool game_paused(void);
-bool game_playing(void);                            // (0.5.4) in partita (non nei menu, non in pausa, niente carte)
-bool game_wants_quit(void);                         // scelto "Esci" dal titolo
+void game_quick_start(Game& g, int map, int players, const char* chars);
+void game_update(Game& g, const Pad pads[MAX_PLAYERS]);      // un passo di 1/60 di secondo
+void game_start_tap(Game& g, int player);                    // START premuto e lasciato subito
+bool game_paused(Game& g);
+bool game_playing(Game& g);                            // (0.5.4) in partita (non nei menu, non in pausa, niente carte)
+bool game_wants_quit(Game& g);                         // scelto "Esci" dal titolo
 // Telecamera, oggetti da disegnare e HUD del gioco (hud puo' essere NULL).
-void game_build_frame(FrameDesc* fd, int w, int h, Hud* hud);
-bool game_player_active(int i);
+void game_build_frame(Game& g, FrameDesc* fd, int w, int h, Hud* hud);
+bool game_player_active(Game& g, int i);
 uint32_t game_player_rgb(int i);
 // Quanto e' pronta la mira del giocatore (0 extra morbida, 1 morbida, 2 media, 3 rapida; si sceglie nella pausa).
-void game_set_aim_level(int player, int level);
-const char* game_aim_name(int player);
+void game_set_aim_level(Game& g, int player, int level);
+const char* game_aim_name(Game& g, int player);
 // Antialias: il renderer dice se lo sa fare, il gioco se e' scelto (voce della pausa).
-void game_set_aa_available(int max_samples);        // 0: il renderer non lo sa fare; altrimenti fino a quanti campioni
-void game_set_aa_level(int level);                  // come la voce della pausa: 0 spento, 1 il migliore, 4, 8
-int game_aa_level(void);
-void game_aa_cap(int samples);                      // (0.5.4) in questa sessione al massimo tanti campioni (8x troppo pesante)
-int game_aa_wanted(void);                           // campioni da usare adesso: 0, 4 o 8
+void game_set_aa_available(Game& g, int max_samples);        // 0: il renderer non lo sa fare; altrimenti fino a quanti campioni
+void game_set_aa_level(Game& g, int level);                  // come la voce della pausa: 0 spento, 1 il migliore, 4, 8
+int game_aa_level(Game& g);
+void game_aa_cap(Game& g, int samples);                      // (0.5.4) in questa sessione al massimo tanti campioni (8x troppo pesante)
+int game_aa_wanted(Game& g);                           // campioni da usare adesso: 0, 4 o 8
 // Schermo: con l'HDMI (TV) la visuale va da 22 a 30 m, sullo schermo della console da 15 a 30. Il
 // core lo legge dal sistema (all'avvio e' come con l'HDMI). Cambia solo l'inquadratura, non la partita.
-void game_set_hdmi(bool on);
+void game_set_hdmi(Game& g, bool on);
 // Chiamata dal core subito dopo save_open (retro_load_game): il gioco prende le impostazioni dal salvataggio (save.h).
-void game_save_loaded(void);
+void game_save_loaded(Game& g);
 // Carte (dalla 0.4): all'avvio attive; spente il gioco va esattamente come prima (prove).
-void game_set_cards_enabled(bool on);
-void game_info(GameInfo* gi);
-uint64_t game_state_hash(void);                     // per confrontare partite tra processori diversi
-void game_trace_monsters(void (*out)(const char* line));
+void game_set_cards_enabled(Game& g, bool on);
+void game_info(Game& g, GameInfo* gi);
+uint64_t game_state_hash(Game& g);                     // per confrontare partite tra processori diversi
+void game_trace_monsters(Game& g, void (*out)(const char* line));
 // Solo per le prove automatiche: i primi n giocatori li guida il computer.
-void game_bot_pads(Pad pads[MAX_PLAYERS], int n);
+void game_bot_pads(Game& g, Pad pads[MAX_PLAYERS], int n);
 // ... oppure un giocatore solo (in rete: quello di questa console), senza toccare gli altri.
-void game_bot_pad(int player, Pad* out);
+void game_bot_pad(Game& g, int player, Pad* out);
 
 // --- gioco in rete (0.5.4, vedi net.h) -------------------------------------------------------------
 // Il core passa al gioco cosa c'e' in rete (pagine GIOCO IN RETE e sala d'attesa) e il gioco gli
@@ -96,13 +102,13 @@ struct NetView {
   int local;                     // sala d'attesa: posto di questa console
   int error, error_seq;          // ultimo errore (NE_*) e quanti finora (per accorgersi di uno nuovo)
 };
-void game_net_view(const NetView* v);
+void game_net_view(Game& g, const NetView* v);
 enum { NR_NONE = 0, NR_HOST, NR_SEARCH, NR_JOIN, NR_LEAVE, NR_START };
-int game_net_request(int* arg);                     // dopo game_update: cosa chiedono i menu (NR_*, una alla volta)
+int game_net_request(Game& g, int* arg);                     // dopo game_update: cosa chiedono i menu (NR_*, una alla volta)
 void game_net_summary(NetGame* out);                // la partita attiva: nome, posto, pianeta e giro
-void game_net_lobby(void);                          // i menu nella sala d'attesa (prove: PUPAZZI_RETE)
+void game_net_lobby(Game& g);                          // i menu nella sala d'attesa (prove: PUPAZZI_RETE)
 struct NetStart;
-void game_net_prepare(NetStart* s);                 // numero per mescolare, mappa col cursore, mire di questa console
+void game_net_prepare(Game& g, NetStart* s);                 // numero per mescolare, mappa col cursore, mire di questa console
 struct NetStart {
   uint32_t seed;
   int local;                     // giocatore di questa console
@@ -110,11 +116,11 @@ struct NetStart {
   uint8_t aim[MAX_PLAYERS];      // mira di ogni giocatore (quella salvata sulla sua console)
   int map_sel;                   // mappa col cursore (quella di chi ha creato la partita)
 };
-void game_net_begin(const NetStart* s);             // su tutte: partita in rete da capo, a COME SI GIOCA?
-void game_net_frame(uint8_t consoles, uint8_t silent, const bool taps[MAX_PLAYERS]);
-bool game_net_over(void);                           // la partita in rete e' tornata al titolo: finita per tutti
+void game_net_begin(Game& g, const NetStart* s);             // su tutte: partita in rete da capo, a COME SI GIOCA?
+void game_net_frame(Game& g, uint8_t consoles, uint8_t silent, const bool taps[MAX_PLAYERS]);
+bool game_net_over(Game& g);                           // la partita in rete e' tornata al titolo: finita per tutti
 // Fine su questa console (NE_*: cosa dire). Chi ha creato la partita, rimasto solo, continua da solo;
 // le altre tornano al titolo con i loro salvataggi.
-void game_net_end(int reason, bool host);
-int game_net_local(void);                           // giocatore di questa console in rete (-1: non in rete)
-void game_net_wait(int frames);                     // solo per l'HUD: da quanti fotogrammi si aspetta la rete
+void game_net_end(Game& g, int reason, bool host);
+int game_net_local(Game& g);                           // giocatore di questa console in rete (-1: non in rete)
+void game_net_wait(Game& g, int frames);                     // solo per l'HUD: da quanti fotogrammi si aspetta la rete

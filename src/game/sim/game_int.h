@@ -9,6 +9,7 @@
 #include "game/sim/level.h"
 #include "game/view/models.h"
 #include "engine/audio.h"
+#include "game/save.h"
 
 #define MAX_MONSTERS 56          // <= 64: i colpi che attraversano ricordano i colpiti in un uint64_t
 #define MAX_SHOTS 256
@@ -340,6 +341,70 @@ const int CARDS_TIMEOUT = 60 * 60;   // chi non sceglie in un minuto (pad spento
 const int CARDS_BANNER_MIN = 15;     // (0.5.4) il banner c'e' da cosi' prima che A conti: niente scelte per sbaglio
 enum { EL_NONE = 0, EL_FIRE, EL_SNOW };   // colpi di fuoco o di neve (per VAPORE)
 
+// Grid of the distance fields (flow.cpp): half-metre cells over the whole map.
+#define FLOW_W (LV_MAX_W * 2)
+#define FLOW_H (LV_MAX_H * 2)
+#define FLOW_FAR 0xFFFF
+
+// Bots (bot.cpp): what each automatic player is doing.
+struct Bot {
+  Vec3 last, goal;
+  int check_t, side_t, jump_t, strafe_t, field_t, menu_t;
+  float side, strafe;
+  int orbit_t;                        // gladiatore: fotogrammi prima di poter cambiare verso del giro attorno
+  float orbit;                        // ...e il verso (+1 / -1)
+  bool l1_prev, a_prev, field_ok;
+  unsigned card_seq;                  // scelta delle carte gia' vista
+  int card_t, card_want, card_wait;
+  int cage_t;                         // da quanto cercano di aprire la capsula dell'esploratore
+  int heal_t, heal_off;               // da quanto inseguono un talismano / per quanto lasciarli stare
+  uint16_t field[FLOW_W * FLOW_H];
+};
+
+// A save as the slot screens show it (menu.cpp).
+struct SlotView { int state, world, giro, stars, smax, open, total; uint32_t seconds; char name[SAVE_NAME_LEN]; };
+
+// State that outlives game_init (until 0.5.4 it lived in module variables): session settings, caches
+// that are rebuilt when needed, what this console sees of the network, the menus' notices. game_init
+// keeps it; game_create sets its defaults.
+struct GameSession {
+  // game.cpp
+  bool settings_dirty;          // pause settings to be saved
+  NetView net_view;             // what is on the network (network pages)
+  int net_req, net_req_arg;     // request of the menus to the core (NR_*)
+  int net_local;                // player of this console in a LAN game (-1: none)
+  int net_wait;                 // frames this console has been waiting for the network
+  uint8_t net_silent;           // consoles that have not answered for a while
+  bool hdmi;                    // TV (HDMI) or the console screen: only the framing changes
+  bool quit;                    // Exit chosen from the title
+  // bot.cpp
+  Bot bot[MAX_PLAYERS];
+  int bot_lag;                  // tests: the marks on the ground are seen this many frames late (bot_set_lag)
+  // flow.cpp: blocked cells (1 blocked, 2 free but next to an obstacle, 0 free) and grid size
+  uint8_t flow_blk[FLOW_W * FLOW_H];
+  int flow_w, flow_h;
+  // monsters.cpp: distance field towards the players, and the gladiator's (free cells, steps to the
+  // target, Dijkstra heap)
+  uint16_t mon_flow[FLOW_W * FLOW_H];
+  bool mon_flow_ok;
+  int mon_flow_t;
+  uint8_t boss_free[FLOW_W * FLOW_H];
+  uint16_t boss_field[FLOW_W * FLOW_H];
+  int16_t boss_hpos[FLOW_W * FLOW_H];
+  uint16_t boss_heap[FLOW_W * FLOW_H];
+  int boss_hn, boss_bw, boss_bh, boss_free_t, boss_field_t, boss_crates;
+  bool boss_field_ok;
+  Vec3 boss_goal;
+  // cards.cpp
+  bool cards_on;                // game_set_cards_enabled: for the whole session
+  // menu.cpp
+  int info_t;                   // temporary notice in the menus
+  char info[256];
+  int net_err_seen;             // network errors already shown (NetView::error_seq)
+  bool lobby_join;              // the waiting room is the one of a console that joined
+  SlotView slot_view[SAVE_SLOTS];
+};
+
 struct Game {
   // Schermate e menu.
   int screen, screen_t;
@@ -393,6 +458,7 @@ struct Game {
   int wave, spawn_left[MO_NTYPES], spawn_cd, spawn_wait, enemies_left;
   uint32_t rng;
   unsigned tick, ui_tick;       // ui_tick va avanti anche in pausa e nei menu
+  int time_frames;              // frames towards the next second of play time of the active save
   PadState in[MAX_PLAYERS];
   Vec3 cam_target;
   float cam_dist, cam_pitch, shake;
@@ -433,9 +499,10 @@ struct Game {
   bool giro_done;               // si e' guardato il giro (fine dell'arena)
   bool giro_up;                 // aperto il giro dopo (le stelle del pianeta ripartono da zero)
   int giro_stars, giro_was;     // stelle del pianeta nel giro appena finito; quel giro
+  GameSession session;          // keep it last: game_init clears everything before it
 };
 
-extern Game g;
+
 
 static inline bool has_card(const Player& p, int c) { return ((p.cards >> c) & 1u) != 0u; }
 // Valori del personaggio con le carte: li usano il gioco, il disegno (mira, barre) e i giocatori
@@ -456,23 +523,23 @@ static inline float pl_reload_frames(const Player& p) {
 }
 static inline int pl_bombs_cap(const Player& p) { return has_card(p, CA_BOMBAROLO) ? 4 : MAX_BOMBS_CARRIED; }
 
-static inline int aim_level_of(int i) { const int l = g.aim_level[i]; return l < (int)NAIMLEVELS ? l : AIM_DEFAULT; }
-static inline const AimTune& aim_tune(int i) { return AIM_TUNE[aim_level_of(i)]; }
+static inline int aim_level_of(Game& g, int i) { const int l = g.aim_level[i]; return l < (int)NAIMLEVELS ? l : AIM_DEFAULT; }
+static inline const AimTune& aim_tune(Game& g, int i) { return AIM_TUNE[aim_level_of(g, i)]; }
 
-static inline uint32_t rng_next(void) {
+static inline uint32_t rng_next(Game& g) {
   uint32_t x = g.rng;
   x ^= x << 13; x ^= x >> 17; x ^= x << 5;
   return g.rng = x;
 }
-static inline float rng_f(void) { return (float)(rng_next() >> 8) * (1.0f / 16777216.0f); }   // [0, 1)
-static inline float rng_s(void) { return rng_f() * 2.0f - 1.0f; }                             // [-1, 1)
+static inline float rng_f(Game& g) { return (float)(rng_next(g) >> 8) * (1.0f / 16777216.0f); }   // [0, 1)
+static inline float rng_s(Game& g) { return rng_f(g) * 2.0f - 1.0f; }                             // [-1, 1)
 // Vettore casuale (x e z in [-sx, sx) e [-sz, sz), y in [y0, y0 + sy)). Le chiamate al generatore
 // vanno sempre in istruzioni separate: l'ordine di valutazione degli argomenti di una funzione
 // non e' fissato dal C++ e due compilatori darebbero partite diverse.
-static inline Vec3 rng_vec(float sx, float y0, float sy, float sz) {
-  const float x = rng_s() * sx;
-  const float y = y0 + rng_f() * sy;
-  const float z = rng_s() * sz;
+static inline Vec3 rng_vec(Game& g, float sx, float y0, float sy, float sz) {
+  const float x = rng_s(g) * sx;
+  const float y = y0 + rng_f(g) * sy;
+  const float z = rng_s(g) * sz;
   return v3(x, y, z);
 }
 static inline float dist2d(Vec3 a, Vec3 b) {
@@ -481,30 +548,30 @@ static inline float dist2d(Vec3 a, Vec3 b) {
 }
 static inline Vec3 dir_yaw(float yaw) { return v3(d_sin(yaw), 0.0f, d_cos(yaw)); }
 static inline float yaw_of(float dx, float dz) { return d_atan2(dx, dz); }
-static inline bool pad_down(int i, int b) { return (g.in[i].btn >> b) & 1u; }
-static inline bool pad_pressed(int i, int b) { return ((g.in[i].btn & ~g.in[i].prev) >> b) & 1u; }
+static inline bool pad_down(Game& g, int i, int b) { return (g.in[i].btn >> b) & 1u; }
+static inline bool pad_pressed(Game& g, int i, int b) { return ((g.in[i].btn & ~g.in[i].prev) >> b) & 1u; }
 
 // --- game.cpp ---
-int count_active(void);
-int count_alive(void);
-int count_in_play(void);      // attivi e non ancora senza vite
-int count_monsters(void);
-void show_msg(const char* big, const char* small, uint32_t rgb, int size, int frames);
-float diff_hp(void);          // moltiplicatori dei mostri secondo il giro della campagna
-float diff_dmg(void);
-float diff_speed(void);
-void start_map(int idx);      // carica la mappa e comincia dalla zona 1
-void go_screen(int s);
-void game_request_quit(void);
-void update_camera(bool snap);
-bool load_map_preview(int idx);
-Vec3 menu_spot(int i);        // dove sta il personaggio del giocatore i nei menu
+int count_active(Game& g);
+int count_alive(Game& g);
+int count_in_play(Game& g);      // attivi e non ancora senza vite
+int count_monsters(Game& g);
+void show_msg(Game& g, const char* big, const char* small, uint32_t rgb, int size, int frames);
+float diff_hp(Game& g);          // moltiplicatori dei mostri secondo il giro della campagna
+float diff_dmg(Game& g);
+float diff_speed(Game& g);
+void start_map(Game& g, int idx);      // carica la mappa e comincia dalla zona 1
+void go_screen(Game& g, int s);
+void game_request_quit(Game& g);
+void update_camera(Game& g, bool snap);
+bool load_map_preview(Game& g, int idx);
+Vec3 menu_spot(Game& g, int i);        // dove sta il personaggio del giocatore i nei menu
 // Sonoro: un effetto in un punto del mondo (sinistra/destra e volume dalla posizione rispetto
 // all'inquadratura) o dei menu (al centro). Solo uscita: non cambia nulla della partita.
-void snd_at(int id, Vec3 pos);
+void snd_at(Game& g, int id, Vec3 pos);
 void snd_ui(int id);
-void settings_changed(void);  // mira, antialias o volumi cambiati (gia' in save_data): si scrivono alla chiusura della pausa
-void stars_late_explorer(void);   // esploratore salvato a mappa gia' finita (festa di fine mappa)
+void settings_changed(Game& g);  // mira, antialias o volumi cambiati (gia' in save_data): si scrivono alla chiusura della pausa
+void stars_late_explorer(Game& g);   // esploratore salvato a mappa gia' finita (festa di fine mappa)
 // Pianeti e giri (dati nel salvataggio, mappe da maps.h).
 int world_giro(int w);            // giro del pianeta w, da 1
 int world_maps(int w);            // mappe del pianeta w nella campagna
@@ -516,98 +583,95 @@ bool map_unlocked(int i);         // la mappa i si puo' giocare?
 int star_count(uint8_t s);        // quante stelle in una maschera SAVE_STAR_*
 extern const char* const WORLD_NAMES[NWORLDS];   // "TERRA", "LUNA"...
 // --- player.cpp ---
-void player_join(int i, int ch, bool mid_game);
-void player_leave(int i);
-void players_gather(void);    // fine mappa: chi e' a terra (o senza vite) raggiunge i compagni per la festa
-void player_update(int i, const Pad& pad);
-void place_players(int z);
+void player_join(Game& g, int i, int ch, bool mid_game);
+void player_leave(Game& g, int i);
+void players_gather(Game& g);    // fine mappa: chi e' a terra (o senza vite) raggiunge i compagni per la festa
+void player_update(Game& g, int i, const Pad& pad);
+void place_players(Game& g, int z);
 Vec3 player_chest(const Player& p);
-bool player_visible_from(int i, Vec3 from);
-void hurt_player(int i, float dmg, Vec3 from, float knock);
-void heal_player(int i, float amount);
-void push_player(int i, float vx, float vz, int frames);
+bool player_visible_from(Game& g, int i, Vec3 from);
+void hurt_player(Game& g, int i, float dmg, Vec3 from, float knock);
+void heal_player(Game& g, int i, float amount);
+void push_player(Game& g, int i, float vx, float vz, int frames);
 // --- combat.cpp ---
-Shot* shot_new(int kind, int owner, Vec3 pos, Vec3 vel);
-void shots_update(void);
-void damage_monster(int k, float dmg, int owner, Vec3 dir, float knock, bool charges);
-void damage_boss(float dmg, int owner, bool charges);
+Shot* shot_new(Game& g, int kind, int owner, Vec3 pos, Vec3 vel);
+void shots_update(Game& g);
+void damage_monster(Game& g, int k, float dmg, int owner, Vec3 dir, float knock, bool charges);
+void damage_boss(Game& g, float dmg, int owner, bool charges);
 // elem: EL_FIRE per la lava di Zolfo (VAPORE sui mostri rallentati), EL_NONE per il resto.
-void explode(Vec3 p, float radius, float dmg, int owner, float knock, bool big, int elem = EL_NONE);
-bool bomb_drop(int i);
-void bombs_update(void);
-void items_reset(int zone);   // zona < 0: tutta la mappa
-void items_update(void);
-void crate_damage(int d, float dmg, Vec3 from);
-bool power_take(int player, int pw);   // bonus PW_* al giocatore (false: CARICA che non gli serve)
-void burst(Vec3 p, int n, int col, float speed);
-void puff(Vec3 p, int kind, int col, Vec3 vel, float size, int life);
-void add_float(Vec3 p, uint32_t rgb, int key, int value, char sign);
-void add_float_text(Vec3 p, uint32_t rgb, const char* txt);   // scritta che sale (al massimo 15 byte: il testo italiano, tradotto nel disegno)
-void explorer_update(void);   // l'esploratore chiama aiuto; poi, salvato, festeggia e se ne va
-void explorer_rescue(Vec3 c); // capsula aperta: stella dell'esploratore
-void add_shake(float a);
-Marker* marker_new(int kind, Vec3 pos, float r, int life);
-void effects_update(void);
+void explode(Game& g, Vec3 p, float radius, float dmg, int owner, float knock, bool big, int elem = EL_NONE);
+bool bomb_drop(Game& g, int i);
+void bombs_update(Game& g);
+void items_reset(Game& g, int zone);   // zona < 0: tutta la mappa
+void items_update(Game& g);
+void crate_damage(Game& g, int d, float dmg, Vec3 from);
+bool power_take(Game& g, int player, int pw);   // bonus PW_* al giocatore (false: CARICA che non gli serve)
+void burst(Game& g, Vec3 p, int n, int col, float speed);
+void puff(Game& g, Vec3 p, int kind, int col, Vec3 vel, float size, int life);
+void add_float(Game& g, Vec3 p, uint32_t rgb, int key, int value, char sign);
+void add_float_text(Game& g, Vec3 p, uint32_t rgb, const char* txt);   // scritta che sale (al massimo 15 byte: il testo italiano, tradotto nel disegno)
+void explorer_update(Game& g);   // l'esploratore chiama aiuto; poi, salvato, festeggia e se ne va
+void explorer_rescue(Game& g, Vec3 c); // capsula aperta: stella dell'esploratore
+void add_shake(Game& g, float a);
+Marker* marker_new(Game& g, int kind, Vec3 pos, float r, int life);
+void effects_update(Game& g);
 // --- monsters.cpp ---
-bool monster_spawn(int type, bool summoned, const Vec3* where);
-void monsters_update(void);
-void monsters_clear(void);
+bool monster_spawn(Game& g, int type, bool summoned, const Vec3* where);
+void monsters_update(Game& g);
+void monsters_clear(Game& g);
 float monster_r(const Monster& m);
 float monster_h(const Monster& m);
 Vec3 monster_center(const Monster& m);
-bool monster_drawn(const Monster& m);   // nascosto nell'erba alta lontano dai giocatori?
-void boss_start(void);
-void boss_update(void);
+bool monster_drawn(Game& g, const Monster& m);   // nascosto nell'erba alta lontano dai giocatori?
+void boss_start(Game& g);
+void boss_update(Game& g);
 float boss_r(void);
-float boss_speed(void);                 // camminata del gladiatore nella fase in corso (m/s)
+float boss_speed(Game& g);                 // camminata del gladiatore nella fase in corso (m/s)
 Vec3 boss_javelin_start(const Boss& b); // da dove partono i giavellotti (il disegno parte dalla mano)
-bool boss_force_act(int act);           // prove: comincia subito l'azione act verso il bersaglio
+bool boss_force_act(Game& g, int act);           // prove: comincia subito l'azione act verso il bersaglio
 // --- flow.cpp ---
 // Campo di distanze su una griglia di celle da mezzo metro: i mostri lo seguono per arrivare ai
 // giocatori girando attorno agli ostacoli, i giocatori automatici per andare dove vogliono.
-#define FLOW_W (LV_MAX_W * 2)
-#define FLOW_H (LV_MAX_H * 2)
-#define FLOW_FAR 0xFFFF
-void flow_build(uint16_t* field, const Vec3* goals, int ngoals, int zone);   // zone < 0: tutta la mappa
-bool flow_dir(const uint16_t* field, float x, float z, float* dx, float* dz);
-bool walk_clear(Vec3 a, Vec3 b, float r, bool flying);
+void flow_build(Game& g, uint16_t* field, const Vec3* goals, int ngoals, int zone);   // zone < 0: tutta la mappa
+bool flow_dir(Game& g, const uint16_t* field, float x, float z, float* dx, float* dz);
+bool walk_clear(Game& g, Vec3 a, Vec3 b, float r, bool flying);
 // --- gioco in rete (game.cpp; vedi net.h) ---
-const NetView& net_view(void);   // cosa c'e' in rete (dal core, solo per le pagine della rete)
-void net_req(int req, int arg);  // richiesta al core (NR_*): la prende dopo game_update
-int net_local(void);             // giocatore di questa console in una partita in rete, -1 fuori
+const NetView& net_view(Game& g);   // cosa c'e' in rete (dal core, solo per le pagine della rete)
+void net_req(Game& g, int req, int arg);  // richiesta al core (NR_*): la prende dopo game_update
+int net_local(Game& g);             // giocatore di questa console in una partita in rete, -1 fuori
 // In rete conta solo chi ha una console collegata (per gli avvisi "premete un tasto").
-static inline bool net_console(int i) { return !g.net || ((g.net_consoles >> i) & 1u) != 0u; }
-int net_wait_frames(void);       // da quanti fotogrammi questa console aspetta la rete (solo HUD)
-uint8_t net_silent(void);        // console che non rispondono da un po' (solo HUD)
+static inline bool net_console(Game& g, int i) { return !g.net || ((g.net_consoles >> i) & 1u) != 0u; }
+int net_wait_frames(Game& g);       // da quanti fotogrammi questa console aspetta la rete (solo HUD)
+uint8_t net_silent(Game& g);        // console che non rispondono da un po' (solo HUD)
 // --- menu.cpp ---
-void menu_info(const char* s);   // avviso nei menu al posto del piede (2 secondi)
-const char* net_error_text(int e, char* buf, int n);   // cosa dire per un errore della rete (NE_*)
-void menu_update(void);
-void play_menus_update(void);  // pausa e finestre per entrare, durante la partita
-void menu_build_hud(Hud* h, const Camera& cam);
-void play_menus_hud(Hud* h);
+void menu_info(Game& g, const char* s);   // avviso nei menu al posto del piede (2 secondi)
+const char* net_error_text(Game& g, int e, char* buf, int n);   // cosa dire per un errore della rete (NE_*)
+void menu_update(Game& g);
+void play_menus_update(Game& g);  // pausa e finestre per entrare, durante la partita
+void menu_build_hud(Game& g, Hud* h, const Camera& cam);
+void play_menus_hud(Game& g, Hud* h);
 // --- game_draw.cpp ---
 bool to_screen(const Camera& c, Vec3 p, int* sx, int* sy);
 // Faccia dell'eroe ch (disegni di tools/make_font.py) in un quadrato di lato 8 * size da (x, y):
 // colori veri, spenti (a terra) o grigi (senza vite).
 enum { FACE_NORMAL = 0, FACE_DOWN, FACE_OUT };   // aspetto delle facce (ui::face)
 // --- bot.cpp ---
-void bot_reset(void);
-void bot_set_lag(int frames);   // prove: i giocatori automatici reagiscono ai segni a terra in ritardo, come una persona
+void bot_reset(Game& g);
+void bot_set_lag(Game& g, int frames);   // prove: i giocatori automatici reagiscono ai segni a terra in ritardo, come una persona
 // --- cards.cpp ---
-bool cards_enabled(void);
-void cards_map_start(void);           // nuova mappa (o mappa da capo): via tutte le carte
-void cards_offer(void);               // apre la scelta (se le carte sono attive) per chi ha ancora vite
-void cards_zone_cleared(void);        // zona ripulita e ne segue un'altra: la scelta si apre tra poco
-void cards_zone_start(void);          // inizio (o nuovo inizio) di una zona: si ricaricano gli scudi
-void cards_update(void);              // scelta aperta: cursori e conferme di tutti, poi si chiude
-void cards_hud(Hud* h);               // riquadri della scelta (al posto della pausa)
-void card_lose_all(int i);            // chi lascia la partita perde le sue carte
-uint8_t card_shot_fx(int i, int kind);       // SFX_* dei colpi di questo tipo del giocatore i
-void card_shot_mods(int i, Shot* s);         // colpo normale appena sparato: danni, PERFORANTE, RIMBALZO, combo
-void card_shot_hit(int k, const Shot& s);    // un colpo di un giocatore ha preso il mostro k (ancora vivo)
-void card_elem_hit(int k, int owner, int elem);   // fuoco o neve sul mostro k: forse VAPORE
-void card_burn_tick(int k);                  // mostro che brucia: danni e fiammelle
-bool card_shield_hit(int i);                 // SCUDO: true se il colpo si ferma
-void card_special_used(int i);               // SPECIALE GENEROSO
-bool cards_layout_ok(char* why, int n, bool all = false);   // prove: nomi e descrizioni stanno nei riquadri (all: li scrive tutti)
+bool cards_enabled(Game& g);
+void cards_map_start(Game& g);           // nuova mappa (o mappa da capo): via tutte le carte
+void cards_offer(Game& g);               // apre la scelta (se le carte sono attive) per chi ha ancora vite
+void cards_zone_cleared(Game& g);        // zona ripulita e ne segue un'altra: la scelta si apre tra poco
+void cards_zone_start(Game& g);          // inizio (o nuovo inizio) di una zona: si ricaricano gli scudi
+void cards_update(Game& g);              // scelta aperta: cursori e conferme di tutti, poi si chiude
+void cards_hud(Game& g, Hud* h);               // riquadri della scelta (al posto della pausa)
+void card_lose_all(Game& g, int i);            // chi lascia la partita perde le sue carte
+uint8_t card_shot_fx(Game& g, int i, int kind);       // SFX_* dei colpi di questo tipo del giocatore i
+void card_shot_mods(Game& g, int i, Shot* s);         // colpo normale appena sparato: danni, PERFORANTE, RIMBALZO, combo
+void card_shot_hit(Game& g, int k, const Shot& s);    // un colpo di un giocatore ha preso il mostro k (ancora vivo)
+void card_elem_hit(Game& g, int k, int owner, int elem);   // fuoco o neve sul mostro k: forse VAPORE
+void card_burn_tick(Game& g, int k);                  // mostro che brucia: danni e fiammelle
+bool card_shield_hit(Game& g, int i);                 // SCUDO: true se il colpo si ferma
+void card_special_used(Game& g, int i);               // SPECIALE GENEROSO
+bool cards_layout_ok(Game& g, char* why, int n, bool all = false);   // prove: nomi e descrizioni stanno nei riquadri (all: li scrive tutti)

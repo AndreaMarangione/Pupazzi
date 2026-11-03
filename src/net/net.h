@@ -39,7 +39,7 @@
 #include <stdint.h>
 #include "game/game.h"
 
-void net_init(void);                 // retro_load_game: variabili d'ambiente, partita automatica (prove)
+void net_init(Game& game);           // retro_load_game: variabili d'ambiente, partita automatica (prove)
 void net_shutdown(void);             // retro_unload_game, retro_deinit, retro_reset: saluta e chiude
 // A ogni fotogramma, prima del gioco: legge la rete, segue ricerca e sala d'attesa (game_net_view),
 // comincia o finisce la partita in rete (game_net_begin, game_net_end).

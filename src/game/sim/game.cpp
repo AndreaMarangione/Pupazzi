@@ -5,10 +5,26 @@
 #include "game/sim/maps.h"
 #include "platform/plat.h"
 #include "game/save.h"
+#include <stddef.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
+#include <type_traits>
 
-Game g;
+// The state is plain data (game_init clears it with memset): calloc, so the core needs no C++ runtime
+// (operator new would pull in libstdc++).
+static_assert(std::is_trivially_default_constructible<Game>::value && std::is_trivially_copyable<Game>::value &&
+                  std::is_standard_layout<Game>::value,
+              "Game is plain data: created with calloc, cleared with memset (game_init)");
+Game* game_create(void) {
+  Game* g = (Game*)calloc(1, sizeof(Game));
+  g->session.net_local = -1;
+  g->session.hdmi = true;
+  g->session.cards_on = true;
+  return g;
+}
+void game_destroy(Game* g) { free(g); }
+
 const char* const WORLD_NAMES[NWORLDS] = { N_("TERRA"), N_("LUNA"), N_("MARTE"), N_("VENERE"), N_("MERCURIO"), N_("GIOVE"),
                                             N_("SATURNO"), N_("URANO"), N_("NETTUNO") };
 static_assert(SAVE_WORLDS == NWORLDS, "save.h e level.h devono avere gli stessi pianeti");
@@ -16,20 +32,13 @@ static_assert(NET_NAME_LEN == SAVE_NAME_LEN, "game.h e save.h: stessa lunghezza 
 
 namespace {
 
-bool g_inited, g_quit;
-bool g_settings_dirty;        // impostazioni della pausa da salvare
+bool g_inited;                 // models and maps built (shared by every game in the process)
 // Gioco in rete (0.5.4): solo di questa console, non della partita (che e' uguale su tutte).
-NetView g_nv;                 // cosa c'e' in rete (pagine della rete)
-int g_nreq = NR_NONE, g_nreq_arg;
-int g_net_local = -1;         // giocatore di questa console
-int g_net_wait;               // fotogrammi che si aspetta la rete
-uint8_t g_net_silent;         // console che non rispondono
 const float PITCH_PLAY = 0.98f, PITCH_MENU = 0.5f;
 // In partita: da CAM_DIST_MIN (gruppo vicino) a CAM_DIST_MAX (gruppo largo); senza HDMI, sullo schermo
 // piccolo della console, si parte piu' vicino (0.5.3). Prima: 0.5.1-0.5.2 da 22 a 30 per tutti; 0.5 da 15
 // a 30; 0.3.2-0.4 da 15 a 21; fino alla 0.3.1 da 11 a 17.
 const float CAM_DIST_MIN = 22.0f, CAM_DIST_MIN_LCD = 15.0f, CAM_DIST_MAX = 30.0f;
-bool g_hdmi = true;
 // Terreno inquadrato dalla telecamera di gioco a distanza d (inclinazione 0,98, campo 0,87 in
 // game_draw.cpp, schermo 4:3), in metri per metro di distanza: verso nord (in alto) fino a 0,81 d
 // dal punto inquadrato, verso sud 0,425 d; di lato, s metri a sud del punto inquadrato (s
@@ -61,61 +70,61 @@ float cam_need(const Vec3* p, int n, float cx, float cz) {
 
 // Mostri di un gruppo: piu' giocatori in gioco (chi e' senza vite non conta), piu' mostri; e
 // di piu' a ogni giro.
-int wave_size(int base) {
+int wave_size(Game& g, int base) {
   if (base <= 0) return 0;
-  const int np = count_in_play() > 0 ? count_in_play() : 1;
+  const int np = count_in_play(g) > 0 ? count_in_play(g) : 1;
   const int n = (int)((float)base * (0.7f + 0.3f * (float)np) * (1.0f + 0.4f * (float)g.loop) + 0.5f);
   return n < 1 ? 1 : n;
 }
 
-void begin_wave(int w) {
+void begin_wave(Game& g, int w) {
   g.wave = w;
   const ZoneDef& zd = g.L.zones[g.zone];
   if (w >= zd.nwaves) return;
   const WaveDef& wd = zd.wave[w];
-  for (int k = 0; k < wd.nkinds; ++k) g.spawn_left[wd.kind[k]] += wave_size(wd.count[k]);
+  for (int k = 0; k < wd.nkinds; ++k) g.spawn_left[wd.kind[k]] += wave_size(g, wd.count[k]);
   g.spawn_cd = 0;
 }
 
-void begin_zone(int z, bool entering) {
+void begin_zone(Game& g, int z, bool entering) {
   g.zone = z;
   g.phase = entering ? PH_ENTER : PH_FIGHT;
   g.phase_t = 0;
   g.spawn_wait = 90;
   memset(g.spawn_left, 0, sizeof(g.spawn_left));
-  begin_wave(0);
-  boss_start();      // solo nell'ultima zona di un'arena; altrimenti nessun boss
-  cards_zone_start();
+  begin_wave(g, 0);
+  boss_start(g);      // solo nell'ultima zona di un'arena; altrimenti nessun boss
+  cards_zone_start(g);
   int n = 0;
   for (int k = 0; k < MO_NTYPES; ++k) n += g.spawn_left[k];
   plat_log("mappa %d (%s), zona %d: %d mostri nella prima ondata", g.map_idx + 1, g.L.name, z + 1, n);
 }
 
-int zone_total_left(void) {
-  int n = count_monsters();
+int zone_total_left(Game& g) {
+  int n = count_monsters(g);
   for (int k = 0; k < MO_NTYPES; ++k) n += g.spawn_left[k];
   const ZoneDef& zd = g.L.zones[g.zone];
   for (int w = g.wave + 1; w < zd.nwaves; ++w)
-    for (int k = 0; k < zd.wave[w].nkinds; ++k) n += wave_size(zd.wave[w].count[k]);
+    for (int k = 0; k < zd.wave[w].nkinds; ++k) n += wave_size(g, zd.wave[w].count[k]);
   return n;
 }
 
-void clear_actors(void) {
-  monsters_clear();
+void clear_actors(Game& g) {
+  monsters_clear(g);
   memset(g.sh, 0, sizeof(g.sh));
   memset(g.mk, 0, sizeof(g.mk));
 }
 
 // Da soli, caduti con vite rimaste: la zona ricomincia (mostri e oggetti della zona da capo,
 // vita piena alla partenza della zona).
-void restart_zone(void) {
-  clear_actors();
-  items_reset(g.zone);
+void restart_zone(Game& g) {
+  clear_actors(g);
+  items_reset(g, g.zone);
   level_reset_dynamic(&g.L, g.zone);
   if (g.explorer_free && g.L.capsule_dyn >= 0) g.L.dyn[g.L.capsule_dyn].hp = 0.0f;   // l'esploratore resta salvo
   for (int i = 0; i < g.L.ngates; ++i) g.gate_want[i] = g.L.gates[i].open;
-  place_players(g.zone);
-  cards_zone_start();
+  place_players(g, g.zone);
+  cards_zone_start(g);
   int lives = 0;
   for (int i = 0; i < MAX_PLAYERS; ++i)
     if (g.pl[i].active) lives += g.pl[i].lives;
@@ -128,22 +137,22 @@ void restart_zone(void) {
     if (gi >= 0) g.gate_want[gi] = 1.0f;
     if (lives == 1) snprintf(sub, sizeof(sub), "%s", tr("la zona resta libera - ultima vita!"));
     else snprintf(sub, sizeof(sub), tr("la zona resta libera - ancora %d vite"), lives);
-    show_msg(tr("SI RIPARTE!"), sub, 0xFFFFFF, 2, 120);
+    show_msg(g, tr("SI RIPARTE!"), sub, 0xFFFFFF, 2, 120);
   } else {
-    begin_zone(g.zone, false);
+    begin_zone(g, g.zone, false);
     if (lives == 1) snprintf(sub, sizeof(sub), tr("zona %d - ultima vita!"), g.zone + 1);
     else snprintf(sub, sizeof(sub), tr("zona %d - ancora %d vite"), g.zone + 1, lives);
-    show_msg(tr("SI RIPARTE!"), sub, 0xFFFFFF, 2, 110);
+    show_msg(g, tr("SI RIPARTE!"), sub, 0xFFFFFF, 2, 110);
   }
   plat_log("si riparte dalla zona %d della mappa %d (vite %d)", g.zone + 1, g.map_idx + 1, lives);
-  update_camera(true);
+  update_camera(g, true);
 }
 
 // Boss del pianeta battuto: si apre il pianeta dopo e, con almeno GIRO_STARS stelle nel giro in
 // corso, il giro dopo (mostri piu' forti) con le stelle del pianeta da zero. Si guarda a fine
 // mappa e di nuovo se l'esploratore viene salvato durante la festa (la sua puo' essere la decima).
 // Solo in memoria: chi la chiama poi scrive il salvataggio.
-void giro_check(void) {
+void giro_check(Game& g) {
   if (!maps_is_boss(g.map_idx) || g.giro_up) return;
   SaveData* sd = save_data();
   const int w = maps_world(g.map_idx);
@@ -172,7 +181,7 @@ void giro_check(void) {
 // Fine mappa: stelle (finita; esploratore salvato; senza ricominciare la mappa da capo), mappa
 // dopo del pianeta aperta, giro (dopo il boss), salvataggio. Una mappa personalizzata senza
 // capsula da' comunque la stella dell'esploratore.
-void award_stars(void) {
+void award_stars(Game& g) {
   uint8_t got = SAVE_STAR_DONE;
   if (g.explorer_free || g.L.capsule_dyn < 0) got |= SAVE_STAR_EXPLORER;
   if (g.map_wipes == 0) got |= SAVE_STAR_NO_WIPE;
@@ -192,33 +201,33 @@ void award_stars(void) {
            (got & SAVE_STAR_DONE) ? "finita " : "", (got & SAVE_STAR_EXPLORER) ? "esploratore " : "",
            (got & SAVE_STAR_NO_WIPE) ? "senza-ricominciare" : "", star_count(g.stars_new), WORLD_NAMES[w >= 0 && w < NWORLDS ? w : 0],
            world_giro(w), world_stars(w), 3 * world_maps(w));
-  giro_check();
+  giro_check(g);
   save_write();
 }
 
-void update_spawning(void) {
+void update_spawning(Game& g) {
   if (g.spawn_wait > 0) { g.spawn_wait--; return; }
   int pending = 0;
   for (int k = 0; k < MO_NTYPES; ++k) pending += g.spawn_left[k];
   if (pending > 0) {
     if (g.spawn_cd > 0) { g.spawn_cd--; return; }
-    int r = (int)(rng_next() % (uint32_t)pending), type = 0;
+    int r = (int)(rng_next(g) % (uint32_t)pending), type = 0;
     for (int k = 0; k < MO_NTYPES; ++k) {
       if (r < g.spawn_left[k]) { type = k; break; }
       r -= g.spawn_left[k];
     }
-    if (monster_spawn(type, false, 0)) {
+    if (monster_spawn(g, type, false, 0)) {
       g.spawn_left[type]--;
       g.spawn_cd = type == MO_SCARABEO ? 6 : 14;
     }
     return;
   }
-  const int alive = count_monsters();
+  const int alive = count_monsters(g);
   if (g.wave + 1 < g.L.zones[g.zone].nwaves) {
     if (alive <= 1) {
-      begin_wave(g.wave + 1);
+      begin_wave(g, g.wave + 1);
       g.spawn_wait = 45;
-      show_msg(tr("ARRIVANO ALTRI!"), "", 0xFF8A5C, 2, 90);
+      show_msg(g, tr("ARRIVANO ALTRI!"), "", 0xFF8A5C, 2, 90);
       snd_ui(SND_WAVE);
     }
     return;
@@ -229,24 +238,24 @@ void update_spawning(void) {
     g.phase_t = 0;
     const int gi = g.L.zones[g.zone].exit_gate;
     if (gi >= 0) g.gate_want[gi] = 1.0f;          // si apre (e cigola: update_gates)
-    show_msg(tr("ZONA LIBERA!"), tr("avanti: il cancello è aperto"), 0x7CF29A, 2, 180);
+    show_msg(g, tr("ZONA LIBERA!"), tr("avanti: il cancello è aperto"), 0x7CF29A, 2, 180);
     snd_ui(SND_ZONE_CLEAR);
     plat_log("mappa %d, zona %d libera", g.map_idx + 1, g.zone + 1);
-    cards_zone_cleared();
+    cards_zone_cleared(g);
   } else {
     g.phase = PH_MAP_DONE;
     g.phase_t = 0;
-    show_msg(tr("MAPPA COMPLETATA!"), "", 0xFFE14D, 2, 200);
+    show_msg(g, tr("MAPPA COMPLETATA!"), "", 0xFFE14D, 2, 200);
     plat_log("mappa %d (%s) completata: mostri sconfitti in totale %d, cadute %d", g.map_idx + 1, g.L.name, g.kills, g.deaths);
-    award_stars();
+    award_stars(g);
   }
 }
 
 // Il giocatore i alla sua partenza nella zona in corso (uno sbuffo dove era e uno dove arriva).
-void to_zone_start(int i) {
+void to_zone_start(Game& g, int i) {
   Player& p = g.pl[i];
   p.leap_n = p.leap_t = 0;
-  burst(p.pos + v3(0, 0.6f, 0), 8, i, 2.5f);
+  burst(g, p.pos + v3(0, 0.6f, 0), 8, i, 2.5f);
   p.pos = g.L.zones[g.zone].start[i];
   level_push_out(&g.L, &p.pos.x, &p.pos.z, 0.0f, PL_R, PL_STEP, BODY_WALK);
   level_body_guard(&g.L, g.L.zones[g.zone].start[i].x, g.L.zones[g.zone].start[i].z, &p.pos.x, &p.pos.z, 0.0f, PL_R, PL_STEP, BODY_WALK);
@@ -254,35 +263,35 @@ void to_zone_start(int i) {
   p.vy = 0.0f;
   p.grounded = true;
   p.tramp_t = 0;
-  burst(p.pos + v3(0, 0.6f, 0), 8, i, 2.5f);
+  burst(g, p.pos + v3(0, 0.6f, 0), 8, i, 2.5f);
 }
 
 // Chi e' rimasto indietro quando la zona comincia viene portato alla sua partenza nella zona.
-void regroup(void) {
+void regroup(Game& g) {
   for (int i = 0; i < MAX_PLAYERS; ++i) {
     Player& p = g.pl[i];
     if (!p.active || !p.alive) continue;
     if (p.leap_n == 0 && level_zone_at(&g.L, p.pos.x, p.pos.z) == g.zone) continue;
     if (p.leap_n > 0 && level_zone_at(&g.L, p.leap_b.x, p.leap_b.z) == g.zone) continue;   // atterra dentro
-    to_zone_start(i);
+    to_zone_start(g, i);
   }
 }
 
 // 0.5.4 (revisione): chi, a cancello chiuso, si ritrova in una zona di prima (tornato indietro proprio
 // mentre il cancello si chiudeva, spinto...) torna alla sua partenza nella zona in corso: da li' non
 // potrebbe piu' uscire, e da soli la zona non finirebbe mai.
-void strays_back(void) {
+void strays_back(Game& g) {
   for (int i = 0; i < MAX_PLAYERS; ++i) {
     const Player& p = g.pl[i];
     if (!p.active || !p.alive || p.leap_n > 0 || p.tramp_t > 0) continue;
     const int z = level_zone_at(&g.L, p.pos.x, p.pos.z);
     if (z < 0 || z >= g.zone) continue;
     plat_log("G%d nella zona %d a cancello chiuso: torna nella zona %d", i + 1, z + 1, g.zone + 1);
-    to_zone_start(i);
+    to_zone_start(g, i);
   }
 }
 
-void compute_mvp(void) {
+void compute_mvp(Game& g) {
   g.mvp = -1;
   float best = -1e30f;
   for (int i = 0; i < MAX_PLAYERS; ++i) {
@@ -312,7 +321,7 @@ struct Leaf {
   float len, turn;
 };
 
-Leaf gate_leaf_now(int gi, int side, float th, float turn) {
+Leaf gate_leaf_now(Game& g, int gi, int side, float th, float turn) {
   Leaf lf;
   Vec3 c;
   level_gate_leaf(&g.L, gi, side, th, &lf.h, &lf.d, &lf.len, &c);
@@ -324,7 +333,7 @@ Leaf gate_leaf_now(int gi, int side, float th, float turn) {
 
 // Il giocatore toccato dal battente viene spinto fuori, dalla parte dove ha il centro (in punta: via
 // dalla punta). true se l'ha spostato.
-bool leaf_push(Player& p, const Leaf& lf) {
+bool leaf_push(Game& g, Player& p, const Leaf& lf) {
   const float rr = PL_R + GATE_LEAF_HALF;
   const Vec3 rel = v3(p.pos.x - lf.h.x, 0.0f, p.pos.z - lf.h.z);
   const float along = dot(rel, lf.d), across = dot(rel, lf.n);
@@ -360,53 +369,53 @@ bool leaf_push(Player& p, const Leaf& lf) {
 
 // Il cancello gi si e' mosso da open0: chi i battenti trovano davanti viene spinto via (piu' volte se
 // in mezzo lo spingono tutti e due, con le punte vicine).
-void gate_sweep(int gi, float open0) {
+void gate_sweep(Game& g, int gi, float open0) {
   const Gate& gt = g.L.gates[gi];
   const float turn = gt.open > open0 ? 1.0f : -1.0f;
   Leaf lf[2];
-  for (int side = 0; side < 2; ++side) lf[side] = gate_leaf_now(gi, side, gate_theta(gt, side), turn);
+  for (int side = 0; side < 2; ++side) lf[side] = gate_leaf_now(g, gi, side, gate_theta(gt, side), turn);
   for (int i = 0; i < MAX_PLAYERS; ++i) {
     Player& p = g.pl[i];
     if (!p.active || !p.alive || p.leap_n > 0 || p.pos.y > GATE_TOP) continue;
     for (int pass = 0; pass < 8; ++pass) {
-      const bool a = leaf_push(p, lf[0]);
-      const bool b = leaf_push(p, lf[1]);
+      const bool a = leaf_push(g, p, lf[0]);
+      const bool b = leaf_push(g, p, lf[1]);
       if (!a && !b) break;
     }
   }
 }
 
-Vec3 gate_mid(const Gate& gt) {
+Vec3 gate_mid(Game& g, const Gate& gt) {
   return (cell_center(&g.L, gt.x0, gt.z0) + cell_center(&g.L, gt.x1, gt.z1)) * 0.5f;
 }
 
 // Il colpo del cancello che si chiude: tonfo, una nuvola di polvere dalla parte dei battenti, un
 // piccolo scossone.
-void gate_slam(int gi) {
+void gate_slam(Game& g, int gi) {
   const Gate& gt = g.L.gates[gi];
-  const Vec3 mid = gate_mid(gt), m = v3(gt.mx, 0.0f, gt.mz);
+  const Vec3 mid = gate_mid(g, gt), m = v3(gt.mx, 0.0f, gt.mz);
   const Vec3 eu = gt.horiz ? v3(1, 0, 0) : v3(0, 0, 1);
   const float half = 0.5f * (float)(gt.horiz ? gt.x1 - gt.x0 + 1 : gt.z1 - gt.z0 + 1);
   const int col = GATE_DUST[g.L.style >= 0 && g.L.style < NSTYLES ? g.L.style : 0];
   for (int k = 0; k < 14; ++k) {
     // Una chiamata al generatore per istruzione: l'ordine resta lo stesso con ogni compilatore.
-    const float r0 = rng_f();
-    const float r1 = rng_f();
-    const float r2 = rng_f();
-    const float r3 = rng_f();
-    const float r4 = rng_f();
-    const int life = 32 + (int)(rng_next() % 14u);
+    const float r0 = rng_f(g);
+    const float r1 = rng_f(g);
+    const float r2 = rng_f(g);
+    const float r3 = rng_f(g);
+    const float r4 = rng_f(g);
+    const int life = 32 + (int)(rng_next(g) % 14u);
     const float u = ((float)k - 6.5f) / 6.5f * half;
     const Vec3 at = mid + eu * u + m * (0.35f + 0.25f * r0) + v3(0.0f, 0.25f, 0.0f);
     const Vec3 vel = m * (0.5f + 0.9f * r1) + eu * (0.8f * (r2 - 0.5f)) + v3(0.0f, 0.35f + 0.35f * r3, 0.0f);
-    puff(at, PK_PUFF, col, vel, 2.4f + 0.8f * r4, life);
+    puff(g, at, PK_PUFF, col, vel, 2.4f + 0.8f * r4, life);
   }
-  snd_at(SND_GATE_SHUT, mid);
-  add_shake(0.1f);
+  snd_at(g, SND_GATE_SHUT, mid);
+  add_shake(g, 0.1f);
 }
 }  // namespace
 
-void update_gates(void) {
+void update_gates(Game& g) {
   for (int i = 0; i < g.L.ngates; ++i) {
     Gate& gt = g.L.gates[i];
     const float w = g.gate_want[i], o0 = gt.open;
@@ -433,29 +442,29 @@ void update_gates(void) {
         gt.open = 0.0f;
         gt.vel = hit * GATE_BOUNCE;
         if (gt.vel < GATE_REST) gt.vel = 0.0f;
-        if (hit >= GATE_SLAM) gate_slam(i);
+        if (hit >= GATE_SLAM) gate_slam(g, i);
       }
     }
     if (gt.open == o0) continue;
-    if (rest && gt.vel != 0.0f) snd_at(SND_GATE, gate_mid(gt));   // comincia a girare: cigola
-    gate_sweep(i, o0);
+    if (rest && gt.vel != 0.0f) snd_at(g, SND_GATE, gate_mid(g, gt));   // comincia a girare: cigola
+    gate_sweep(g, i, o0);
   }
 }
 
 // Comincia la mappa gia' caricata (g.map_idx) dalla zona 1, come appena scelta: 3 vite a testa,
 // carte da scegliere, oggetti, casse e capsula come all'inizio. again: la stessa mappa da capo
 // nella stessa visita (statistiche dei giocatori e ripartenze restano).
-static void map_start_msg(bool again, bool log = true);
+static void map_start_msg(Game& g, bool again, bool log = true);
 
-void begin_map(bool again) {
-  clear_actors();
+void begin_map(Game& g, bool again) {
+  clear_actors(g);
   memset(g.bo, 0, sizeof(g.bo));
   memset(g.pa, 0, sizeof(g.pa));
   memset(g.ft, 0, sizeof(g.ft));
   memset(g.squash, 0, sizeof(g.squash));
   memset(g.crate_hit, 0, sizeof(g.crate_hit));
   memset(g.tramp_t, 0, sizeof(g.tramp_t));
-  items_reset(-1);
+  items_reset(g, -1);
   level_reset_dynamic(&g.L, -1);
   for (int i = 0; i < LV_MAX_GATES; ++i) g.gate_want[i] = 0.0f;
   g.loop = world_giro(maps_world(g.map_idx)) - 1;   // difficolta': il giro del pianeta
@@ -481,7 +490,7 @@ void begin_map(bool again) {
     p.lives = START_LIVES;
     p.out = false;
   }
-  cards_map_start();
+  cards_map_start(g);
   g.explorer_free = false;
   g.expl_t = -1;
   g.help_t = 0;
@@ -489,25 +498,25 @@ void begin_map(bool again) {
   g.giro_done = g.giro_up = false;
   g.giro_stars = g.giro_was = 0;
   g.zone = 0;
-  place_players(0);
-  begin_zone(0, false);
+  place_players(g, 0);
+  begin_zone(g, 0, false);
   g.wipe_cleared = g.wipe_map = false;
   g.screen = SC_PLAY;
   g.screen_t = 0;
   g.paused = false;
   g.cam_pitch = PITCH_PLAY;
-  map_start_msg(again);
-  update_camera(true);
-  cards_offer();     // prima della prima ondata; il messaggio della mappa si vede dopo le carte
+  map_start_msg(g, again);
+  update_camera(g, true);
+  cards_offer(g);     // prima della prima ondata; il messaggio della mappa si vede dopo le carte
 }
 
 // Messaggio grande all'inizio della mappa (nome e "pronti... via!", oppure "si ricomincia").
-static void map_start_msg(bool again, bool log) {
+static void map_start_msg(Game& g, bool again, bool log) {
   char big[160], sub[224];
   const int w = maps_world(g.map_idx);
   if (again) {
     snprintf(big, sizeof(big), "%s", tr("SI RICOMINCIA!"));
-    if (count_active() > 1) snprintf(sub, sizeof(sub), tr("la mappa da capo: %d vite a testa"), START_LIVES);
+    if (count_active(g) > 1) snprintf(sub, sizeof(sub), tr("la mappa da capo: %d vite a testa"), START_LIVES);
     else snprintf(sub, sizeof(sub), tr("la mappa da capo: %d vite"), START_LIVES);
     if (log)
       plat_log("=== mappa %d: %s da capo (ripartenza %d in questa visita, %s giro %d) ===", g.map_idx + 1, g.L.name, g.map_wipes,
@@ -519,32 +528,32 @@ static void map_start_msg(bool again, bool log) {
     else snprintf(sub, sizeof(sub), "%s", what);
     if (log) plat_log("=== mappa %d: %s (%s, giro %d) ===", g.map_idx + 1, g.L.name, WORLD_NAMES[w >= 0 && w < NWORLDS ? w : 0], g.loop + 1);
   }
-  show_msg(big, sub, 0xFFE14D, 2, 150);
+  show_msg(g, big, sub, 0xFFE14D, 2, 150);
 }
 
-void restart_map(void) { begin_map(true); }
+void restart_map(Game& g) { begin_map(g, true); }
 
-void play_update(const Pad pads[MAX_PLAYERS]) {
+void play_update(Game& g, const Pad pads[MAX_PLAYERS]) {
   // Scelta delle carte aperta: conta solo quella (niente pausa, niente ingressi), gioco fermo.
-  if (g.cards_open) cards_update();
-  else play_menus_update();
+  if (g.cards_open) cards_update(g);
+  else play_menus_update(g);
   if (g.screen != SC_PLAY) return;
   if (g.paused || g.cards_open) return;
   g.tick++;
-  for (int i = 0; i < MAX_PLAYERS; ++i) player_update(i, pads[i]);
-  monsters_update();
-  boss_update();
-  shots_update();
-  bombs_update();
-  items_update();
-  effects_update();
-  explorer_update();
-  update_gates();
+  for (int i = 0; i < MAX_PLAYERS; ++i) player_update(g, i, pads[i]);
+  monsters_update(g);
+  boss_update(g);
+  shots_update(g);
+  bombs_update(g);
+  items_update(g);
+  effects_update(g);
+  explorer_update(g);
+  update_gates(g);
 
-  if (g.phase == PH_FIGHT || g.phase == PH_CLEAR) strays_back();
+  if (g.phase == PH_FIGHT || g.phase == PH_CLEAR) strays_back(g);
   switch (g.phase) {
     case PH_FIGHT:
-      update_spawning();
+      update_spawning(g);
       break;
     case PH_ENTER: {
       g.phase_t++;
@@ -554,7 +563,7 @@ void play_update(const Pad pads[MAX_PLAYERS]) {
         if (p.active && p.alive && level_zone_at(&g.L, p.pos.x, p.pos.z) != g.zone) all_in = false;
       }
       if (all_in || g.phase_t >= 240) {
-        regroup();
+        regroup(g);
         const int gi = g.L.zones[g.zone].entry_gate;
         if (gi >= 0) g.gate_want[gi] = 0.0f;
         g.phase = PH_FIGHT;
@@ -567,29 +576,29 @@ void play_update(const Pad pads[MAX_PLAYERS]) {
       if (g.zone + 1 >= g.L.nzones) break;
       // Prima le carte per la zona che segue: si aprono poco dopo "ZONA LIBERA!".
       if (g.cards_due > 0) {
-        if (--g.cards_due == 0) cards_offer();
+        if (--g.cards_due == 0) cards_offer(g);
         break;
       }
       for (int i = 0; i < MAX_PLAYERS; ++i)
         if (g.pl[i].active && g.pl[i].alive && level_zone_at(&g.L, g.pl[i].pos.x, g.pl[i].pos.z) == g.zone + 1) {
-          begin_zone(g.zone + 1, true);
+          begin_zone(g, g.zone + 1, true);
           break;
         }
       break;
     }
     case PH_MAP_DONE:
       if (++g.phase_t >= 210) {
-        compute_mvp();
+        compute_mvp(g);
         g.maps_done++;
-        players_gather();      // chi e' a terra (o senza vite) festeggia con gli altri
-        go_screen(SC_STATS);
+        players_gather(g);      // chi e' a terra (o senza vite) festeggia con gli altri
+        go_screen(g, SC_STATS);
         return;
       }
       break;
     case PH_WIPE:
       if (++g.phase_t >= (g.wipe_map ? WIPE_MAP_FRAMES : WIPE_ZONE_FRAMES)) {
-        if (g.wipe_map) restart_map();
-        else restart_zone();
+        if (g.wipe_map) restart_map(g);
+        else restart_zone(g);
       }
       break;
   }
@@ -597,12 +606,12 @@ void play_update(const Pad pads[MAX_PLAYERS]) {
   // l'ultimo giocatore e' caduto nello stesso fotogramma (bolla di lava, razzo o bomba arrivati
   // dopo il turno del boss).
   const bool boss_beaten = g.boss.alive && g.boss.hp <= 0.0f;
-  if (!boss_beaten && (g.phase == PH_FIGHT || g.phase == PH_CLEAR || g.phase == PH_ENTER) && count_active() > 0 &&
-      count_alive() == 0) {
+  if (!boss_beaten && (g.phase == PH_FIGHT || g.phase == PH_CLEAR || g.phase == PH_ENTER) && count_active(g) > 0 &&
+      count_alive(g) == 0) {
     // Tutti a terra. Da soli (un giocatore attivo) la caduta ha gia' tolto una vita: con vite
     // rimaste si rifa' la zona, senza vite la mappa ricomincia da capo. In piu' giocatori, a
     // terra tutti nello stesso momento, la mappa ricomincia da capo anche con vite rimaste.
-    const bool solo = count_active() == 1;
+    const bool solo = count_active(g) == 1;
     int lives = 0;
     for (int i = 0; i < MAX_PLAYERS; ++i)
       if (g.pl[i].active) lives += g.pl[i].lives;
@@ -614,7 +623,7 @@ void play_update(const Pad pads[MAX_PLAYERS]) {
     if (g.wipe_map) {
       g.map_wipes++;
       g.restarts++;
-      show_msg(solo ? tr("VITE FINITE!") : tr("TUTTI A TERRA!"), tr("si ricomincia la mappa da capo"), 0xFF6A5A, 2, WIPE_MAP_FRAMES);
+      show_msg(g, solo ? tr("VITE FINITE!") : tr("TUTTI A TERRA!"), tr("si ricomincia la mappa da capo"), 0xFF6A5A, 2, WIPE_MAP_FRAMES);
       if (solo) plat_log("vite finite: la mappa %d (%s) ricomincia da capo", g.map_idx + 1, g.L.name);
       else plat_log("tutti a terra insieme (vite rimaste in tutto: %d): la mappa %d (%s) ricomincia da capo", lives, g.map_idx + 1, g.L.name);
     } else {
@@ -622,15 +631,15 @@ void play_update(const Pad pads[MAX_PLAYERS]) {
       char sub[224];
       if (lives == 1) snprintf(sub, sizeof(sub), "%s", tr("resta 1 vita: si rifà questa zona"));
       else snprintf(sub, sizeof(sub), tr("restano %d vite: si rifà questa zona"), lives);
-      show_msg(tr("VITA PERSA!"), sub, 0xFF6A5A, 2, WIPE_ZONE_FRAMES);
+      show_msg(g, tr("VITA PERSA!"), sub, 0xFF6A5A, 2, WIPE_ZONE_FRAMES);
       plat_log("vita persa (restano %d): mappa %d, zona %d da rifare", lives, g.map_idx + 1, g.zone + 1);
     }
   }
-  g.enemies_left = g.phase == PH_FIGHT ? zone_total_left() : count_monsters();
-  update_camera(false);
+  g.enemies_left = g.phase == PH_FIGHT ? zone_total_left(g) : count_monsters(g);
+  update_camera(g, false);
 }
 
-void update_pad_states(const Pad pads[MAX_PLAYERS]) {
+void update_pad_states(Game& g, const Pad pads[MAX_PLAYERS]) {
   for (int i = 0; i < MAX_PLAYERS; ++i) {
     PadState& s = g.in[i];
     s.prev = s.btn;
@@ -653,22 +662,22 @@ void update_pad_states(const Pad pads[MAX_PLAYERS]) {
 
 // --- funzioni condivise -------------------------------------------------------------
 
-int count_active(void) {
+int count_active(Game& g) {
   int n = 0;
   for (int i = 0; i < MAX_PLAYERS; ++i) n += g.pl[i].active;
   return n;
 }
-int count_alive(void) {
+int count_alive(Game& g) {
   int n = 0;
   for (int i = 0; i < MAX_PLAYERS; ++i) n += g.pl[i].active && g.pl[i].alive;
   return n;
 }
-int count_in_play(void) {
+int count_in_play(Game& g) {
   int n = 0;
   for (int i = 0; i < MAX_PLAYERS; ++i) n += g.pl[i].active && !g.pl[i].out;
   return n;
 }
-int count_monsters(void) {
+int count_monsters(Game& g) {
   int n = 0;
   for (int i = 0; i < MAX_MONSTERS; ++i) n += g.mo[i].alive;
   return n;
@@ -719,11 +728,11 @@ bool map_unlocked(int i) {
 }
 
 // Mostri piu' forti a ogni giro del pianeta (g.loop: giro - 1).
-float diff_hp(void) { return 1.0f + 0.6f * (float)g.loop; }
-float diff_dmg(void) { return 1.0f + 0.25f * (float)g.loop; }
-float diff_speed(void) { return fminf(1.0f + 0.05f * (float)g.loop, 1.25f); }
+float diff_hp(Game& g) { return 1.0f + 0.6f * (float)g.loop; }
+float diff_dmg(Game& g) { return 1.0f + 0.25f * (float)g.loop; }
+float diff_speed(Game& g) { return fminf(1.0f + 0.05f * (float)g.loop, 1.25f); }
 
-void show_msg(const char* big, const char* small, uint32_t rgb, int size, int frames) {
+void show_msg(Game& g, const char* big, const char* small, uint32_t rgb, int size, int frames) {
   snprintf(g.msg, sizeof(g.msg), "%s", big);
   snprintf(g.msg2, sizeof(g.msg2), "%s", small);
   g.msg_rgb = rgb;
@@ -731,7 +740,7 @@ void show_msg(const char* big, const char* small, uint32_t rgb, int size, int fr
   g.msg_t = frames;
 }
 
-bool load_map_preview(int idx) {
+bool load_map_preview(Game& g, int idx) {
   if (idx < 0 || idx >= maps_count()) return false;
   if (g.level_ok && g.map_shown == idx) return true;
   level_free(&g.L);
@@ -739,14 +748,14 @@ bool load_map_preview(int idx) {
   if (!g.level_ok) return false;
   level_build_mesh(&g.L);
   g.map_shown = idx;
-  clear_actors();
+  clear_actors(g);
   memset(g.bo, 0, sizeof(g.bo));
   memset(g.pa, 0, sizeof(g.pa));
   memset(g.ft, 0, sizeof(g.ft));
   memset(g.squash, 0, sizeof(g.squash));
   memset(g.crate_hit, 0, sizeof(g.crate_hit));
   memset(g.tramp_t, 0, sizeof(g.tramp_t));
-  items_reset(-1);
+  items_reset(g, -1);
   level_reset_dynamic(&g.L, -1);
   for (int i = 0; i < LV_MAX_GATES; ++i) g.gate_want[i] = 0.0f;
   memset(&g.boss, 0, sizeof(g.boss));
@@ -754,8 +763,8 @@ bool load_map_preview(int idx) {
   return true;
 }
 
-void start_map(int idx) {
-  if (!load_map_preview(idx)) return;
+void start_map(Game& g, int idx) {
+  if (!load_map_preview(g, idx)) return;
   g.map_idx = idx;
   // Il generatore casuale riparte mescolato con i fotogrammi passati dall'avvio (tempo nei menu
   // compreso): carte e ondate cambiano da una partita all'altra, ma con gli stessi comandi dal
@@ -763,24 +772,24 @@ void start_map(int idx) {
   g.rng ^= 0x9E3779B9u * (g.ui_tick + 1u);
   if (g.rng == 0u) g.rng = 0x9E3779B9u;
   g.map_wipes = 0;
-  begin_map(false);
+  begin_map(g, false);
 }
 
 // Nei menu i personaggi stanno in fila alla partenza della zona 1; la telecamera li guarda da
 // nord, quindi il giocatore 1 sta a est (a sinistra sullo schermo).
-Vec3 menu_spot(int i) {
+Vec3 menu_spot(Game& g, int i) {
   Vec3 c = v3(0, 0, 0);
   for (int k = 0; k < 4; ++k) c = c + g.L.zones[0].start[k] * 0.25f;
   return v3(c.x + (1.5f - (float)i) * 1.25f, 0.0f, c.z);
 }
 
-void go_screen(int s) {
+void go_screen(Game& g, int s) {
   g.screen = s;
   g.screen_t = 0;
   g.menu_sel = 0;
   g.paused = false;
   if (s != SC_PLAY && s != SC_STATS) {
-    if (!g.level_ok) load_map_preview(s == SC_MAPS || s == SC_CHARS ? g.map_sel : 0);
+    if (!g.level_ok) load_map_preview(g, s == SC_MAPS || s == SC_CHARS ? g.map_sel : 0);
   }
   if (s == SC_CHARS) {
     for (int i = 0; i < MAX_PLAYERS; ++i) {
@@ -790,10 +799,10 @@ void go_screen(int s) {
     }
     g.chars_t = 0;
   }
-  update_camera(true);
+  update_camera(g, true);
 }
 
-void update_camera(bool snap) {
+void update_camera(Game& g, bool snap) {
   Vec3 want;
   float dist, pitch;
   bool back = false;
@@ -823,7 +832,7 @@ void update_camera(bool snap) {
     Vec3 pts[MAX_PLAYERS + 4];
     int np = 0;
     float y = 0.0f;
-    const int me = net_local();
+    const int me = net_local(g);
     const bool mine = me >= 0 && g.pl[me].active && !g.pl[me].out;
     for (int pass = 0; pass < 3 && np == 0; ++pass)
       for (int i = 0; i < MAX_PLAYERS; ++i) {
@@ -875,7 +884,7 @@ void update_camera(bool snap) {
         cz = cz0 + 0.5f * (float)k;
       }
     }
-    dist = clampf(dist, g_hdmi ? CAM_DIST_MIN : CAM_DIST_MIN_LCD, CAM_DIST_MAX);
+    dist = clampf(dist, g.session.hdmi ? CAM_DIST_MIN : CAM_DIST_MIN_LCD, CAM_DIST_MAX);
     // Ai bordi della zona ci si ferma mostrando poco oltre, a ogni distanza, ma chi gioca resta
     // nell'inquadratura: prima nord-sud (se il punto fermato al bordo lascerebbe fuori qualcuno,
     // si torna verso quello voluto quanto basta), poi di lato con la riga in cui si trova ognuno.
@@ -909,26 +918,26 @@ void update_camera(bool snap) {
 
 // --- interfaccia ------------------------------------------------------------------------
 
-void game_init(void) {
-  if (g_inited) game_shutdown();
-  memset(&g, 0, sizeof(g));
+void game_init(Game& g) {
+  if (g_inited) game_shutdown(g);
+  memset(&g, 0, offsetof(Game, session));   // everything but the session, which outlives game_init (the last member)
   for (int i = 0; i < MAX_PLAYERS; ++i) g.aim_level[i] = AIM_DEFAULT;   // resta per tutta la sessione
   g.aa_level = 1;                                                       // antialias: il migliore che il renderer sa fare
   g.aa_cap = 8;
   models_build();
   maps_init();
   g_inited = true;
-  game_reset();
+  game_reset(g);
 }
 
-void game_shutdown(void) {
+void game_shutdown(Game& g) {
   if (!g_inited) return;
   level_free(&g.L);
   models_free();
   g_inited = false;
 }
 
-void game_reset(void) {
+void game_reset(Game& g) {
   for (int i = 0; i < MAX_PLAYERS; ++i) {
     memset(&g.pl[i], 0, sizeof(Player));
     g.joined[i] = g.ready[i] = false;
@@ -945,14 +954,14 @@ void game_reset(void) {
     g.vita_kept[i] = g.stats_kept[i] = false;
   }
   g.cards_open = false;
-  g_quit = false;
-  bot_reset();
-  load_map_preview(0);
-  go_screen(SC_TITLE);
+  g.session.quit = false;
+  bot_reset(g);
+  load_map_preview(g, 0);
+  go_screen(g, SC_TITLE);
   g.cam_pitch = PITCH_MENU;
 }
 
-void game_quick_start(int map, int players, const char* chars) {
+void game_quick_start(Game& g, int map, int players, const char* chars) {
   if (map < 0 || map >= maps_count()) map = 0;
   if (players < 1) players = 1;
   if (players > MAX_PLAYERS) players = MAX_PLAYERS;
@@ -960,17 +969,17 @@ void game_quick_start(int map, int players, const char* chars) {
   for (int i = 0; i < players; ++i) {
     int ch = i % NCHARS;
     if (i < nc && chars[i] >= '0' && chars[i] < '0' + NCHARS) ch = chars[i] - '0';
-    player_join(i, ch, false);
+    player_join(g, i, ch, false);
     g.joined[i] = true;
     g.pick[i] = ch;
   }
   g.map_sel = map;
-  start_map(map);
+  start_map(g, map);
 }
 
 // Musica secondo la schermata (lo stesso brano continua senza ripartire) e musica piu' bassa
 // mentre la partita e' ferma (pausa, carte).
-static void music_update(void) {
+static void music_update(Game& g) {
   int want = MUS_TITLE;
   static const int STYLE_MUSIC[NSTYLES] = { MUS_PIRAMIDI, MUS_CHICHENITZA, MUS_MURAGLIA, MUS_COLOSSEO };
   if (g.screen == SC_PLAY)
@@ -982,39 +991,38 @@ static void music_update(void) {
 
 // Impostazioni cambiate nella pausa (mira, antialias, volumi; la pausa le mette subito in
 // save_data): il file si scrive quando la pausa si chiude.
-static void settings_save(void) {
-  if (!g_settings_dirty || (g.screen == SC_PLAY && g.paused)) return;
-  g_settings_dirty = false;
+static void settings_save(Game& g) {
+  if (!g.session.settings_dirty || (g.screen == SC_PLAY && g.paused)) return;
+  g.session.settings_dirty = false;
   save_write();
 }
 
-void game_update(const Pad pads[MAX_PLAYERS]) {
+void game_update(Game& g, const Pad pads[MAX_PLAYERS]) {
   g.ui_tick++;
   g.screen_t++;
   // Tempo di gioco della partita attiva (fuori dalla prima schermata e dalle sue pagine: salvataggi,
   // lingua, nome, gioco in rete).
-  static int s_frames;
   if (save_slot() >= 0 && g.screen != SC_TITLE && g.screen != SC_SLOTS && g.screen != SC_LANG && g.screen != SC_NAME &&
-      g.screen != SC_NET && g.screen != SC_LOBBY && ++s_frames >= 60) {
-    s_frames = 0;
+      g.screen != SC_NET && g.screen != SC_LOBBY && ++g.time_frames >= 60) {
+    g.time_frames = 0;
     save_data()->seconds++;
   }
-  update_pad_states(pads);
+  update_pad_states(g, pads);
   if (g.screen == SC_PLAY) {
-    play_update(pads);
+    play_update(g, pads);
   } else {
-    menu_update();
-    effects_update();
-    update_camera(false);
+    menu_update(g);
+    effects_update(g);
+    update_camera(g, false);
   }
   for (int i = 0; i < MAX_PLAYERS; ++i) g.start_tap[i] = false;
-  music_update();
-  settings_save();
+  music_update(g);
+  settings_save(g);
 }
 
 // --- sonoro ---------------------------------------------------------------------------------
 
-void snd_at(int id, Vec3 pos) {
+void snd_at(Game& g, int id, Vec3 pos) {
   // Inquadratura: circa 0,62 volte la distanza della telecamera per lato. Dentro si sente pieno,
   // fuori cala fino a zero a una volta e mezza; sinistra/destra dalla posizione sullo schermo.
   const float dist = fmaxf(g.cam_dist, 8.0f);
@@ -1027,30 +1035,30 @@ void snd_at(int id, Vec3 pos) {
 
 void snd_ui(int id) { audio_play(id, 0.0f, 1.0f); }
 
-void game_start_tap(int player) {
+void game_start_tap(Game& g, int player) {
   if (player >= 0 && player < MAX_PLAYERS) g.start_tap[player] = true;
 }
 
-bool game_paused(void) { return g.screen == SC_PLAY && g.paused; }
+bool game_paused(Game& g) { return g.screen == SC_PLAY && g.paused; }
 
-void game_set_hdmi(bool on) {
-  if (on == g_hdmi) return;
-  g_hdmi = on;
+void game_set_hdmi(Game& g, bool on) {
+  if (on == g.session.hdmi) return;
+  g.session.hdmi = on;
   plat_log("schermo: %s, visuale da %.0f a %.0f m", on ? "HDMI (TV)" : "della console", (double)(on ? CAM_DIST_MIN : CAM_DIST_MIN_LCD),
            (double)CAM_DIST_MAX);
 }
-bool game_playing(void) { return g.screen == SC_PLAY && !g.paused && !g.cards_open; }
-void game_set_aa_available(int max_samples) { g.aa_max = max_samples > 0 ? max_samples : 0; }
-void game_set_aa_level(int level) { g.aa_level = level; }
-int game_aa_level(void) { return g.aa_level; }
-void game_aa_cap(int samples) { g.aa_cap = samples; }
-int game_aa_wanted(void) {
+bool game_playing(Game& g) { return g.screen == SC_PLAY && !g.paused && !g.cards_open; }
+void game_set_aa_available(Game& g, int max_samples) { g.aa_max = max_samples > 0 ? max_samples : 0; }
+void game_set_aa_level(Game& g, int level) { g.aa_level = level; }
+int game_aa_level(Game& g) { return g.aa_level; }
+void game_aa_cap(Game& g, int samples) { g.aa_cap = samples; }
+int game_aa_wanted(Game& g) {
   if (g.aa_max <= 0 || g.aa_level <= 0) return 0;
   int want = g.aa_level == 1 ? g.aa_cap : g.aa_level;     // il migliore: fin dove arriva, salvo il tetto
   if (want > g.aa_max) want = g.aa_max;
   return want;
 }
-void game_save_loaded(void) {
+void game_save_loaded(Game& g) {
   // Impostazioni salvate: mira di ogni posto, antialias, volumi, lingua.
   const SaveData* sd = save_data();
   for (int i = 0; i < MAX_PLAYERS && i < SAVE_PLAYERS; ++i)
@@ -1058,22 +1066,22 @@ void game_save_loaded(void) {
   g.aa_level = sd->antialias;
   audio_set_volume(sd->music_vol, sd->sfx_vol);
   lang_set(sd->lang);
-  g_settings_dirty = false;
+  g.session.settings_dirty = false;
   // Prove: la partita veloce (giocatori automatici, PUPAZZI_MAPPA) comincia prima che il core legga
   // il salvataggio e gioca nella partita 1 (se non c'e' la crea); se il pianeta e' a un altro giro
   // la mappa riparte con quello.
   if (g.screen == SC_PLAY && g.tick == 0 && save_slot() < 0 && !save_slot_load(0)) save_slot_new(0);
-  if (g.screen == SC_PLAY && g.tick == 0) map_start_msg(false, false);      // nella lingua salvata
+  if (g.screen == SC_PLAY && g.tick == 0) map_start_msg(g, false, false);      // nella lingua salvata
   if (g.screen == SC_PLAY && g.tick == 0 && g.loop != world_giro(maps_world(g.map_idx)) - 1) {
     plat_log("salvataggio letto: %s e' al giro %d, la mappa di prova riparte", WORLD_NAMES[maps_world(g.map_idx)],
              world_giro(maps_world(g.map_idx)));
-    start_map(g.map_idx);
+    start_map(g, g.map_idx);
   }
 }
 
-void settings_changed(void) { g_settings_dirty = true; }
+void settings_changed(Game& g) { g.session.settings_dirty = true; }
 
-void stars_late_explorer(void) {
+void stars_late_explorer(Game& g) {
   g.stars_got |= SAVE_STAR_EXPLORER;
   if (!(g.stars_had & SAVE_STAR_EXPLORER)) g.stars_new |= SAVE_STAR_EXPLORER;
   if (g.giro_up) {
@@ -1084,16 +1092,16 @@ void stars_late_explorer(void) {
   }
   save_add_stars(maps_id(g.map_idx), SAVE_STAR_EXPLORER);
   plat_log("stella dell'esploratore aggiunta a mappa finita (mappa %d)", g.map_idx + 1);
-  giro_check();      // dopo il boss puo' essere la decima stella
+  giro_check(g);      // dopo il boss puo' essere la decima stella
   save_write();
 }
-bool game_wants_quit(void) { return g_quit; }
-void game_request_quit(void) { g_quit = true; }
+bool game_wants_quit(Game& g) { return g.session.quit; }
+void game_request_quit(Game& g) { g.session.quit = true; }
 
-bool game_player_active(int i) { return i >= 0 && i < MAX_PLAYERS && g.pl[i].active; }
+bool game_player_active(Game& g, int i) { return i >= 0 && i < MAX_PLAYERS && g.pl[i].active; }
 uint32_t game_player_rgb(int i) { return PLAYER_RGB[i >= 0 && i < MAX_PLAYERS ? i : MAX_PLAYERS]; }
 
-uint64_t game_state_hash(void) {
+uint64_t game_state_hash(Game& g) {
   uint64_t h = 1469598103934665603ull;
   auto mix = [&](const void* p, size_t n) {
     const uint8_t* b = (const uint8_t*)p;
@@ -1138,7 +1146,7 @@ uint64_t game_state_hash(void) {
   // Gladiatore (0.5.1): dove sta e dove guarda, vita, azione in corso, bersaglio.
   if (g.boss.alive) { const float bf[4] = { g.boss.pos.x, g.boss.pos.z, g.boss.hp, g.boss.face }; const int bi[3] = { g.boss.act, g.boss.act_t, g.boss.target }; mix(bf, sizeof(bf)); mix(bi, sizeof(bi)); }
   // Carte: solo se attive, cosi' a carte spente l'impronta resta quella di prima.
-  if (cards_enabled()) {
+  if (cards_enabled(g)) {
     for (int i = 0; i < MAX_PLAYERS; ++i) {
       const Player& p = g.pl[i];
       const uint8_t f[2] = { (uint8_t)p.shield, 0 };
@@ -1168,7 +1176,7 @@ uint64_t game_state_hash(void) {
 
 // Prove: tutti i campi dei mostri vivi, in esadecimale esatto, per trovare dove due processori
 // cominciano a dare risultati diversi.
-void game_trace_monsters(void (*out)(const char* line)) {
+void game_trace_monsters(Game& g, void (*out)(const char* line)) {
   char buf[512];
   for (int k = 0; k < MAX_MONSTERS; ++k) {
     const Monster& m = g.mo[k];
@@ -1181,16 +1189,16 @@ void game_trace_monsters(void (*out)(const char* line)) {
   }
 }
 
-void game_info(GameInfo* gi) {
+void game_info(Game& g, GameInfo* gi) {
   memset(gi, 0, sizeof(*gi));
   gi->screen = g.screen;
   gi->map = g.map_idx + 1;
   gi->loop = g.loop + 1;
   gi->zone = g.zone + 1;
   gi->nzones = g.L.nzones;
-  gi->enemies = count_monsters();
-  gi->players = count_active();
-  gi->alive = count_alive();
+  gi->enemies = count_monsters(g);
+  gi->players = count_active(g);
+  gi->alive = count_alive(g);
   gi->phase = g.phase;
   gi->kills = g.kills;
   gi->deaths = g.deaths;
@@ -1203,22 +1211,22 @@ void game_info(GameInfo* gi) {
 
 // --- gioco in rete (0.5.4) ------------------------------------------------------------------------
 
-const NetView& net_view(void) { return g_nv; }
-void net_req(int req, int arg) {
-  g_nreq = req;
-  g_nreq_arg = arg;
+const NetView& net_view(Game& g) { return g.session.net_view; }
+void net_req(Game& g, int req, int arg) {
+  g.session.net_req = req;
+  g.session.net_req_arg = arg;
 }
-int net_local(void) { return g.net ? g_net_local : -1; }
-int net_wait_frames(void) { return g.net ? g_net_wait : 0; }
-uint8_t net_silent(void) { return g.net ? g_net_silent : 0; }
+int net_local(Game& g) { return g.net ? g.session.net_local : -1; }
+int net_wait_frames(Game& g) { return g.net ? g.session.net_wait : 0; }
+uint8_t net_silent(Game& g) { return g.net ? g.session.net_silent : 0; }
 
-void game_net_view(const NetView* v) { g_nv = *v; }
+void game_net_view(Game& g, const NetView* v) { g.session.net_view = *v; }
 
-int game_net_request(int* arg) {
-  const int r = g_nreq;
-  *arg = g_nreq_arg;
-  g_nreq = NR_NONE;
-  g_nreq_arg = 0;
+int game_net_request(Game& g, int* arg) {
+  const int r = g.session.net_req;
+  *arg = g.session.net_req_arg;
+  g.session.net_req = NR_NONE;
+  g.session.net_req_arg = 0;
   return r;
 }
 
@@ -1238,20 +1246,20 @@ void game_net_summary(NetGame* out) {
   snprintf(out->version, sizeof(out->version), "%s", PUPAZZI_VERSION);
 }
 
-void game_net_lobby(void) { go_screen(SC_LOBBY); }
+void game_net_lobby(Game& g) { go_screen(g, SC_LOBBY); }
 
-void game_net_prepare(NetStart* s) {
+void game_net_prepare(Game& g, NetStart* s) {
   uint32_t seed = g.rng ^ (g.ui_tick * 0x9E3779B9u) ^ 0x5A17C0DEu;
   seed ^= seed << 13; seed ^= seed >> 17; seed ^= seed << 5;
   s->seed = seed ? seed : 1u;
   s->map_sel = g.map_sel;
-  for (int i = 0; i < MAX_PLAYERS; ++i) s->aim[i] = (uint8_t)aim_level_of(i);
+  for (int i = 0; i < MAX_PLAYERS; ++i) s->aim[i] = (uint8_t)aim_level_of(g, i);
 }
 
 // La partita come appena accesa la console, uguale su tutte: tutto cio' che conta per la partita
 // riparte da zero e la mappa di partenza si rilegge da capo (oggetti, casse, cancelli, mostri,
 // colpi, particelle). Restano solo le cose di questa console (telecamera, antialias, lingua).
-static void net_reset_sim(void) {
+static void net_reset_sim(Game& g) {
   for (int i = 0; i < MAX_PLAYERS; ++i) {
     memset(&g.pl[i], 0, sizeof(Player));
     g.joined[i] = g.ready[i] = false;
@@ -1305,30 +1313,30 @@ static void net_reset_sim(void) {
   g.bots = 0;
   g.net_pop = false;
   g.lobby_sel = 0;
-  g_quit = false;
-  bot_reset();
+  g.session.quit = false;
+  bot_reset(g);
   g.level_ok = false;
   g.map_shown = -1;
-  load_map_preview(0);
+  load_map_preview(g, 0);
 }
 
-void game_net_begin(const NetStart* s) {
-  net_reset_sim();
+void game_net_begin(Game& g, const NetStart* s) {
+  net_reset_sim(g);
   g.net = true;
   g.net_consoles = s->consoles;
-  g_net_local = s->local >= 0 && s->local < MAX_PLAYERS ? s->local : 0;
-  g_net_wait = 0;
-  g_net_silent = 0;
+  g.session.net_local = s->local >= 0 && s->local < MAX_PLAYERS ? s->local : 0;
+  g.session.net_wait = 0;
+  g.session.net_silent = 0;
   for (int i = 0; i < MAX_PLAYERS; ++i) g.aim_level[i] = s->aim[i] < NAIMLEVELS ? s->aim[i] : (uint8_t)AIM_DEFAULT;
   g.rng = s->seed ? s->seed : 0x9E3779B9u;
   g.map_sel = s->map_sel >= 0 && s->map_sel < maps_count() ? s->map_sel : 0;
-  go_screen(SC_MODE);
-  plat_log("partita in rete: questa console e' il giocatore %d (console: %s%s%s%s)", g_net_local + 1, (s->consoles & 1) ? "1" : "",
+  go_screen(g, SC_MODE);
+  plat_log("partita in rete: questa console e' il giocatore %d (console: %s%s%s%s)", g.session.net_local + 1, (s->consoles & 1) ? "1" : "",
            (s->consoles & 2) ? " 2" : "", (s->consoles & 4) ? " 3" : "", (s->consoles & 8) ? " 4" : "");
 }
 
-void game_net_frame(uint8_t consoles, uint8_t silent, const bool taps[MAX_PLAYERS]) {
-  g_net_silent = silent;
+void game_net_frame(Game& g, uint8_t consoles, uint8_t silent, const bool taps[MAX_PLAYERS]) {
+  g.session.net_silent = silent;
   if (!g.net) return;
   const uint8_t gone = (uint8_t)(g.net_consoles & ~consoles);
   g.net_consoles = (uint8_t)(g.net_consoles & consoles);
@@ -1336,28 +1344,28 @@ void game_net_frame(uint8_t consoles, uint8_t silent, const bool taps[MAX_PLAYER
     if (!((gone >> i) & 1u)) continue;
     // Chi si scollega esce come dalla pausa (LASCIA LA PARTITA): il suo posto si libera.
     plat_log("rete: la console del giocatore %d non c'e' piu': il suo eroe esce (fotogramma %u)", i + 1, g.ui_tick);
-    if (g.pl[i].active) player_leave(i);
+    if (g.pl[i].active) player_leave(g, i);
     g.pl[i].joining = false;
     g.joined[i] = g.ready[i] = false;
     char big[160];
     snprintf(big, sizeof(big), tr("GIOCATORE %d È USCITO"), i + 1);
-    if (g.screen == SC_PLAY) show_msg(big, tr("la sua console si è scollegata"), PLAYER_RGB[i], 2, 150);
-    else menu_info(big);
+    if (g.screen == SC_PLAY) show_msg(g, big, tr("la sua console si è scollegata"), PLAYER_RGB[i], 2, 150);
+    else menu_info(g, big);
   }
   for (int i = 0; i < MAX_PLAYERS; ++i)
     if (taps[i]) g.start_tap[i] = true;
 }
 
-bool game_net_over(void) { return g.net && g.screen == SC_TITLE; }
+bool game_net_over(Game& g) { return g.net && g.screen == SC_TITLE; }
 
-void game_net_end(int reason, bool host) {
+void game_net_end(Game& g, int reason, bool host) {
   if (!g.net) return;
   g.net = false;
   g.net_consoles = 0;
   g.net_pop = false;
-  g_net_local = -1;
-  g_net_wait = 0;
-  g_net_silent = 0;
+  g.session.net_local = -1;
+  g.session.net_wait = 0;
+  g.session.net_silent = 0;
   // Di nuovo le mire salvate su questa console (in rete ogni posto aveva quella della sua console).
   for (int i = 0; i < MAX_PLAYERS && i < SAVE_PLAYERS; ++i)
     if (save_data()->aim[i] < NAIMLEVELS) g.aim_level[i] = save_data()->aim[i];
@@ -1365,17 +1373,17 @@ void game_net_end(int reason, bool host) {
   if (!host) {
     // Di nuovo i salvataggi di questa console, dal titolo.
     save_guest_end();
-    game_reset();
-    menu_info(net_error_text(reason, buf, sizeof(buf)));
+    game_reset(g);
+    menu_info(g, net_error_text(g, reason, buf, sizeof(buf)));
     plat_log("partita in rete finita su questa console: si torna al titolo");
     return;
   }
   if (reason == NE_ALONE) {
-    if (g.screen == SC_PLAY) show_msg(tr("SEI RIMASTO SOLO"), net_error_text(reason, buf, sizeof(buf)), 0xFFE14D, 2, 180);
-    else menu_info(net_error_text(reason, buf, sizeof(buf)));
+    if (g.screen == SC_PLAY) show_msg(g, tr("SEI RIMASTO SOLO"), net_error_text(g, reason, buf, sizeof(buf)), 0xFFE14D, 2, 180);
+    else menu_info(g, net_error_text(g, reason, buf, sizeof(buf)));
   }
   plat_log("partita in rete finita: si continua su questa console");
 }
 
-int game_net_local(void) { return net_local(); }
-void game_net_wait(int frames) { g_net_wait = frames; }
+int game_net_local(Game& g) { return net_local(g); }
+void game_net_wait(Game& g, int frames) { g.session.net_wait = frames; }

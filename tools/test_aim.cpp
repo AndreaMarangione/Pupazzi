@@ -7,6 +7,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+static Game& g = *game_create();   // the game under test (the game keeps no global state: the test owns it)
+
 static int g_fail = 0;
 
 static void check(bool ok, const char* what) {
@@ -22,7 +24,7 @@ static void step(float rx, float ry, uint16_t btn = 0) {
   pads[0].rx = rx;
   pads[0].ry = ry;
   pads[0].btn = btn;
-  game_update(pads);
+  game_update(g, pads);
   g.pl[0].invuln = 1000;              // nessun mostro deve interrompere le prove
   g.pl[0].hp = g.pl[0].hp_max;
 }
@@ -41,9 +43,9 @@ static float want_yaw(float a_deg) {
 static float err_deg(float yaw, float want) { return fabsf(d_wrap_pi(yaw - want)) * DEG; }
 
 static void fresh(int level, const char* ch) {
-  game_init();
-  game_set_aim_level(0, level);
-  game_quick_start(0, 1, ch);
+  game_init(g);
+  game_set_aim_level(g, 0, level);
+  game_quick_start(g, 0, 1, ch);
   for (int k = 0; k < 30; ++k) step(0, 0);
 }
 
@@ -71,7 +73,7 @@ static void pads_step(const Pad* p) {
   Pad pads[MAX_PLAYERS];
   if (p) memcpy(pads, p, sizeof(pads));
   else memset(pads, 0, sizeof(pads));
-  game_update(pads);
+  game_update(g, pads);
 }
 
 // 0.5.4: sul banner delle carte si aspetta quanto serve e ognuno preme A per vedere le sue carte.
@@ -88,7 +90,7 @@ static void cards_reveal(void) {
 
 // Mostro fermo (gia' spuntato) in pos; restituisce il suo indice.
 static int test_monster(Vec3 pos) {
-  if (!monster_spawn(MO_SCORPIONE, false, &pos)) return -1;
+  if (!monster_spawn(g, MO_SCORPIONE, false, &pos)) return -1;
   for (int k = MAX_MONSTERS - 1; k >= 0; --k)
     if (g.mo[k].alive && g.mo[k].pos.x == pos.x && g.mo[k].pos.z == pos.z) {
       g.mo[k].rise = 0;
@@ -100,18 +102,18 @@ static int test_monster(Vec3 pos) {
 
 static void test_cards(void) {
   printf("10) carte\n");
-  game_set_cards_enabled(true);
+  game_set_cards_enabled(g, true);
   for (int l = 0; l < NLANGS; ++l) {                // in ogni lingua (0.5.3)
     lang_set(l);
     char why[160], what[200];
-    const bool ok = cards_layout_ok(why, sizeof(why), getenv("PUPAZZI_CARTE_TUTTE") != NULL);
+    const bool ok = cards_layout_ok(g, why, sizeof(why), getenv("PUPAZZI_CARTE_TUTTE") != NULL);
     snprintf(what, sizeof(what), "%s: %s", save_lang_id(l), ok ? "nomi e descrizioni stanno nei riquadri con 1, 2, 3 e 4 giocatori" : why);
     check(ok, what);
   }
   lang_set(LANG_IT);
   {
-    game_init();
-    game_quick_start(0, 4, "0123");
+    game_init(g);
+    game_quick_start(g, 0, 4, "0123");
     bool ok = g.cards_open;
     for (int i = 0; i < MAX_PLAYERS; ++i) {
       const CardOffer& o = g.offer[i];
@@ -132,7 +134,7 @@ static void test_cards(void) {
     check(ok, "A sul banner: ognuno vede le sue carte, nessuna presa; tutto fermo");
     Pad pads[MAX_PLAYERS];
     memset(pads, 0, sizeof(pads));
-    game_start_tap(0);                      // G1: START breve prende la prima carta, non apre la pausa
+    game_start_tap(g, 0);                      // G1: START breve prende la prima carta, non apre la pausa
     pads_step(pads);
     ok = !g.paused && g.offer[0].done && has_card(g.pl[0], g.offer[0].card[0]);
     pads[1].btn = 1u << PAD_DOWN;           // G2: giu' e A, prende la seconda
@@ -162,8 +164,8 @@ static void test_cards(void) {
   {
     // Un pad che non risponde: dopo un minuto prende la carta col cursore e si riparte. G1 preme
     // A a fotogrammi alterni (vede le carte e prende la prima).
-    game_init();
-    game_quick_start(0, 2, "01");
+    game_init(g);
+    game_quick_start(g, 0, 2, "01");
     Pad pads[MAX_PLAYERS];
     memset(pads, 0, sizeof(pads));
     int frames = 0;
@@ -181,8 +183,8 @@ static void test_cards(void) {
   {
     // 0.5.4: il banner. Una A tenuta da prima o premuta appena compare non conta; poi A fa vedere le
     // carte (senza prenderne una), START breve pure; l'A dopo prende.
-    game_init();
-    game_quick_start(0, 2, "01");
+    game_init(g);
+    game_quick_start(g, 0, 2, "01");
     Pad pads[MAX_PLAYERS];
     memset(pads, 0, sizeof(pads));
     bool ok = g.cards_open && !g.offer[0].shown && !g.offer[1].shown;
@@ -191,8 +193,8 @@ static void test_cards(void) {
     ok &= !g.offer[0].shown;
     pads[0].btn = 0;
     pads_step(pads);
-    game_init();
-    game_quick_start(0, 2, "01");
+    game_init(g);
+    game_quick_start(g, 0, 2, "01");
     memset(pads, 0, sizeof(pads));
     pads_step(pads);
     pads[1].btn = 1u << PAD_A;                     // G2: A appena compare il banner
@@ -206,7 +208,7 @@ static void test_cards(void) {
     ok &= g.offer[1].shown && !g.offer[1].done && !g.offer[0].shown;
     pads[1].btn = 0;
     pads_step(pads);
-    game_start_tap(0);                             // G1: START breve, vede le carte
+    game_start_tap(g, 0);                             // G1: START breve, vede le carte
     pads_step(pads);
     ok &= g.offer[0].shown && !g.offer[0].done;
     pads[0].btn = pads[1].btn = 1u << PAD_A;
@@ -215,8 +217,8 @@ static void test_cards(void) {
     check(ok, "banner: A tenuta o troppo presto non conta; A (o START) fa vedere le carte, l'A dopo prende");
   }
   {
-    game_init();
-    game_quick_start(0, 1, "0");
+    game_init(g);
+    game_quick_start(g, 0, 1, "0");
     Pad pads[MAX_PLAYERS];
     memset(pads, 0, sizeof(pads));
     cards_reveal();
@@ -228,14 +230,14 @@ static void test_cards(void) {
     p.shield = true;
     p.invuln = 0;
     const float hp = p.hp;
-    hurt_player(0, 30.0f, p.pos + v3(1, 0, 0), 3.0f);
+    hurt_player(g, 0, 30.0f, p.pos + v3(1, 0, 0), 3.0f);
     const bool stopped = p.hp == hp && !p.shield && p.invuln > 0 && p.alive;
     p.invuln = 0;
-    hurt_player(0, 30.0f, p.pos + v3(1, 0, 0), 3.0f);
+    hurt_player(g, 0, 30.0f, p.pos + v3(1, 0, 0), 3.0f);
     check(stopped && p.hp == hp - 30.0f, "SCUDO: il primo colpo si ferma, il secondo no");
     // VITA EXTRA (dalla 0.5, al posto di SECONDA VITA): subito una vita in piu' per questa mappa.
     const int lives = p.lives;
-    cards_offer();
+    cards_offer(g);
     CardOffer& o = g.offer[0];
     o.card[0] = CA_VITA;
     o.sel = 0;
@@ -248,31 +250,31 @@ static void test_cards(void) {
     pads[0].btn = 0;
     for (int k = 0; k < CARDS_CLOSE_FRAMES + 2; ++k) pads_step(pads);
     p.invuln = 0;
-    hurt_player(0, 500.0f, p.pos + v3(1, 0, 0), 3.0f);
+    hurt_player(g, 0, 500.0f, p.pos + v3(1, 0, 0), 3.0f);
     check(took && !g.cards_open && !p.alive && p.lives == START_LIVES && !p.out,
           "VITA EXTRA: subito una vita in piu' (4); cadendo se ne perde una, senza rialzarsi");
   }
   {
     // PERFORANTE e RIMBALZO con colpi messi a mano e mostri fermi (solo i colpi avanzano).
-    game_init();
-    game_quick_start(0, 1, "0");
+    game_init(g);
+    game_quick_start(g, 0, 1, "0");
     Pad pads[MAX_PLAYERS];
     memset(pads, 0, sizeof(pads));
     pads[0].btn = 1u << PAD_A;
     pads_step(pads);
-    monsters_clear();
+    monsters_clear(g);
     memset(g.sh, 0, sizeof(g.sh));
     const Vec3 at = g.pl[0].pos + v3(0, 0.85f, 0);
     int hits[2] = { 0, 0 };
     for (int pierce = 0; pierce < 2; ++pierce) {
-      monsters_clear();
+      monsters_clear(g);
       const int a = test_monster(g.pl[0].pos + v3(0, 0, -2.0f)), b = test_monster(g.pl[0].pos + v3(0, 0, -3.2f));
-      Shot* s = shot_new(SK_BULLET, 0, at, v3(0, 0, -18.0f));
+      Shot* s = shot_new(g, SK_BULLET, 0, at, v3(0, 0, -18.0f));
       s->left = 8.0f;
       s->dmg = 5.0f;
       s->r = 0.12f;
       s->pierce = (uint8_t)pierce;
-      for (int k = 0; k < 30; ++k) shots_update();
+      for (int k = 0; k < 30; ++k) shots_update(g);
       hits[pierce] = (a >= 0 && g.mo[a].hp < 1000.0f) + (b >= 0 && g.mo[b].hp < 1000.0f);
     }
     check(hits[0] == 1 && hits[1] == 2, "PERFORANTE: il seme passa il primo mostro e prende anche il secondo");
@@ -285,41 +287,41 @@ static void test_cards(void) {
       }
     bool ok = wx >= 0;
     if (ok) {
-      monsters_clear();
+      monsters_clear(g);
       memset(g.sh, 0, sizeof(g.sh));
       const Vec3 c = cell_center(&g.L, wx, wz + 2);
-      Shot* s = shot_new(SK_BULLET, 0, v3(c.x + 0.1f, 0.85f, c.z), v3(0.0f, 0.0f, -17.0f));
+      Shot* s = shot_new(g, SK_BULLET, 0, v3(c.x + 0.1f, 0.85f, c.z), v3(0.0f, 0.0f, -17.0f));
       s->left = 30.0f;
       s->dmg = 5.0f;
       s->r = 0.12f;
       s->bounce = 1;
       int n = 0;
-      while (s->alive && s->vel.z < 0.0f && n++ < 60) shots_update();
+      while (s->alive && s->vel.z < 0.0f && n++ < 60) shots_update(g);
       ok = s->alive && s->vel.z > 0.0f && s->bounce == 0 && s->pos.z > (float)wz + 1.0f - (float)g.L.H;
       // Di nuovo contro la siepe (girato a mano): questa volta si spegne.
       s->vel.z = -17.0f;
       n = 0;
-      while (s->alive && n++ < 60) shots_update();
+      while (s->alive && n++ < 60) shots_update(g);
       ok &= !s->alive;
     }
     check(ok, "RIMBALZO: il colpo sulla siepe torna indietro (una volta)");
   }
   {
     // Bruciatura: 4 al secondo per 3 secondi; VAPORE: 30 intorno al mostro rallentato, poi una pausa.
-    game_init();
-    game_quick_start(0, 2, "23");
+    game_init(g);
+    game_quick_start(g, 0, 2, "23");
     Pad pads[MAX_PLAYERS];
     memset(pads, 0, sizeof(pads));
     pads[0].btn = pads[1].btn = 1u << PAD_A;
     pads_step(pads);
     g.pl[0].cards = g.pl[1].cards = 0;     // le prime carte prese non contano qui
-    monsters_clear();
+    monsters_clear(g);
     const int k = test_monster(g.pl[0].pos + v3(0, 0, -4.0f)), k2 = test_monster(g.pl[0].pos + v3(0.9f, 0, -4.0f));
     Monster& m = g.mo[k];
     m.burn_t = 180;
     m.burn_by = 1;
     int n = 0;
-    while (m.burn_t > 0 && n++ < 400) card_burn_tick(k);
+    while (m.burn_t > 0 && n++ < 400) card_burn_tick(g, k);
     const float burnt = 1000.0f - m.hp;
     char buf[128];
     snprintf(buf, sizeof(buf), "bruciatura: %.0f danni in %d fotogrammi", (double)burnt, n);
@@ -327,12 +329,12 @@ static void test_cards(void) {
     m.hp = 1000.0f;
     m.slow_t = 60;
     m.slow_k = 0.6f;
-    card_elem_hit(k, 1, EL_FIRE);
+    card_elem_hit(g, k, 1, EL_FIRE);
     const bool none = m.hp == 1000.0f;     // nessuno ha VAPORE
     g.pl[0].cards |= 1u << CA_VAPORE;
-    card_elem_hit(k, 1, EL_FIRE);
+    card_elem_hit(g, k, 1, EL_FIRE);
     const float d1 = 1000.0f - m.hp, d2 = 1000.0f - g.mo[k2].hp;
-    card_elem_hit(k, 1, EL_FIRE);
+    card_elem_hit(g, k, 1, EL_FIRE);
     snprintf(buf, sizeof(buf), "VAPORE: %.0f al mostro e %.0f al vicino, poi aspetta (vapore %d)", (double)d1, (double)d2,
              m.vapor_t);
     check(none && d1 == 30.0f && d2 == 30.0f && 1000.0f - m.hp == 30.0f && m.vapor_t == 90 && g.pl[0].dmg_done >= 60.0f, buf);
@@ -343,20 +345,20 @@ static void test_cards(void) {
     int picks[2] = { 0, 0 };
     unsigned offers[2] = { 0, 0 };
     for (int run = 0; run < 2; ++run) {
-      game_init();
-      game_quick_start(0, 4, "0123");
+      game_init(g);
+      game_quick_start(g, 0, 4, "0123");
       for (int f = 0; f < 4000; ++f) {
         Pad pads[MAX_PLAYERS];
         memset(pads, 0, sizeof(pads));
-        game_bot_pads(pads, 4);
+        game_bot_pads(g, pads, 4);
         const bool was = g.cards_open;
         uint32_t before[MAX_PLAYERS];
         for (int i = 0; i < MAX_PLAYERS; ++i) before[i] = g.pl[i].cards;
-        game_update(pads);
+        game_update(g, pads);
         if (was)
           for (int i = 0; i < MAX_PLAYERS; ++i) picks[run] += g.pl[i].cards != before[i];
       }
-      h[run] = game_state_hash();
+      h[run] = game_state_hash(g);
       offers[run] = g.cards_seq;
     }
     char buf[128];
@@ -364,13 +366,13 @@ static void test_cards(void) {
              " uguale", offers[0], picks[0]);
     check(offers[0] >= 2 && picks[0] >= 4 * ((int)offers[0] - 1) && picks[0] == picks[1] && h[0] == h[1], buf);
   }
-  game_set_cards_enabled(false);
+  game_set_cards_enabled(g, false);
 }
 
 int main() {
   plat_log_open("/dev/null");
   // Le prove della mira guidano il personaggio da subito: senza la scelta delle carte (come prima della 0.4).
-  game_set_cards_enabled(false);
+  game_set_cards_enabled(g, false);
   static const char* const NAME[NAIMLEVELS] = { "extra morbida", "morbida", "media", "rapida" };
 
   printf("1) direzione fedele, niente scatti verso gli assi\n");
@@ -583,7 +585,7 @@ int main() {
       step(0, 0, (uint16_t)(1u << b));
       step(0, 0);
     };
-    game_start_tap(0);
+    game_start_tap(g, 0);
     step(0, 0);
     bool ok = g.paused && g.pause_sel == PS_RESUME;
     press(PAD_DOWN);
@@ -613,9 +615,9 @@ int main() {
     press(PAD_B);
     ok &= !g.paused && g.screen == SC_PLAY && g.pl[0].bombs == 0;
     check(ok, "pausa: A su Comandi apre i tasti e B li chiude; giu', destra/sinistra/A cambiano la mira; B riprende");
-    check(!strcmp(game_aim_name(0), "extra morbida"), "il nome della mira scelta arriva al registro");
-    game_init();
-    check(g.aim_level[0] == AIM_SOFT && !strcmp(game_aim_name(0), "morbida"), "all'avvio la mira e' morbida");
+    check(!strcmp(game_aim_name(g, 0), "extra morbida"), "il nome della mira scelta arriva al registro");
+    game_init(g);
+    check(g.aim_level[0] == AIM_SOFT && !strcmp(game_aim_name(g, 0), "morbida"), "all'avvio la mira e' morbida");
   }
 
   printf("8) inclinazione a meta' che trema (+-0,04) mentre si gira a 90 gradi al secondo\n");
@@ -655,11 +657,11 @@ int main() {
   {
     fresh(AIM_MEDIUM, "0");
     for (int k = 0; k < 40; ++k) stick_deg(0.0f, 1.0f);
-    game_start_tap(0);
+    game_start_tap(g, 0);
     stick_deg(0.0f, 1.0f);
     const bool paused = g.paused;
     for (int k = 0; k < 30; ++k) stick_deg(120.0f, 0.7f);
-    game_start_tap(0);
+    game_start_tap(g, 0);
     stick_deg(120.0f, 0.7f);
     float worst = 0.0f;
     for (int k = 0; k < 3; ++k) {
@@ -685,7 +687,7 @@ int main() {
   }
 
   test_cards();
-  game_shutdown();
+  game_shutdown(g);
   printf(g_fail ? "\n%d prove fallite\n" : "\ntutto bene\n", g_fail);
   return g_fail ? 1 : 0;
 }

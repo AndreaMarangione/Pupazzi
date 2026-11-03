@@ -17,6 +17,8 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+static Game& g = *game_create();   // the game under test (the game keeps no global state: the test owns it)
+
 static int g_fail = 0;
 static Pad g_pads[MAX_PLAYERS];
 static const char* g_shots;             // --immagini
@@ -30,7 +32,7 @@ static void check(bool ok, const char* what) {
 
 static void step(int n = 1) {
   for (int k = 0; k < n; ++k) {
-    game_update(g_pads);
+    game_update(g, g_pads);
     if (g.msg_t > 0) snprintf(g_lastmsg, sizeof(g_lastmsg), "%s / %s", g.msg, g.msg2);
   }
 }
@@ -55,7 +57,7 @@ static void pick_card(int i) {
 static void quiet(void) {
   memset(g.spawn_left, 0, sizeof(g.spawn_left));
   g.spawn_wait = 1000000;
-  monsters_clear();
+  monsters_clear(g);
   memset(g.sh, 0, sizeof(g.sh));
   memset(g.mk, 0, sizeof(g.mk));
 }
@@ -67,7 +69,7 @@ static void kill_player(int i) {
   p.invuln = 0;
   p.shield = false;
   p.leap_n = 0;
-  hurt_player(i, 100000.0f, p.pos + v3(1, 0, 0), 0.0f);
+  hurt_player(g, i, 100000.0f, p.pos + v3(1, 0, 0), 0.0f);
   step();
 }
 
@@ -76,7 +78,7 @@ static void clear_zone(void) {
   memset(g.spawn_left, 0, sizeof(g.spawn_left));
   g.wave = g.L.zones[g.zone].nwaves - 1;
   g.spawn_wait = 0;
-  monsters_clear();
+  monsters_clear(g);
   g.boss.alive = false;
   for (int k = 0; k < 10 && g.phase != PH_CLEAR && g.phase != PH_MAP_DONE; ++k) step();
 }
@@ -141,7 +143,7 @@ static void shot(const char* name) {
   if (!g_shots) return;
   static Hud hud;
   FrameDesc fd{};
-  game_build_frame(&fd, 640, 480, &hud);
+  game_build_frame(g, &fd, 640, 480, &hud);
   RenderStats st;
   const uint32_t* fb = swr_render(&fd, &st);
   char path[512];
@@ -158,9 +160,9 @@ static void shot(const char* name) {
 }
 
 static void fresh(int map, int players, const char* chars) {
-  game_init();
+  game_init(g);
   memset(g_pads, 0, sizeof(g_pads));
-  game_quick_start(map, players, chars);
+  game_quick_start(g, map, players, chars);
   step(3);
   quiet();
 }
@@ -182,7 +184,7 @@ int main(int argc, char** argv) {
     printf("mkdtemp non riuscita\n");
     return 1;
   }
-  game_set_cards_enabled(false);
+  game_set_cards_enabled(g, false);
   char buf[640];
 
   printf("1) da soli: una caduta costa una vita e si rifa' la zona\n");
@@ -206,7 +208,7 @@ int main(int argc, char** argv) {
     snprintf(buf, sizeof(buf), "dopo %d fotogrammi si riparte dalla partenza della zona %d con la vita piena (%s)", WIPE_ZONE_FRAMES, g.zone + 1,
              g_lastmsg);
     check(waiting && g.phase == PH_FIGHT && g.zone == z && p.alive && p.hp == p.hp_max && dist2d(p.pos, g.L.zones[z].start[0]) < 0.3f &&
-              pending > 0 && count_monsters() == 0 && !strcmp(g.msg, "SI RIPARTE!"),
+              pending > 0 && count_monsters(g) == 0 && !strcmp(g.msg, "SI RIPARTE!"),
           buf);
     check(g.wipes == 1 && g.map_wipes == 0 && g.restarts == 0 && p.deaths == 1, "zona rifatta: non conta come mappa da capo");
 
@@ -257,10 +259,10 @@ int main(int argc, char** argv) {
   printf("4) VITA EXTRA: una vita in piu' subito\n");
   {
     open_game(save_dir("quattro"));
-    game_set_cards_enabled(true);
-    game_init();
+    game_set_cards_enabled(g, true);
+    game_init(g);
     memset(g_pads, 0, sizeof(g_pads));
-    game_quick_start(0, 1, "0");
+    game_quick_start(g, 0, 1, "0");
     const bool open = g.cards_open;
     g.offer[0].card[g.offer[0].sel] = CA_VITA;
     pick_card(0);
@@ -281,7 +283,7 @@ int main(int argc, char** argv) {
     snprintf(buf, sizeof(buf), "tre zone rifatte (%d), alla quarta caduta mappa da capo; poi vite %d e carte di nuovo da scegliere",
              zone_restarts, p.lives);
     check(zone_restarts == 3 && map_again && p.lives == START_LIVES && !has_card(p, CA_VITA) && g.cards_open, buf);
-    game_set_cards_enabled(false);
+    game_set_cards_enabled(g, false);
   }
 
   printf("5) in piu' giocatori: si rientra dopo 5 secondi accanto a un compagno\n");
@@ -324,7 +326,7 @@ int main(int argc, char** argv) {
     quiet();
     Vec3 near_b = g.L.zones[g.zone].start[1];
     b.pos = near_b;
-    const int k = monster_spawn(MO_SCORPIONE, false, &near_b) ? 0 : -1;
+    const int k = monster_spawn(g, MO_SCORPIONE, false, &near_b) ? 0 : -1;
     int mk = -1;
     for (int j = 0; j < MAX_MONSTERS; ++j)
       if (g.mo[j].alive) mk = j;
@@ -338,12 +340,12 @@ int main(int argc, char** argv) {
     snprintf(buf, sizeof(buf), "G1 si allontana dal corpo di G2 (%.1f m), telecamera su G1 (%.1f m), il mostro non lo cerca", (double)moved,
              (double)cam_off);
     check(k == 0 && moved > 3.0f && cam_off < 8.0f && !targeted_b, buf);
-    game_set_cards_enabled(true);
-    cards_offer();
+    game_set_cards_enabled(g, true);
+    cards_offer(g);
     check(g.cards_open && g.offer[0].on && !g.offer[1].on, "carte: solo per chi ha ancora vite");
     g.cards_open = false;
-    game_set_cards_enabled(false);
-    check(count_in_play() == 1 && count_active() == 2, "conta come giocatore attivo (statistiche) ma non in gioco");
+    game_set_cards_enabled(g, false);
+    check(count_in_play(g) == 1 && count_active(g) == 2, "conta come giocatore attivo (statistiche) ma non in gioco");
 
     printf("7) senza vite e l'ultimo in piedi cade: la mappa ricomincia da capo\n");
     a.hp = 1.0f;
@@ -367,7 +369,7 @@ int main(int argc, char** argv) {
     snprintf(buf, sizeof(buf), "vite %d %d %d, \"%s / %s\"", g.pl[0].lives, g.pl[1].lives, g.pl[2].lives, g.msg, g.msg2);
     check(on && g.phase == PH_WIPE && g.wipe_map && g.pl[1].lives == 2 && !strcmp(g.msg, "TUTTI A TERRA!"), buf);
     step(WIPE_MAP_FRAMES);
-    check(g.zone == 0 && count_alive() == 3 && g.map_wipes == 1 && g.pl[0].deaths == 1, "mappa da capo dalla zona 1, tutti in piedi");
+    check(g.zone == 0 && count_alive(g) == 3 && g.map_wipes == 1 && g.pl[0].deaths == 1, "mappa da capo dalla zona 1, tutti in piedi");
   }
 
   printf("9) chi esce e rientra nella stessa mappa ha le vite che aveva\n");
@@ -378,21 +380,21 @@ int main(int argc, char** argv) {
     kill_player(1);
     step(RESPAWN_FRAMES);
     quiet();
-    player_leave(1);
-    player_join(1, 1, true);
+    player_leave(g, 1);
+    player_join(g, 1, 1, true);
     check(b.active && b.alive && b.lives == 2, "uscito con 2 vite, rientra con 2");
     kill_player(1);
     step(RESPAWN_FRAMES);
     quiet();
     kill_player(1);
-    player_leave(1);
-    player_join(1, 1, true);
+    player_leave(g, 1);
+    player_join(g, 1, 1, true);
     check(b.active && !b.alive && b.out && b.lives == 0 && g.phase == PH_FIGHT, "senza vite: rientra ancora fuori");
-    player_join(2, 2, true);
+    player_join(g, 2, 2, true);
     check(g.pl[2].lives == START_LIVES && g.pl[2].alive, "un giocatore nuovo entra con 3 vite");
-    player_leave(2);
+    player_leave(g, 2);
     // G2 esce: G1 resta da solo e quando cade valgono le regole di chi gioca da solo.
-    player_leave(1);
+    player_leave(g, 1);
     kill_player(0);
     step();
     snprintf(buf, sizeof(buf), "rimasto da solo: zona rifatta (vite %d)", g.pl[0].lives);
@@ -402,10 +404,10 @@ int main(int argc, char** argv) {
     check(g.pl[0].alive && g.pl[0].lives == 2, "e si riparte con le vite che aveva");
     // G1 a terra che aspetta di rientrare, G3 (l'unico in piedi) esce: G1 resta da solo e si rifa'
     // la zona senza perdere un'altra vita.
-    player_join(2, 2, true);
+    player_join(g, 2, 2, true);
     kill_player(0);
     const bool waits = g.phase == PH_FIGHT && !g.pl[0].alive && g.pl[0].respawn > 0 && g.pl[0].lives == 1;
-    player_leave(2);
+    player_leave(g, 2);
     step();
     snprintf(buf, sizeof(buf), "G1 a terra (1 vita) e G3 esce: zona rifatta, vite %d", g.pl[0].lives);
     check(waits && g.phase == PH_WIPE && !g.wipe_map && g.pl[0].lives == 1, buf);
@@ -414,7 +416,7 @@ int main(int argc, char** argv) {
     // Mappa da capo (vite finite di G1): chi rientra dopo ha di nuovo 3 vite.
     kill_player(0);
     step(WIPE_MAP_FRAMES + 1);
-    player_join(1, 1, true);
+    player_join(g, 1, 1, true);
     check(g.pl[0].lives == START_LIVES && b.lives == START_LIVES && b.alive && !b.out, "dopo la mappa da capo si rientra con 3 vite");
   }
 
@@ -428,17 +430,17 @@ int main(int argc, char** argv) {
     b.kills = 7;
     b.deaths = 1;
     b.dmg_done = 250.0f;
-    player_leave(1);
-    player_join(1, 1, true);
+    player_leave(g, 1);
+    player_join(g, 1, 1, true);
     check(b.lives == START_LIVES + 1 && has_card(b, CA_VITA), "rientra con 4 vite e VITA EXTRA gia' presa (non torna tra le carte)");
     check(b.kills == 7 && b.deaths == 1 && b.dmg_done == 250.0f, "e con le sue statistiche della mappa");
     // Mappa da capo mentre e' fuori: rientra con 3 vite, VITA EXTRA di nuovo possibile, statistiche
     // della visita tenute.
-    player_leave(1);
+    player_leave(g, 1);
     g.pl[0].lives = 1;
     kill_player(0);
     step(WIPE_MAP_FRAMES + 1);
-    player_join(1, 1, true);
+    player_join(g, 1, 1, true);
     check(b.lives == START_LIVES && !has_card(b, CA_VITA) && b.kills == 7, "dopo la mappa da capo: 3 vite, VITA EXTRA di nuovo possibile");
   }
 
@@ -451,7 +453,7 @@ int main(int argc, char** argv) {
     g.boss.hp = 30.0f;
     // La bolla di lava di Zolfo arriva sul boss nello stesso fotogramma in cui Zolfo cade (i colpi
     // si muovono dopo il turno del boss: il boss senza vita cade al fotogramma dopo).
-    Shot* s = shot_new(SK_LAVA, 0, g.boss.pos + v3(0, 1.0f, 0), v3(0, -1.0f, 0));
+    Shot* s = shot_new(g, SK_LAVA, 0, g.boss.pos + v3(0, 1.0f, 0), v3(0, -1.0f, 0));
     check(s != NULL, "bolla di lava sul boss");
     if (s) {
       s->dmg = 500.0f;
@@ -462,7 +464,7 @@ int main(int argc, char** argv) {
     Player& p = g.pl[0];
     p.invuln = 0;
     p.shield = false;
-    hurt_player(0, 1e6f, p.pos + v3(1, 0, 0), 0.0f);
+    hurt_player(g, 0, 1e6f, p.pos + v3(1, 0, 0), 0.0f);
     step(3);
     snprintf(buf, sizeof(buf), "il gladiatore cade, mappa finita, niente ripartenza (fase %d, boss %d)", g.phase, (int)g.boss.alive);
     check(!g.boss.alive && g.phase == PH_MAP_DONE && g.map_wipes == 0, buf);
@@ -472,7 +474,7 @@ int main(int argc, char** argv) {
     g.boss.hp = 5.0f;
     kill_player(0);
     kill_player(1);
-    damage_boss(100.0f, 0, false);
+    damage_boss(g, 100.0f, 0, false);
     step();
     check(g.phase == PH_WIPE && g.boss.alive && g.boss.hp > 0.0f, "tutti a terra: un colpo arrivato dopo non batte il boss");
   }
@@ -509,12 +511,12 @@ int main(int argc, char** argv) {
     // Difficolta': la mappa dopo comincia al giro 2.
     fresh(0, 1, "0");
     Vec3 at = g.L.zones[0].start[0] + v3(0, 0, -5.0f);
-    monster_spawn(MO_SCORPIONE, false, &at);
+    monster_spawn(g, MO_SCORPIONE, false, &at);
     int mk = -1;
     for (int j = 0; j < MAX_MONSTERS; ++j)
       if (g.mo[j].alive) mk = j;
-    snprintf(buf, sizeof(buf), "giro 2: mostri con %.2f volte la vita (sciacallo %.0f)", (double)diff_hp(), mk >= 0 ? (double)g.mo[mk].hp_max : 0.0);
-    check(g.loop == 1 && mk >= 0 && g.mo[mk].hp_max == MONS[MO_SCORPIONE].hp * 1.6f && diff_dmg() == 1.25f, buf);
+    snprintf(buf, sizeof(buf), "giro 2: mostri con %.2f volte la vita (sciacallo %.0f)", (double)diff_hp(g), mk >= 0 ? (double)g.mo[mk].hp_max : 0.0);
+    check(g.loop == 1 && mk >= 0 && g.mo[mk].hp_max == MONS[MO_SCORPIONE].hp * 1.6f && diff_dmg(g) == 1.25f, buf);
     if (g_shots) {
       fresh(bm, 4, "0123");
       kill_player(1);
@@ -550,7 +552,7 @@ int main(int argc, char** argv) {
     const bool nine = !g.giro_up && g.giro_stars == 9;
     if (g.L.capsule_dyn >= 0) {
       const DynCell& dc = g.L.dyn[g.L.capsule_dyn];
-      explorer_rescue(cell_center(&g.L, dc.cx, dc.cz));
+      explorer_rescue(g, cell_center(&g.L, dc.cx, dc.cz));
     }
     snprintf(buf, sizeof(buf), "9 stelle, poi l'esploratore durante la festa: giro %d", world_giro(WORLD_TERRA));
     check(g.L.capsule_dyn < 0 || (nine && g.giro_up && world_giro(WORLD_TERRA) == 2 && (g.stars_got & SAVE_STAR_EXPLORER) &&
@@ -571,7 +573,7 @@ int main(int argc, char** argv) {
       fclose(f);
     }
     open_game(dir);
-    game_init();
+    game_init(g);
     bool ok = map_unlocked(0) && world_giro(WORLD_TERRA) == 1;
     for (int i = 1; i < maps_count(); ++i) ok &= !map_unlocked(i);
     check(ok, "solo la prima mappa della Terra aperta, giro 1");
@@ -586,12 +588,12 @@ int main(int argc, char** argv) {
     // Giro 3 dal salvataggio: si gioca al giro 3.
     save_data()->giro[WORLD_TERRA] = 3;
     fresh(0, 1, "0");
-    check(g.loop == 2 && diff_hp() == 1.0f + 0.6f * 2.0f, "giro 3 nel salvataggio: mostri del giro 3");
+    check(g.loop == 2 && diff_hp(g) == 1.0f + 0.6f * 2.0f, "giro 3 nel salvataggio: mostri del giro 3");
     if (g_shots) {
       save_set_stars(maps_id(0), 7);
       save_set_stars(maps_id(1), 5);
       g.map_sel = 1;
-      go_screen(SC_MAPS);
+      go_screen(g, SC_MAPS);
       step(30);
       shot("menu_mappe");
     }
@@ -600,18 +602,18 @@ int main(int argc, char** argv) {
   printf("13) l'impronta della partita comprende vite e giocatori fuori\n");
   {
     fresh(0, 2, "01");
-    const uint64_t h0 = game_state_hash();
+    const uint64_t h0 = game_state_hash(g);
     g.pl[1].lives--;
-    const uint64_t h1 = game_state_hash();
+    const uint64_t h1 = game_state_hash(g);
     g.pl[1].lives++;
     g.pl[1].out = true;
-    const uint64_t h2 = game_state_hash();
+    const uint64_t h2 = game_state_hash(g);
     g.pl[1].out = false;
     const int loop = g.loop;
     g.loop = loop + 1;
-    const uint64_t h3 = game_state_hash();
+    const uint64_t h3 = game_state_hash(g);
     g.loop = loop;
-    const uint64_t h4 = game_state_hash();
+    const uint64_t h4 = game_state_hash(g);
     snprintf(buf, sizeof(buf), "vite, senza vite e giro cambiano l'impronta (%d %d %d %d)", h1 != h0, h2 != h0, h3 != h0, h4 == h0);
     check(h1 != h0 && h2 != h0 && h3 != h0 && h4 == h0, buf);
   }
@@ -622,25 +624,25 @@ int main(int argc, char** argv) {
     int deaths[2] = { 0, 0 };
     for (int run = 0; run < 2; ++run) {
       open_game(save_dir(run ? "q2" : "q1"));
-      game_set_cards_enabled(true);
-      game_init();
-      game_quick_start(0, 2, "03");
+      game_set_cards_enabled(g, true);
+      game_init(g);
+      game_quick_start(g, 0, 2, "03");
       for (int f = 0; f < 3000; ++f) {
         Pad pads[MAX_PLAYERS];
         memset(pads, 0, sizeof(pads));
-        game_bot_pads(pads, 2);
-        game_update(pads);
+        game_bot_pads(g, pads, 2);
+        game_update(g, pads);
         if (f == 1500) {
           // Una caduta a meta': rientro e vite dentro la partita ripetuta.
           g.pl[1].invuln = 0;
           g.pl[1].shield = false;
-          if (g.pl[1].alive && g.pl[1].leap_n == 0) hurt_player(1, 100000.0f, g.pl[1].pos, 0.0f);
+          if (g.pl[1].alive && g.pl[1].leap_n == 0) hurt_player(g, 1, 100000.0f, g.pl[1].pos, 0.0f);
         }
       }
-      h[run] = game_state_hash();
+      h[run] = game_state_hash(g);
       deaths[run] = g.deaths;
     }
-    game_set_cards_enabled(false);
+    game_set_cards_enabled(g, false);
     snprintf(buf, sizeof(buf), "3000 fotogrammi, cadute %d: stessa impronta %016llx", deaths[0], (unsigned long long)h[0]);
     check(h[0] == h[1] && deaths[0] == deaths[1] && deaths[0] >= 1, buf);
   }
@@ -670,12 +672,12 @@ int main(int argc, char** argv) {
     fresh(0, 1, "0");
     int seen[NPOWERS] = { 0, 0, 0, 0 }, total = 0;
     for (int round = 0; round < 60; ++round) {
-      items_reset(-1);
+      items_reset(g, -1);
       level_reset_dynamic(&g.L, -1);
       for (int it = 0; it < g.L.nitems; ++it) {
         const MapItem& mi = g.L.items[it];
         if (mi.kind != IT_POWER) continue;
-        crate_damage(mi.crate, 1000.0f, v3(0, 0, 0));
+        crate_damage(g, mi.crate, 1000.0f, v3(0, 0, 0));
         if (g.item_on[it] && g.item_pw[it] < NPOWERS) {
           seen[g.item_pw[it]]++;
           total++;
@@ -691,7 +693,7 @@ int main(int argc, char** argv) {
       for (int it = 0; it < g.L.nitems; ++it) {
         const MapItem& mi = g.L.items[it];
         if (mi.kind != IT_POWER || mi.zone != 0) continue;
-        crate_damage(mi.crate, 1000.0f, v3(0, 0, 0));
+        crate_damage(g, mi.crate, 1000.0f, v3(0, 0, 0));
         g.item_pw[it] = (uint8_t)pw;
         return it;
       }
@@ -739,15 +741,15 @@ int main(int argc, char** argv) {
     // FURIA: danni doppi; INVINCIBILE: nessun danno, finche' dura.
     {
       fresh(0, 1, "0");
-      monster_spawn(MO_SCORPIONE, false, 0);
+      monster_spawn(g, MO_SCORPIONE, false, 0);
       int k = -1;
       for (int m = 0; m < MAX_MONSTERS; ++m)
         if (g.mo[m].alive) k = m;
       const float hp0 = g.mo[k].hp;
-      damage_monster(k, 10.0f, 0, v3(1, 0, 0), 0.0f, true);
+      damage_monster(g, k, 10.0f, 0, v3(1, 0, 0), 0.0f, true);
       const float d1 = hp0 - g.mo[k].hp;
       g.pl[0].pw_t[PW_FURY] = PW_FRAMES[PW_FURY];
-      damage_monster(k, 10.0f, 0, v3(1, 0, 0), 0.0f, true);
+      damage_monster(g, k, 10.0f, 0, v3(1, 0, 0), 0.0f, true);
       const float d2 = hp0 - d1 - g.mo[k].hp;
       snprintf(buf, sizeof(buf), "FURIA: un colpo da 10 toglie %.0f (senza: %.0f)", (double)d2, (double)d1);
       check(d1 == 10.0f && d2 == 20.0f, buf);
@@ -755,10 +757,10 @@ int main(int argc, char** argv) {
       p.invuln = 0;
       p.pw_t[PW_INVINCIBLE] = 5;
       const float h0 = p.hp;
-      hurt_player(0, 30.0f, p.pos + v3(1, 0, 0), 5.0f);
+      hurt_player(g, 0, 30.0f, p.pos + v3(1, 0, 0), 5.0f);
       const bool none = p.hp == h0;
       step(6);
-      hurt_player(0, 30.0f, p.pos + v3(1, 0, 0), 0.0f);
+      hurt_player(g, 0, 30.0f, p.pos + v3(1, 0, 0), 0.0f);
       check(none && p.pw_t[PW_INVINCIBLE] == 0 && p.hp == h0 - 30.0f, "INVINCIBILE: niente danni finche' dura, poi di nuovo");
     }
     // Il tempo dei bonus si ferma in pausa; cadendo i bonus finiscono; contano nell'impronta.
@@ -771,9 +773,9 @@ int main(int argc, char** argv) {
       g.paused = false;
       step(30);
       const int after = g.pl[0].pw_t[PW_FURY];
-      const uint64_t h0 = game_state_hash();
+      const uint64_t h0 = game_state_hash(g);
       g.pl[0].pw_t[PW_SPEED] = 7;
-      const uint64_t h1 = game_state_hash();
+      const uint64_t h1 = game_state_hash(g);
       kill_player(0);
       snprintf(buf, sizeof(buf), "in pausa resta %d, poi %d; a terra niente bonus; impronta diversa", still, after);
       check(still == 100 && after == 70 && h1 != h0 && g.pl[0].pw_t[PW_FURY] == 0 && g.pl[0].pw_t[PW_SPEED] == 0, buf);
@@ -785,7 +787,7 @@ int main(int argc, char** argv) {
       for (int k = 0; k < g.L.nitems; ++k)
         if (g.L.items[k].kind == IT_POWER && g.L.items[k].zone == 0) { it = k; break; }
       const int d = g.L.items[it].crate;
-      crate_damage(d, 1000.0f, v3(0, 0, 0));
+      crate_damage(g, d, 1000.0f, v3(0, 0, 0));
       const bool out = g.item_on[it] && g.L.dyn[d].hp <= 0.0f;
       kill_player(0);
       for (int k = 0; k < WIPE_ZONE_FRAMES + 10 && g.phase == PH_WIPE; ++k) step();
@@ -891,11 +893,11 @@ int main(int argc, char** argv) {
       check(close_f >= 0 && hit_f - close_f >= 38 && hit_f - close_f <= 44 && puffs >= 10 && shake > 0.05f && slams == 1 && top > 0.03f &&
                 top < 0.1f && still_f - hit_f <= 30 && level_walk_top(&g.L, gt.x0, gt.z0) > 10.0f && g.zone == 1,
             buf);
-      const uint64_t h0 = game_state_hash();
+      const uint64_t h0 = game_state_hash(g);
       g.L.gates[gi].vel = 0.001f;
-      const uint64_t h1 = game_state_hash();
+      const uint64_t h1 = game_state_hash(g);
       g.L.gates[gi].vel = 0.0f;
-      check(h0 != h1 && game_state_hash() == h0, "l'impronta della partita comprende i cancelli");
+      check(h0 != h1 && game_state_hash(g) == h0, "l'impronta della partita comprende i cancelli");
       // Revisione 0.5.4: entrati tutti, chi torna subito indietro non resta chiuso fuori (le ante
       // partono piano: il passaggio si chiude appena cominciano a girare), anche con VELOCITA'.
       int out = 0, tries2 = 0;
@@ -961,7 +963,7 @@ int main(int argc, char** argv) {
       int n = 0;
       for (int it = 0; it < g.L.nitems && n < 4; ++it)
         if (g.L.items[it].kind == IT_POWER && g.L.items[it].zone == 0) {
-          crate_damage(g.L.items[it].crate, 1000.0f, v3(0, 0, 0));
+          crate_damage(g, g.L.items[it].crate, 1000.0f, v3(0, 0, 0));
           g.item_pw[it] = (uint8_t)(n++);
         }
     }
@@ -984,14 +986,14 @@ int main(int argc, char** argv) {
     };
     for (const Spot& s : SPOTS) {
       for (int i = 0; i < 4; ++i) g.pl[i].pos = v3(s.p[i][0], 0.0f, s.p[i][1]);
-      update_camera(true);
+      update_camera(g, true);
       printf("  %s: distanza %.1f m, punto inquadrato %.1f %.1f\n", s.name, (double)g.cam_dist, (double)g.cam_target.x,
              (double)g.cam_target.z);
       shot(s.name);
     }
   }
 
-  game_shutdown();
+  game_shutdown(g);
   if (g_shots) swr_shutdown();
   char cmd[160];
   snprintf(cmd, sizeof(cmd), "rm -rf %s", g_base);
