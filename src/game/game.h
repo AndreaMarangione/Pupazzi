@@ -2,7 +2,7 @@
 #pragma once
 #include "engine/render.h"
 
-#define PUPAZZI_VERSION "0.5.4"   // the only place: core, menus and Makefile read it from here
+#define PUPAZZI_VERSION "0.5.5"   // the only place: core, menus and Makefile read it from here
 #define MAX_PLAYERS 4
 
 // The whole state of a game (defined in game/sim/game_int.h). The frontend creates one with

@@ -6,6 +6,11 @@ Le note di ogni release su GitHub si prendono da qui (la sezione con il numero d
 
 ## [Non rilasciato]
 
+## [0.5.5] - 2026-11-03
+
+Stesso gioco della 0.5.4: cambiano il codice e il modo di pubblicarlo. In rete gioca solo con
+altre console alla 0.5.5.
+
 ### Cambiato
 
 - Il gioco si costruisce e si prova da solo su GitHub a ogni modifica (CI); le release si fanno

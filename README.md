@@ -618,6 +618,14 @@ Fatto senza console, anche sui file veri del firmware (immagine della MOD 4.0.3)
   difetti, tutti corretti (uno grave: chi tornava indietro appena passato il cancello poteva restare
   chiuso fuori; uno medio: un messaggio costruito apposta bloccava la console che aveva creato la
   partita; 4 piccoli).
+- 0.5.5 (riordino del codice, stesso gioco): a ogni passo partite, immagini (anche della GPU),
+  sonoro, registri e salvataggi identici a prima in 10 scenari fotogramma per fotogramma; dopo la
+  traduzione dei commenti i core per console, PC e questa macchina identici byte per byte; prove
+  (428 controlli), sonoro, GPU, rete e comandi dalla rete passate; stessa partita su gcc, clang,
+  PC, ARM32 e ARM64; gioco in rete tra il nuovo codice e il core della 0.5.4 (stessa versione) e
+  tra x86 e ARM a 32 e 64 bit in emulazione, partite uguali; AddressSanitizer e UBSan puliti; voce
+  di menu nel RetroArch a 32 bit in emulazione con i salvataggi della 0.4, della 0.5.2 e della
+  0.5.3; archivio della release uguale rifatto due volte, ricompilato da zero con binari identici.
 
 Si può sapere solo sulla console: il gioco in rete sul Wi-Fi vero (messaggi persi e ritardi veri,
 la scritta "rete lenta", il tempo di andata e ritorno nel riquadro di SELECT, 3 e 4 console
