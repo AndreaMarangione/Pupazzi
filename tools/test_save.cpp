@@ -6,8 +6,8 @@
 // troppo grandi) che restano da parte, la partita 1 della 0.5.2 che non si riesce a scrivere.
 // Usa solo save.cpp e plat.cpp, in una cartella temporanea.
 //   make build/native/test_save && ./build/native/test_save
-#include "save.h"
-#include "plat.h"
+#include "game/save.h"
+#include "platform/plat.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

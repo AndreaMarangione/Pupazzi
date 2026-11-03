@@ -852,7 +852,7 @@ def main_header():
     h.append("extern const HudWord HUD_WORDS[HUD_NWORDS];")
     h.append("extern const HudRun HUD_RUNS[HUD_NRUNS];")
     h.append("extern const uint8_t HUD_NIB[HUD_NNIB];")
-    write_if_changed(os.path.join(ROOT, "src", "font_hud.h"), "\n".join(h) + "\n")
+    write_if_changed(os.path.join(ROOT, "src", "engine", "font_hud.h"), "\n".join(h) + "\n")
 
     o = []
     o.append("// Generato da tools/make_font.py: non modificare a mano. Solo per hud.cpp.")
@@ -904,7 +904,7 @@ def main_header():
     o.append("const uint8_t HUD_NIB[HUD_NNIB] = {")
     o += numbers(data)
     o.append("};")
-    write_if_changed(os.path.join(ROOT, "src", "font_hud_data.h"), "\n".join(o) + "\n")
+    write_if_changed(os.path.join(ROOT, "src", "engine", "font_hud_data.h"), "\n".join(o) + "\n")
     nsg = sum(len(sf["glyphs"]) for sf in sfaces)
     sys.stderr.write("make_font: %d caratteri e disegni (%d di cinese, giapponese e hindi), %d parole hindi, %d coppie, "
                      "%d byte di pixel, atlante alto %d su %d\n" % (len(glyph_rows), nsg, len(word_rows), len(kern_rows), len(data),

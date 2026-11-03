@@ -6,7 +6,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "../src/swr.h"
+#include "engine/swr.h"
 
 static uint32_t g_rng = 0x1234567u;
 static uint32_t rnd(void) {

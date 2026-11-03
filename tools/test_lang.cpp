@@ -3,10 +3,10 @@
 // grandi in cui si usa); a capo e puntini non spezzano le parole hindi, in cinese e giapponese si va
 // a capo tra i caratteri, una parola piu' larga della riga si spezza senza perdere nulla.
 //   make build/native/test_lang && ./build/native/test_lang
-#include "lang.h"
-#include "hud.h"
-#include "ui.h"
-#include "lang_data.h"
+#include "engine/lang.h"
+#include "engine/hud.h"
+#include "engine/ui.h"
+#include "engine/lang_data.h"
 #include <stdio.h>
 #include <string.h>
 

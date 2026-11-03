@@ -6,11 +6,11 @@
 //   make build/native/test_rules && ./build/native/test_rules [--immagini CARTELLA]
 // Con --immagini scrive anche le schermate dell'HUD (PPM a 640x480, renderer software): icone
 // dei giocatori con uno a terra e uno senza vite, arena, menu delle mappe, fine dell'arena.
-#include "game_int.h"
-#include "maps.h"
-#include "plat.h"
-#include "save.h"
-#include "swr.h"
+#include "game/sim/game_int.h"
+#include "game/sim/maps.h"
+#include "platform/plat.h"
+#include "game/save.h"
+#include "engine/swr.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

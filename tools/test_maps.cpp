@@ -14,10 +14,10 @@
 //      rientra non riappare sul pozzo); casse che tornano su chi ci sta sopra.
 // Numeri a caso da una funzione hash della prova: mai il generatore del gioco.
 //   make build/native/test_maps && ./build/native/test_maps [FOTOGRAMMI_PER_ZONA [SEME]]
-#include "game_int.h"
-#include "maps.h"
-#include "plat.h"
-#include "save.h"
+#include "game/sim/game_int.h"
+#include "game/sim/maps.h"
+#include "platform/plat.h"
+#include "game/save.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

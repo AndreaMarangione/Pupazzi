@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-# Testi del gioco nelle 7 lingue: legge lang/testi.txt, lo controlla e genera src/lang_data.h.
-#   python3 tools/make_lang.py              controlla e scrive src/lang_data.h
+# Testi del gioco nelle 7 lingue: legge lang/testi.txt, lo controlla e genera src/engine/lang_data.h.
+#   python3 tools/make_lang.py              controlla e scrive src/engine/lang_data.h
 #   python3 tools/make_lang.py --controlla  solo i controlli (make test): esce con 1 se c'e' un errore
 #   python3 tools/make_lang.py --elenco     i testi che il codice passa a tr() o segna con N_()
 #
@@ -23,7 +23,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 LANGS = ["it", "en", "es", "pt", "zh", "ja", "hi"]
 FACES = {"@T25", "@T32", "@T38", "@T44", "@B22"}
 TABLE = os.path.join(ROOT, "lang", "testi.txt")
-OUT = os.path.join(ROOT, "src", "lang_data.h")
+OUT = os.path.join(ROOT, "src", "engine", "lang_data.h")
 
 
 class Text:
@@ -182,7 +182,7 @@ def unescape(lits):
 def code_keys():
     """{testo: [file:riga, ...]} dei testi del codice."""
     keys = {}
-    for path in sorted(glob.glob(os.path.join(ROOT, "src", "*.cpp")) + glob.glob(os.path.join(ROOT, "src", "*.h"))):
+    for path in sorted(glob.glob(os.path.join(ROOT, "src", "**", "*.cpp"), recursive=True) + glob.glob(os.path.join(ROOT, "src", "**", "*.h"), recursive=True)):
         if path.endswith(("lang_data.h", "font_hud.h", "font_hud_data.h", "libretro.h")):
             continue
         src = open(path, encoding="utf-8").read()
@@ -333,7 +333,7 @@ def main():
     if args == ["--controlla"]:
         old = open(OUT, encoding="utf-8").read() if os.path.exists(OUT) else None
         if old != generate(texts):
-            sys.stderr.write("make_lang: src/lang_data.h non e' aggiornato: python3 tools/make_lang.py\n")
+            sys.stderr.write("make_lang: src/engine/lang_data.h non e' aggiornato: python3 tools/make_lang.py\n")
             return 1
         print("make_lang: %d testi in %d lingue, tutto a posto" % (len(texts), len(LANGS)))
         return 0

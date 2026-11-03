@@ -12,11 +12,11 @@
 //   giocatori automatici vedono i segni a terra F fotogrammi dopo che compaiono (come una persona).
 //   --solo PERSONAGGI (per esempio 01): solo quella lotta, senza le prove. --traccia N: una riga
 //   ogni N fotogrammi con boss e giocatori.
-#include "game_int.h"
-#include "maps.h"
-#include "plat.h"
-#include "save.h"
-#include "swr.h"
+#include "game/sim/game_int.h"
+#include "game/sim/maps.h"
+#include "platform/plat.h"
+#include "game/save.h"
+#include "engine/swr.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

@@ -1,7 +1,7 @@
 // Prove di sysinfo (0.5.4): batteria da una /sys finta (carica, in carica, piena, nessuna batteria,
 // riletta ogni 2 secondi, PUPAZZI_BATTERIA) e carico della CPU da una /proc finta.
 //   make build/native/test_sys && ./build/native/test_sys
-#include "sysinfo.h"
+#include "platform/sysinfo.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

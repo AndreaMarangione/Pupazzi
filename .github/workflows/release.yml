@@ -31,9 +31,9 @@ jobs:
 
       - name: Check that the tag matches the version in the code
         run: |
-          version="$(sed -n 's/^#define PUPAZZI_VERSION "\([^"]*\)".*/\1/p' src/game.h)"
+          version="$(sed -n 's/^#define PUPAZZI_VERSION "\([^"]*\)".*/\1/p' src/game/game.h)"
           if [ "$TAG" != "v$version" ]; then
-            echo "::error::tag $TAG does not match PUPAZZI_VERSION $version (src/game.h)"
+            echo "::error::tag $TAG does not match PUPAZZI_VERSION $version (src/game/game.h)"
             exit 1
           fi
           echo "VERSION=$version" >> "$GITHUB_ENV"

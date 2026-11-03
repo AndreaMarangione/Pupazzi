@@ -3,7 +3,7 @@
 // gioco ne' far usare comandi vecchi; quelli giusti si usano in ordine, anche con i buchi, i
 // doppioni e dopo un lungo stop. Si prova la parte di src/net.cpp che li legge, senza rete.
 //   make build/native/test_netin && ./build/native/test_netin
-#include "../src/net.cpp"
+#include "net/net.cpp"
 #include <signal.h>
 
 static int g_fail = 0;

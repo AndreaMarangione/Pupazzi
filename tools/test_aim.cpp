@@ -1,8 +1,8 @@
 // Prove della mira (0.3.1): levetta destra con zona morta circolare, filtro, rilascio e rimbalzo,
 // colpi a ventaglio di Astro e Marzio, voce "Mira" nella pausa. Usa il gioco senza frontend.
 //   make build/native/test_aim && ./build/native/test_aim
-#include "game_int.h"
-#include "plat.h"
+#include "game/sim/game_int.h"
+#include "platform/plat.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

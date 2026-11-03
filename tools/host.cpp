@@ -19,7 +19,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
-#include "../src/libretro.h"
+#include "platform/libretro.h"
 
 #define MAXW 1024
 #define MAXH 1024
