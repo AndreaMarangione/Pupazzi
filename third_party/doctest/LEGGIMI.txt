@@ -1,0 +1,6 @@
+doctest 2.4.12 - libreria per le prove in C++ (solo il file doctest.h)
+  https://github.com/doctest/doctest, versione v2.4.12 (commit 1da23a3e8119ec5cce4f9388e91b065e20bf06f5)
+  Copyright (c) 2016-2023 Viktor Kirilov
+  MIT License (testo completo in LICENSE.txt)
+
+La usano solo i programmi di prova in tests/ (make test): nel core del gioco non c'e'.

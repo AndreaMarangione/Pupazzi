@@ -23,23 +23,19 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include "test.h"
 
 static Game& g = *game_create();   // the game under test (the game keeps no global state: the test owns it)
 
-static int g_fail = 0;
 static Pad g_pads[MAX_PLAYERS];
 static char g_base[64] = "/tmp/pupazzi_test_maps_XXXXXX";
+static int g_per_zone = 3000;        // primo argomento: fotogrammi per zona
 static uint32_t g_seed = 0;          // secondo argomento: altre partite a caso
 
 // Come nel gioco: le impostazioni, poi la partita 1 (caricata o, se non c'e', nuova).
 static void open_game(const char* dir) {
   save_open(dir);
   if (!save_slot_load(0)) save_slot_new(0);
-}
-
-static void check(bool ok, const char* what) {
-  printf("%s %s\n", ok ? "  ok    " : "  ERRORE", what);
-  if (!ok) g_fail++;
 }
 
 static uint32_t hmix(uint32_t a, uint32_t b, uint32_t c) {
@@ -150,22 +146,21 @@ static void parse_rejects(const char* name, const char* grid, const char* want) 
   }
   char buf[320];
   snprintf(buf, sizeof(buf), "rifiutata: %s (\"%s\")", name, ok ? "accettata!" : err);
-  check(!ok && strstr(err, want) != NULL, buf);
+  EXPECT(!ok && strstr(err, want) != NULL, buf);
 }
 
-static void test_static(void) {
-  printf("1) mappe di serie e mappe sbagliate\n");
+TEST_CASE("1) mappe di serie e mappe sbagliate") {
   char buf[400], why[160];
   for (int i = 0; i < MAP_TEXT_COUNT; ++i) {
     char err[200];
     const bool ok = level_parse(&g_lv, MAP_TEXTS[i].text, err, sizeof(err));
     snprintf(buf, sizeof(buf), "%s: si carica (%s)", MAP_TEXTS[i].id, ok ? g_lv.name : err);
-    check(ok, buf);
+    EXPECT(ok, buf);
     if (!ok) continue;
     const bool s = static_ok(&g_lv, why, sizeof(why));
     snprintf(buf, sizeof(buf), "%s: bordo e fuori chiusi, zone separate, tutto nelle zone e raggiungibile a piedi%s%s", MAP_TEXTS[i].id,
              s ? "" : ": ", s ? "" : why);
-    check(s, buf);
+    EXPECT(s, buf);
     // Zone grandi come quelle di serie (31 x 21) e niente acqua o cenote sul bordo delle zone fuori dai muri.
     if (g_lv.boss == BOSS_NONE) {
       bool sizes = true;
@@ -174,7 +169,7 @@ static void test_static(void) {
         if (zd.x1 - zd.x0 + 1 != 31 || zd.z1 - zd.z0 + 1 != 21) sizes = false;
       }
       snprintf(buf, sizeof(buf), "%s: %d zone da 31 x 21", MAP_TEXTS[i].id, g_lv.nzones);
-      check(sizes && g_lv.nzones == 3, buf);
+      EXPECT(sizes && g_lv.nzones == 3, buf);
     }
   }
   // Mappe che il gioco deve rifiutare (con il loro messaggio nel menu delle mappe).
@@ -206,7 +201,7 @@ static void test_static(void) {
                                 "    ######\n    #....#\n    #....#\n#####GG###\n#........#\n#........#\n#..,12,..#\n##########\n",
                                 err, sizeof(err));
     snprintf(buf, sizeof(buf), "accettata: mappa con un angolo fuori chiuso dai muri (%s)", ok ? "ok" : err);
-    check(ok, buf);
+    EXPECT(ok, buf);
   }
   // Cancelli a battente (0.5.4): i battenti si aprono verso la zona che apre il cancello, anche nei
   // cancelli da nord a sud e in quelli di una casella; un masso davanti ferma il battente che ci
@@ -231,17 +226,17 @@ static void test_static(void) {
     }
     snprintf(buf, sizeof(buf), "masso davanti al cancello: il battente sinistro si ferma a %.0f gradi senza toccarlo, il destro si apre del tutto (%s)",
              ok ? (double)(a.stop[0] * 90.0f) : 0.0, ok ? "ok" : err);
-    check(ok && a.horiz && a.mz > 0.0f && a.stop[0] > 0.0f && a.stop[0] < 0.5f && a.stop[1] == 1.0f && clear, buf);
+    EXPECT(ok && a.horiz && a.mz > 0.0f && a.stop[0] > 0.0f && a.stop[0] < 0.5f && a.stop[1] == 1.0f && clear, buf);
     snprintf(text, sizeof(text), "%s%s", HEAD, "##########\n#...#....#\n#...#....#\n#...G....#\n#...G....#\n#...#....#\n#.12#....#\n##########\n");
     ok = level_parse(&g_lv, text, err, sizeof(err));
     const Gate& b = g_lv.gates[0];
     snprintf(buf, sizeof(buf), "cancello da nord a sud: i battenti si aprono verso ovest, del tutto (%s)", ok ? "ok" : err);
-    check(ok && !b.horiz && b.mx < 0.0f && b.mz == 0.0f && b.stop[0] == 1.0f && b.stop[1] == 1.0f, buf);
+    EXPECT(ok && !b.horiz && b.mx < 0.0f && b.mz == 0.0f && b.stop[0] == 1.0f && b.stop[1] == 1.0f, buf);
     snprintf(text, sizeof(text), "%s%s", HEAD, "########\n#......#\n#......#\n###G####\n#......#\n#......#\n#.12...#\n########\n");
     ok = level_parse(&g_lv, text, err, sizeof(err));
     const Gate& c = g_lv.gates[0];
     snprintf(buf, sizeof(buf), "cancello di una casella: da ovest a est, si apre verso sud (%s)", ok ? "ok" : err);
-    check(ok && c.horiz && c.mz > 0.0f && c.stop[0] == 1.0f && c.stop[1] == 1.0f, buf);
+    EXPECT(ok && c.horiz && c.mz > 0.0f && c.stop[0] == 1.0f && c.stop[1] == 1.0f, buf);
   }
 }
 
@@ -492,15 +487,16 @@ static void fuzz_map(int map, int per_zone, Fuzz& F) {
   }
 }
 
-static void test_fuzz(int per_zone) {
-  printf("2) giocatori a caso in ogni zona (%d fotogrammi per zona, 4 giocatori)\n", per_zone);
+TEST_CASE("2) giocatori a caso in ogni zona, 4 giocatori") {
+  const int per_zone = g_per_zone;
+  printf("  (%d fotogrammi per zona)\n", per_zone);
   for (int m = 0; m < maps_count(); ++m) {
     Fuzz F;
     fuzz_map(m, per_zone, F);
     char buf[400];
     snprintf(buf, sizeof(buf), "%s: %ld fotogrammi, cadute nel cenote %ld (tutti a terra %ld), fughe %ld, salti di zona %ld, dentro gli ostacoli %ld%s%s",
              maps_name(m), F.frames, F.falls, F.wipes, F.leaks, F.jumps_zone, F.overlaps, F.first[0] ? " - " : "", F.first);
-    check(F.leaks == 0 && F.jumps_zone == 0 && F.overlaps == 0 && F.falls_bad == 0 && F.respawn_bad == 0, buf);
+    EXPECT(F.leaks == 0 && F.jumps_zone == 0 && F.overlaps == 0 && F.falls_bad == 0 && F.respawn_bad == 0, buf);
   }
 }
 
@@ -553,8 +549,7 @@ static void put(int i, int cx, int cz) {
   p.tramp_t = 0;
 }
 
-static void test_targeted(void) {
-  printf("3) casi mirati\n");
+TEST_CASE("3) casi mirati") {
   char buf[400], why[200];
   for (int m = 0; m < maps_count(); ++m) {
     // a) dai blocchi e dalle piattaforme accanto ai muri del bordo della zona, saltando contro il muro
@@ -589,7 +584,7 @@ static void test_targeted(void) {
         }
       }
     snprintf(buf, sizeof(buf), "%s: salti da blocchi e piattaforme contro i muri (%d casi)%s%s", maps_name(m), tried, bad ? ": " : "", why);
-    check(bad == 0, buf);
+    EXPECT(bad == 0, buf);
     // b) contro i cancelli chiusi, saltando e correndo di traverso
     fresh(m, 1);
     bad = 0;
@@ -619,7 +614,7 @@ static void test_targeted(void) {
       }
     }
     snprintf(buf, sizeof(buf), "%s: salti contro i cancelli chiusi (%d casi)%s%s", maps_name(m), tried, bad ? ": " : "", why);
-    check(bad == 0, buf);
+    EXPECT(bad == 0, buf);
     // c) verso l'acqua da ogni riva, saltando
     fresh(m, 1);
     bad = 0;
@@ -648,7 +643,7 @@ static void test_targeted(void) {
         }
       }
     snprintf(buf, sizeof(buf), "%s: salti verso l'acqua dalle rive (%d casi)%s%s", maps_name(m), tried, bad ? ": " : "", why);
-    check(bad == 0, buf);
+    EXPECT(bad == 0, buf);
   }
 }
 
@@ -700,15 +695,14 @@ static void no_custom(void) {
   unsetenv("PUPAZZI_MAPS");
 }
 
-static void test_custom(void) {
-  printf("4) mappe di prova: acqua contro il muro tra due zone, cenote, casse, cancelli\n");
+TEST_CASE("4) mappe di prova: acqua contro il muro tra due zone, cenote, casse, cancelli") {
   char buf[400], why[200];
   {
     // L'errore della 0.5: acqua contro il muro da tutte e due le parti. Si salta verso l'acqua
     // della zona 1 da ogni lato: non ci si entra e non si passa nella zona 2.
     use_custom(MAP_ACQUA);
     fresh(0, 1);
-    check(!strcmp(g.L.name, "Prova acqua") && g.L.nzones == 2, "la mappa di prova con l'acqua si carica");
+    EXPECT(!strcmp(g.L.name, "Prova acqua") && g.L.nzones == 2, "la mappa di prova con l'acqua si carica");
     bool ok = true;
     why[0] = 0;
     for (int k = 0; k < 12 && ok; ++k) {
@@ -717,7 +711,7 @@ static void test_custom(void) {
       ok = run_at(0, t.x, t.z, 240, k % 3, why, sizeof(why));
     }
     snprintf(buf, sizeof(buf), "salti continui verso l'acqua contro il muro: si resta nella zona 1%s%s", ok ? "" : ": ", why);
-    check(ok, buf);
+    EXPECT(ok, buf);
     // Il trampolino lancia verso l'acqua: il volo si ferma alla riva come contro un muro.
     {
       put(0, 12, 8);
@@ -733,7 +727,7 @@ static void test_custom(void) {
         if (overlaps(&g.L, g.pl[0].pos.x, g.pl[0].pos.z, y0, what, sizeof(what)) || level_zone_at(&g.L, g.pl[0].pos.x, g.pl[0].pos.z) != 0) okt = false;
       }
       snprintf(buf, sizeof(buf), "trampolino verso l'acqua: lanciato (%s), il volo si ferma alla riva", launched ? "si" : "no");
-      check(okt && launched, buf);
+      EXPECT(okt && launched, buf);
     }
     // Corpo messo a forza dentro l'acqua (come nella 0.5) circondato da acqua e muro: la spinta
     // non lo manda mai dentro il muro.
@@ -743,7 +737,7 @@ static void test_custom(void) {
     int cx, cz;
     level_cell(&g.L, x, z, &cx, &cz);
     snprintf(buf, sizeof(buf), "spinta da dentro l'acqua: il centro resta fuori dai muri (casella %d,%d tipo %d)", cx, cz, g.L.cell[cz][cx]);
-    check(g.L.cell[cz][cx] != C_WALL && g.L.zone[cz][cx] == 0, buf);
+    EXPECT(g.L.cell[cz][cx] != C_WALL && g.L.zone[cz][cx] == 0, buf);
     (void)x0;
     (void)z0;
     // La guardia: dentro un ostacolo non si entra, si torna dove si era.
@@ -751,10 +745,10 @@ static void test_custom(void) {
     const float ox = gx, oz = gz;
     gx += 1.0f;   // dentro l'acqua
     const bool took = level_body_guard(&g.L, ox, oz, &gx, &gz, 0.0f, PL_R, PL_STEP, BODY_WALK);
-    check(!took && level_body_ok(&g.L, gx, gz, 0.0f, PL_R, PL_STEP, BODY_WALK), "level_body_guard rifiuta lo spostamento dentro l'acqua");
+    EXPECT(!took && level_body_ok(&g.L, gx, gz, 0.0f, PL_R, PL_STEP, BODY_WALK), "level_body_guard rifiuta lo spostamento dentro l'acqua");
     // Chi vola passa sopra l'acqua.
-    check(level_body_ok(&g.L, cell_center(&g.L, 11, 5).x, cell_center(&g.L, 11, 5).z, 0.0f, 0.26f, PL_STEP, BODY_FLY),
-          "chi vola passa sopra l'acqua");
+    EXPECT(level_body_ok(&g.L, cell_center(&g.L, 11, 5).x, cell_center(&g.L, 11, 5).z, 0.0f, 0.26f, PL_STEP, BODY_FLY),
+           "chi vola passa sopra l'acqua");
     // Cancello: uno che resta nel passaggio quando la zona 2 comincia viene riportato dentro.
     clear_zone();
     put(0, 7, 3);
@@ -763,12 +757,12 @@ static void test_custom(void) {
     for (int k = 0; k < 60; ++k) game_update(g, g_pads);
     const int zz = level_zone_at(&g.L, g.pl[0].pos.x, g.pl[0].pos.z);
     snprintf(buf, sizeof(buf), "zona 2 cominciata e cancello chiuso: G1 nella zona 2 (zona %d)", zz + 1);
-    check(g.zone == 1 && zz == 1 && level_body_ok(&g.L, g.pl[0].pos.x, g.pl[0].pos.z, 0.0f, PL_R, PL_STEP, BODY_WALK), buf);
+    EXPECT(g.zone == 1 && zz == 1 && level_body_ok(&g.L, g.pl[0].pos.x, g.pl[0].pos.z, 0.0f, PL_R, PL_STEP, BODY_WALK), buf);
   }
   {
     use_custom(MAP_CENOTE);
     fresh(0, 1);
-    check(!strcmp(g.L.name, "Prova cenote"), "la mappa di prova con il cenote si carica");
+    EXPECT(!strcmp(g.L.name, "Prova cenote"), "la mappa di prova con il cenote si carica");
     // a terra dentro il cenote: si perde una vita (da soli: si rifa' la zona)
     Player& p = g.pl[0];
     put(0, 5, 6);
@@ -783,13 +777,13 @@ static void test_custom(void) {
     int cx = -1, cz = -1;
     level_cell(&g.L, p.pos.x, p.pos.z, &cx, &cz);
     snprintf(buf, sizeof(buf), "camminando nel cenote si cade: vite %d -> %d, casella %d,%d, \"%s\"", lives, p.lives, cx, cz, g.msg);
-    check(!p.alive && p.lives == lives - 1 && g.L.cell[cz][cx] == C_PIT && g.phase == PH_WIPE, buf);
+    EXPECT(!p.alive && p.lives == lives - 1 && g.L.cell[cz][cx] == C_PIT && g.phase == PH_WIPE, buf);
     for (int k = 0; k < 30; ++k) game_update(g, g_pads);
     snprintf(buf, sizeof(buf), "affonda sotto l'acqua del pozzo (quota %.2f)", p.pos.y);
-    check(p.pos.y < -1.0f, buf);
+    EXPECT(p.pos.y < -1.0f, buf);
     for (int k = 0; k < WIPE_ZONE_FRAMES + 5; ++k) game_update(g, g_pads);
     quiet();
-    check(p.alive && !level_pit_near(&g.L, p.pos.x, p.pos.z, PL_R + 0.5f), "si riparte dalla partenza della zona, lontano dal pozzo");
+    EXPECT(p.alive && !level_pit_near(&g.L, p.pos.x, p.pos.z, PL_R + 0.5f), "si riparte dalla partenza della zona, lontano dal pozzo");
     // sopra il cenote stretto (una casella) si salta senza cadere
     put(0, 10, 4);
     p.yaw = D_HALF_PI;
@@ -806,7 +800,7 @@ static void test_custom(void) {
     }
     level_cell(&g.L, p.pos.x, p.pos.z, &cx, &cz);
     snprintf(buf, sizeof(buf), "salto sopra il cenote largo una casella: passato (casella %d,%d), mai caduto", cx, cz);
-    check(over && !fell && p.alive && cx >= 12, buf);
+    EXPECT(over && !fell && p.alive && cx >= 12, buf);
     // sull'orlo (centro fuori dalla casella del pozzo) non si cade: l'orlo e' il bordo della casella
     put(0, 7, 3);
     p.pos.x = cell_center(&g.L, 7, 3).x - 0.45f;     // a 5 cm dal pozzo
@@ -815,7 +809,7 @@ static void test_custom(void) {
       game_update(g, g_pads);
       quiet();
     }
-    check(p.alive, "sull'orlo del cenote, col centro fuori, si resta in piedi");
+    EXPECT(p.alive, "sull'orlo del cenote, col centro fuori, si resta in piedi");
     // il mostro spinto dentro cade ed e' sconfitto (la vittoria a chi l'ha spinto)
     put(0, 9, 8);
     const int kills = p.kills;
@@ -839,7 +833,7 @@ static void test_custom(void) {
       dead = !g.mo[mk].alive;
     }
     snprintf(buf, sizeof(buf), "mostro spinto nel cenote: sconfitto (%s), la vittoria va a G1 (%d -> %d)", dead ? "si" : "no", kills, p.kills);
-    check(dead && p.kills == kills + 1, buf);
+    EXPECT(dead && p.kills == kills + 1, buf);
     // e quello che cammina da solo non ci entra: insegue un giocatore dall'altra parte del pozzo
     quiet();
     put(0, 2, 3);
@@ -860,7 +854,7 @@ static void test_custom(void) {
         if (!g.mo[mk].alive) { alive = false; break; }
       }
     }
-    check(alive, "un mostro che cammina non entra nel cenote da solo (lo gira)");
+    EXPECT(alive, "un mostro che cammina non entra nel cenote da solo (lo gira)");
     // in due: chi cade rientra accanto al compagno, mai sul pozzo ne' accanto
     quiet();
     fresh(0, 2);
@@ -875,7 +869,7 @@ static void test_custom(void) {
       g.pl[0].invuln = 1000;
     }
     snprintf(buf, sizeof(buf), "in due: G2 cade nel cenote (\"%s\")", g.msg);
-    check(!g.pl[1].alive && strstr(g.msg, "CENOTE") != NULL, buf);
+    EXPECT(!g.pl[1].alive && strstr(g.msg, "CENOTE") != NULL, buf);
     bool back = false, safe = true;
     for (int k = 0; k < RESPAWN_FRAMES + 200; ++k) {
       memset(g_pads, 0, sizeof(g_pads));
@@ -889,7 +883,7 @@ static void test_custom(void) {
       }
     }
     snprintf(buf, sizeof(buf), "G2 rientra lontano dal cenote (a %.2f,%.2f)", g.pl[1].pos.x, g.pl[1].pos.z);
-    check(back && safe, buf);
+    EXPECT(back && safe, buf);
     // casse che tornano su chi ci sta sopra quando la zona ricomincia: si riparte dalla partenza
     fresh(0, 1);
     const int d = g.L.dyn_at[6][3];
@@ -901,28 +895,24 @@ static void test_custom(void) {
     for (int k = 0; k < WIPE_ZONE_FRAMES + 5; ++k) game_update(g, g_pads);
     quiet();
     snprintf(buf, sizeof(buf), "cassa rotta, rimessa a posto alla ripartenza: G1 fuori dalla cassa (%.2f,%.2f)", g.pl[0].pos.x, g.pl[0].pos.z);
-    check(d >= 0 && g.L.dyn[d].hp > 0.0f && g.pl[0].alive && level_body_ok(&g.L, g.pl[0].pos.x, g.pl[0].pos.z, 0.0f, PL_R, PL_STEP, BODY_WALK), buf);
+    EXPECT(d >= 0 && g.L.dyn[d].hp > 0.0f && g.pl[0].alive && level_body_ok(&g.L, g.pl[0].pos.x, g.pl[0].pos.z, 0.0f, PL_R, PL_STEP, BODY_WALK), buf);
   }
   no_custom();
 }
 
 int main(int argc, char** argv) {
   plat_log_open("/dev/null");
-  const int per_zone = argc >= 2 ? atoi(argv[1]) : 3000;
-  if (argc >= 3) g_seed = (uint32_t)atoi(argv[2]);
+  if (argc >= 2 && argv[1][0] != '-') g_per_zone = atoi(argv[1]);
+  if (argc >= 3 && argv[2][0] != '-') g_seed = (uint32_t)atoi(argv[2]);
   if (!mkdtemp(g_base)) {
     printf("mkdtemp non riuscita\n");
     return 1;
   }
   open_game(g_base);
   game_set_cards_enabled(g, false);
-  test_static();
-  test_fuzz(per_zone);
-  test_targeted();
-  test_custom();
+  const int failed = run_tests(argc, argv);
   char cmd[160];
   snprintf(cmd, sizeof(cmd), "rm -rf %s", g_base);
   if (system(cmd)) {}
-  printf("\n%s\n", g_fail ? "CI SONO ERRORI" : "tutto bene");
-  return g_fail ? 1 : 0;
+  return failed;
 }

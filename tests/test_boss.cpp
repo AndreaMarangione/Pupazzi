@@ -23,11 +23,11 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include "test.h"
 
 static Game& g = *game_create();   // the game under test (the game keeps no global state: the test owns it)
 static View& v = *view_create();   // its view: camera and frames for the images
 
-static int g_fail = 0;
 static Pad g_pads[MAX_PLAYERS];
 static const char* g_shots;             // --immagini
 static char g_base[64] = "/tmp/pupazzi_test_boss_XXXXXX";
@@ -39,11 +39,6 @@ static const char* g_only;              // --solo PERSONAGGI: solo le lotte con 
 static void open_game(const char* dir) {
   save_open(dir);
   if (!save_slot_load(0)) save_slot_new(0);
-}
-
-static void check(bool ok, const char* what) {
-  printf("%s %s\n", ok ? "  ok    " : "  ERRORE", what);
-  if (!ok) g_fail++;
 }
 
 static void step(int n = 1) {
@@ -167,8 +162,7 @@ static void shot(const char* name) {
 
 // --- prove -----------------------------------------------------------------------------------
 
-static void test_walk(void) {
-  printf("1) cammina verso il bersaglio, piu' piano degli eroi, e gira attorno alle statue\n");
+TEST_CASE("1) cammina verso il bersaglio, piu' piano degli eroi, e gira attorno alle statue") {
   arena(1, "0");
   const Vec3 spawn = g.L.boss_pos;
   put_boss(spawn.x, spawn.z, 0.0f);
@@ -181,20 +175,20 @@ static void test_walk(void) {
   const float face = fabsf(d_wrap_pi(g.boss.face - yaw_to(g.boss.pos, g.pl[0].pos)));
   snprintf(buf, sizeof(buf), "in 2 secondi da %.1f a %.1f m, a %.2f m/s (fase 1: %.1f), guardandolo (%.2f rad)", (double)d0, (double)d1,
            (double)speed, (double)boss_speed(g), (double)face);
-  check(d0 - d1 > 3.6f && fabsf(speed - 2.4f) < 0.15f && face < 0.15f && g.boss.act == BA_NONE, buf);
+  EXPECT(d0 - d1 > 3.6f && fabsf(speed - 2.4f) < 0.15f && face < 0.15f && g.boss.act == BA_NONE, buf);
   g.boss.stage = 1;
   const float v1 = boss_speed(g);
   g.boss.stage = 2;
   const float v2 = boss_speed(g);
   g.boss.stage = 0;
   snprintf(buf, sizeof(buf), "piu' svelto a ogni fase: %.1f e %.1f m/s (gli eroi da 4,7 a 5)", (double)v1, (double)v2);
-  check(v1 > 2.65f && v1 < 2.75f && v2 > 2.95f && v2 < 3.05f && v2 < CHARS[CH_MOCHI].speed, buf);
+  EXPECT(v1 > 2.65f && v1 < 2.75f && v2 > 2.95f && v2 < 3.05f && v2 < CHARS[CH_MOCHI].speed, buf);
   // Il bersaglio si sposta di lato: il gladiatore si gira e lo segue.
   put(0, spawn.x + 9.0f, g.boss.pos.z + 1.0f);
   step(60);
   const float f2 = fabsf(d_wrap_pi(g.boss.face - yaw_to(g.boss.pos, g.pl[0].pos)));
   snprintf(buf, sizeof(buf), "il bersaglio va di lato: un secondo dopo lo guarda di nuovo (%.2f rad)", (double)f2);
-  check(f2 < 0.3f, buf);
+  EXPECT(f2 < 0.3f, buf);
   // Dietro una statua (blocco di muro 2x2 staccato): la strada dritta e' chiusa, ci gira attorno.
   bool found = false;
   Vec3 from = v3(0, 0, 0), to = v3(0, 0, 0);
@@ -228,37 +222,36 @@ static void test_walk(void) {
   }
   snprintf(buf, sizeof(buf), "da dietro la statua (%.1f %.1f) arriva a 3 m dal giocatore in %d fotogrammi (fermo %d volte)", (double)from.x,
            (double)from.z, frames, still);
-  check(frames < 400 && still == 0, buf);
+  EXPECT(frames < 400 && still == 0, buf);
 }
 
-static void test_sweep(void) {
-  printf("2) fendente: colpisce chi gli sta davanti, non chi sta dietro\n");
+TEST_CASE("2) fendente: colpisce chi gli sta davanti, non chi sta dietro") {
   arena(2, "01");
   const Vec3 c = v3(g.L.boss_pos.x - 4.5f, 0, g.L.boss_pos.z + 2.5f);
-  check(fits(c.x, c.z, boss_r()) && fits(c.x + 0.3f, c.z + 2.6f, PL_R) && fits(c.x, c.z - 2.6f, PL_R), "posto libero per la prova");
+  EXPECT(fits(c.x, c.z, boss_r()) && fits(c.x + 0.3f, c.z + 2.6f, PL_R) && fits(c.x, c.z - 2.6f, PL_R), "posto libero per la prova");
   put_boss(c.x, c.z, 0.0f);
   put(0, c.x + 0.3f, c.z + 2.6f);     // davanti (verso sud)
   put(1, c.x, c.z - 2.6f);            // dietro
   g.boss.target = 0;
   g.boss.target_t = 0;
   const float h0 = g.pl[0].hp, h1 = g.pl[1].hp;
-  check(boss_force_act(g, BA_SWEEP), "comincia il fendente");
+  EXPECT(boss_force_act(g, BA_SWEEP), "comincia il fendente");
   const int wind = g.boss.wind;
   const Marker* m = find_marker(MK_SWEEP);
   snprintf(buf, sizeof(buf), "settore rosso a terra verso il bersaglio (%d fotogrammi di preparazione)", wind);
-  check(m && fabsf(d_wrap_pi(m->yaw - yaw_to(c, g.pl[0].pos))) < 0.01f && m->fire_at == wind && wind == 33 &&
-            fabsf(m->r - BOSS_SWEEP_R) < 0.01f,
-        buf);
+  EXPECT(m && fabsf(d_wrap_pi(m->yaw - yaw_to(c, g.pl[0].pos))) < 0.01f && m->fire_at == wind && wind == 33 &&
+             fabsf(m->r - BOSS_SWEEP_R) < 0.01f,
+         buf);
   step(wind - 1);
   const bool before = g.pl[0].hp == h0 && g.boss.act == BA_SWEEP && dist2d(g.boss.pos, c) < 0.01f;
   const float z0 = g.pl[0].pos.z;
   step(1);
   snprintf(buf, sizeof(buf), "fermo durante la preparazione; al colpo: davanti %.0f -> %.0f, dietro %.0f -> %.0f", (double)h0, (double)g.pl[0].hp,
            (double)h1, (double)g.pl[1].hp);
-  check(before && fabsf(h0 - g.pl[0].hp - 28.0f) < 0.01f && g.pl[1].hp == h1, buf);
+  EXPECT(before && fabsf(h0 - g.pl[0].hp - 28.0f) < 0.01f && g.pl[1].hp == h1, buf);
   step(10);
   snprintf(buf, sizeof(buf), "chi e' colpito vola via (%.2f m)", (double)(g.pl[0].pos.z - z0));
-  check(g.pl[0].pos.z - z0 > 0.5f, buf);
+  EXPECT(g.pl[0].pos.z - z0 > 0.5f, buf);
   // Di lato al limite del settore (75 gradi) si prende, a 110 gradi no; nell'ultima fase si prepara piu' in fretta.
   arena(2, "01");
   put_boss(c.x, c.z, 0.0f);
@@ -273,11 +266,10 @@ static void test_sweep(void) {
   step(w2 + 1);
   snprintf(buf, sizeof(buf), "fase 3: preparazione di %d fotogrammi; a 75 gradi colpito (%.0f), a 110 no (%.0f)", w2, (double)(a0 - g.pl[0].hp),
            (double)(a1 - g.pl[1].hp));
-  check(w2 == 24 && g.pl[0].hp < a0 && g.pl[1].hp == a1, buf);
+  EXPECT(w2 == 24 && g.pl[0].hp < a0 && g.pl[1].hp == a1, buf);
 }
 
-static void test_rush(void) {
-  printf("3) carica: chi resta nella corsia la prende e vola di lato, chi ne esce no\n");
+TEST_CASE("3) carica: chi resta nella corsia la prende e vola di lato, chi ne esce no") {
   for (int dodge = 0; dodge < 2; ++dodge) {
     arena(1, "1");
     const Vec3 s = g.L.boss_pos;
@@ -292,7 +284,7 @@ static void test_rush(void) {
     if (!dodge) {
       snprintf(buf, sizeof(buf), "corsia rossa larga %.1f m e lunga %.1f m verso il bersaglio (preparazione %d fotogrammi, contro un ostacolo: %s)",
                m ? (double)(2.0f * m->r) : 0.0, m ? (double)m->len : 0.0, wind, g.boss.crash ? "si" : "no");
-      check(m && fabsf(m->yaw) < 0.01f && m->r > 1.15f && m->r < 1.3f && lane > 9.0f && lane <= 15.0f && wind == 48, buf);
+      EXPECT(m && fabsf(m->yaw) < 0.01f && m->r > 1.15f && m->r < 1.3f && lane > 9.0f && lane <= 15.0f && wind == 48, buf);
     }
     if (dodge) g_pads[0].lx = 1.0f;     // appena vede la corsia esce di lato
     int f = 0;
@@ -305,21 +297,20 @@ static void test_rush(void) {
     if (!dodge) {
       snprintf(buf, sizeof(buf), "restando nella corsia: %.0f di danni, spinto di lato di %.1f m; lui corre %.1f m in %d fotogrammi", (double)(h0 - g.pl[0].hp),
                (double)fabsf(g.pl[0].pos.x - s.x), (double)ran, f);
-      check(fabsf(h0 - g.pl[0].hp - 25.0f) < 0.01f && fabsf(g.pl[0].pos.x - s.x) > 1.0f && fabsf(ran - lane) < 0.05f, buf);
+      EXPECT(fabsf(h0 - g.pl[0].hp - 25.0f) < 0.01f && fabsf(g.pl[0].pos.x - s.x) > 1.0f && fabsf(ran - lane) < 0.05f, buf);
       // Si e' fermato senza sbattere: poco dopo i giavellotti.
       int t = 0;
       for (; t < 120 && g.boss.act != BA_JAVELIN; ++t) step();
       snprintf(buf, sizeof(buf), "fermo senza sbattere: dopo %d fotogrammi lancia i giavellotti", t);
-      check(g.boss.act == BA_JAVELIN && !g.boss.crash, buf);
+      EXPECT(g.boss.act == BA_JAVELIN && !g.boss.crash, buf);
     } else {
       snprintf(buf, sizeof(buf), "uscito di lato (a %.1f m dalla linea): nessun danno; lui corre %.1f m", (double)fabsf(g.pl[0].pos.x - s.x), (double)ran);
-      check(g.pl[0].hp == h0 && fabsf(ran - lane) < 0.05f, buf);
+      EXPECT(g.pl[0].hp == h0 && fabsf(ran - lane) < 0.05f, buf);
     }
   }
 }
 
-static void test_crash(void) {
-  printf("4) carica contro un ostacolo: stordito per 1,5 secondi, intanto i colpi fanno il 50%% in piu'\n");
+TEST_CASE("4) carica contro un ostacolo: stordito per 1,5 secondi, intanto i colpi fanno il 50% in piu'") {
   arena(1, "1");
   const Vec3 s = g.L.boss_pos;
   put_boss(s.x, s.z, D_HALF_PI);
@@ -334,7 +325,7 @@ static void test_crash(void) {
   for (; f < 300 && g.boss.act == BA_RUSH; ++f) step();
   const Vec3 ahead = g.boss.pos + dir_yaw(g.boss.face) * 0.3f;   // ancora un passo e toccherebbe l'ostacolo
   snprintf(buf, sizeof(buf), "la corsia finisce contro un ostacolo dopo %.1f m: dopo %d fotogrammi e' stordito (\"STORDITO!\")", (double)lane, f);
-  check(crash && g.boss.act == BA_STUN && has_float("STORDITO!") && !fits(ahead.x, ahead.z, boss_r()), buf);
+  EXPECT(crash && g.boss.act == BA_STUN && has_float("STORDITO!") && !fits(ahead.x, ahead.z, boss_r()), buf);
   const float hp0 = g.boss.hp;
   damage_boss(g, 100.0f, 0, false);
   const float stun_dmg = hp0 - g.boss.hp;
@@ -343,27 +334,26 @@ static void test_crash(void) {
   const float hp1 = g.boss.hp;
   damage_boss(g, 100.0f, 0, false);
   snprintf(buf, sizeof(buf), "stordito per %d fotogrammi: 100 di colpo ne tolgono %.0f, dopo %.0f", t, (double)stun_dmg, (double)(hp1 - g.boss.hp));
-  check(t >= BOSS_STUN_FRAMES && t <= BOSS_STUN_FRAMES + 2 && fabsf(stun_dmg - 150.0f) < 0.01f && fabsf(hp1 - g.boss.hp - 100.0f) < 0.01f, buf);
+  EXPECT(t >= BOSS_STUN_FRAMES && t <= BOSS_STUN_FRAMES + 2 && fabsf(stun_dmg - 150.0f) < 0.01f && fabsf(hp1 - g.boss.hp - 100.0f) < 0.01f, buf);
 }
 
-static void test_stages(void) {
-  printf("5) a 2/3 e a 1/3 della vita ruggisce (prende poco) e chiama i rinforzi, senza riempire l'arena\n");
+TEST_CASE("5) a 2/3 e a 1/3 della vita ruggisce (prende poco) e chiama i rinforzi, senza riempire l'arena") {
   arena(2, "01");
   Boss& b = g.boss;
   b.hp = b.hp_max * 0.66f;
   step();
   snprintf(buf, sizeof(buf), "a 2/3 della vita: fase %d, ruggisce, \"%s\"", b.stage + 1, g.msg);
-  check(b.stage == 1 && b.roar > 0 && !strcmp(g.msg, "SI ARRABBIA!"), buf);
+  EXPECT(b.stage == 1 && b.roar > 0 && !strcmp(g.msg, "SI ARRABBIA!"), buf);
   const float hp0 = b.hp;
   damage_boss(g, 100.0f, 0, false);
   snprintf(buf, sizeof(buf), "mentre ruggisce 100 di colpo ne tolgono %.0f", (double)(hp0 - b.hp));
-  check(fabsf(hp0 - b.hp - 25.0f) < 0.01f, buf);
+  EXPECT(fabsf(hp0 - b.hp - 25.0f) < 0.01f, buf);
   step(70);
   const bool calls = b.act == BA_SUMMON;
   step(40);
   const int n1 = count_monsters(g);
   snprintf(buf, sizeof(buf), "poi chiama i rinforzi: %d mostri dalle botole", n1);
-  check(calls && n1 >= 3 && n1 <= 10, buf);
+  EXPECT(calls && n1 >= 3 && n1 <= 10, buf);
   // Altri mostri in campo: il massimo resta 10.
   for (int k = 0; k < 6; ++k) monster_spawn(g, MO_SCARABEO, false, 0);
   for (int k = 0; k < 400 && b.act != BA_NONE; ++k) step();
@@ -373,7 +363,7 @@ static void test_stages(void) {
   const bool roar2 = b.stage == 2 && b.roar > 0 && !strcmp(g.msg, "È FURIOSO!");
   step(115);
   snprintf(buf, sizeof(buf), "a 1/3: fase %d (\"È FURIOSO!\"), mostri in campo %d (al massimo 10)", b.stage + 1, count_monsters(g));
-  check(roar2 && count_monsters(g) <= 10, buf);
+  EXPECT(roar2 && count_monsters(g) <= 10, buf);
   // Un attacco a meta' non si interrompe: la fase cambia quando e' finito.
   arena(1, "0");
   put(0, g.boss.pos.x, g.boss.pos.z + 3.0f);
@@ -383,11 +373,10 @@ static void test_stages(void) {
   step(5);
   const bool waits = g.boss.stage == 0 && g.boss.act == BA_SWEEP;
   for (int k = 0; k < 200 && g.boss.roar == 0; ++k) step();
-  check(waits && g.boss.stage == 1 && g.boss.roar > 0, "con il fendente in corso ruggisce dopo averlo finito");
+  EXPECT(waits && g.boss.stage == 1 && g.boss.roar > 0, "con il fendente in corso ruggisce dopo averlo finito");
 }
 
-static void test_target(void) {
-  printf("6) bersaglio: il piu' vicino, tenuto almeno 3 secondi; passa a chi lo picchia forte; giavellotti 1, 2, 3\n");
+TEST_CASE("6) bersaglio: il piu' vicino, tenuto almeno 3 secondi; passa a chi lo picchia forte; giavellotti 1, 2, 3") {
   arena(2, "01");
   const Vec3 s = g.L.boss_pos;
   put_boss(s.x, s.z, 0.0f);
@@ -406,13 +395,13 @@ static void test_target(void) {
     step();
   }
   snprintf(buf, sizeof(buf), "prima G1 (il piu' vicino), tiene G1 con G2 appena piu' vicino, dopo 3 secondi passa a G2 (bersaglio G%d)", g.boss.target + 1);
-  check(first && kept && g.boss.target == 1 && g.boss.target_t < 5, buf);
+  EXPECT(first && kept && g.boss.target == 1 && g.boss.target_t < 5, buf);
   // G1 lontano lo picchia forte: il gladiatore va da lui.
   step(70);
   for (int k = 0; k < 4; ++k) damage_boss(g, 60.0f, 0, false);
   step(2);
   snprintf(buf, sizeof(buf), "G1 da lontano gli toglie 240 in un attimo: insegue G1 (bersaglio G%d)", g.boss.target + 1);
-  check(g.boss.target == 0, buf);
+  EXPECT(g.boss.target == 0, buf);
   // Giavellotti: 1, 2 e 3 secondo la fase (con due eroi: uno a testa, il terzo di lato al bersaglio).
   int n[3];
   for (int st = 0; st < 3; ++st) {
@@ -428,18 +417,17 @@ static void test_target(void) {
     for (int i = 0; i < MAX_SHOTS; ++i) n[st] += g.sh[i].alive && g.sh[i].kind == SK_JAVELIN;
   }
   snprintf(buf, sizeof(buf), "giavellotti per fase: %d, %d, %d (con il cerchio rosso dove cadono)", n[0], n[1], n[2]);
-  check(n[0] == 1 && n[1] == 2 && n[2] == 3 && count_markers(MK_LOB) == 3, buf);
+  EXPECT(n[0] == 1 && n[1] == 2 && n[2] == 3 && count_markers(MK_LOB) == 3, buf);
 }
 
-static void test_restart(void) {
-  printf("7) si ricomincia: il gladiatore torna al suo posto con la vita piena\n");
+TEST_CASE("7) si ricomincia: il gladiatore torna al suo posto con la vita piena") {
   arena(1, "0");
   const Vec3 spawn = g.L.boss_pos;
   const ZoneDef& z = g.L.zones[g.zone];
   float dmin = 1e30f;
   for (int i = 0; i < MAX_PLAYERS; ++i) dmin = fminf(dmin, dist2d(spawn, z.start[i]));
   snprintf(buf, sizeof(buf), "parte dalla casella B, a %.1f m dalla partenza piu' vicina, dove ci sta", (double)dmin);
-  check(dmin >= 4.0f && fits(spawn.x, spawn.z, boss_r()), buf);
+  EXPECT(dmin >= 4.0f && fits(spawn.x, spawn.z, boss_r()), buf);
   put_boss(spawn.x + 4.0f, spawn.z + 6.0f, 1.0f);
   g.boss.hp = g.boss.hp_max * 0.5f;
   g.boss.stage = 1;
@@ -453,9 +441,9 @@ static void test_restart(void) {
   const Boss& b = g.boss;
   snprintf(buf, sizeof(buf), "da soli, zona rifatta: al suo posto (%.1f m), vita %.0f su %.0f, fase %d, nessun segno a terra", (double)dist2d(b.pos, spawn),
            (double)b.hp, (double)b.hp_max, b.stage + 1);
-  check(wipe && g.phase == PH_FIGHT && b.alive && dist2d(b.pos, spawn) < 0.01f && b.hp == b.hp_max && b.stage == 0 && b.act == BA_NONE &&
-            count_markers(MK_SWEEP) == 0 && count_markers(MK_LANE) == 0,
-        buf);
+  EXPECT(wipe && g.phase == PH_FIGHT && b.alive && dist2d(b.pos, spawn) < 0.01f && b.hp == b.hp_max && b.stage == 0 && b.act == BA_NONE &&
+             count_markers(MK_SWEEP) == 0 && count_markers(MK_LANE) == 0,
+         buf);
   // In due: chi cade rientra dopo 5 secondi, il boss resta com'era.
   arena(2, "01");
   g.boss.hp = g.boss.hp_max * 0.8f;
@@ -465,7 +453,7 @@ static void test_restart(void) {
   hurt_player(g, 1, 1e6f, g.pl[1].pos + v3(1, 0, 0), 0.0f);
   step(RESPAWN_FRAMES + 2);
   snprintf(buf, sizeof(buf), "in due, G2 cade e rientra: il boss non torna al suo posto (%.1f m) e tiene la sua vita", (double)dist2d(g.boss.pos, spawn));
-  check(g.pl[1].alive && g.boss.hp == hp && dist2d(g.boss.pos, spawn) > 2.0f && dist2d(g.boss.pos, at) < 8.0f, buf);
+  EXPECT(g.pl[1].alive && g.boss.hp == hp && dist2d(g.boss.pos, spawn) > 2.0f && dist2d(g.boss.pos, at) < 8.0f, buf);
   // Tutti a terra: mappa da capo, boss da capo.
   g.pl[0].invuln = g.pl[1].invuln = 0;
   hurt_player(g, 0, 1e6f, g.pl[0].pos + v3(1, 0, 0), 0.0f);
@@ -474,14 +462,14 @@ static void test_restart(void) {
   const bool map = g.phase == PH_WIPE && g.wipe_map;
   step(WIPE_MAP_FRAMES);
   snprintf(buf, sizeof(buf), "tutti a terra: mappa da capo, boss al suo posto con la vita piena (%.0f)", (double)g.boss.hp);
-  check(map && g.phase == PH_FIGHT && g.boss.hp == g.boss.hp_max && dist2d(g.boss.pos, spawn) < 0.01f && g.map_wipes == 1, buf);
+  EXPECT(map && g.phase == PH_FIGHT && g.boss.hp == g.boss.hp_max && dist2d(g.boss.pos, spawn) < 0.01f && g.map_wipes == 1, buf);
 }
 
 // Due eroi che corrono in cerchio attorno al centro dell'arena (invulnerabili, senza sparare): il
 // gladiatore li insegue e attacca per n fotogrammi. Mai fermo a lungo mentre vuole camminare, mai
 // dentro un ostacolo o fuori dalla zona.
-static void test_kite(int n) {
-  printf("8) %d fotogrammi con due eroi che gli corrono attorno: mai bloccato, mai dentro un ostacolo\n", n);
+TEST_CASE("8) 20000 fotogrammi con due eroi che gli corrono attorno: mai bloccato, mai dentro un ostacolo") {
+  const int n = 20000;
   arena(2, "01");
   g.boss.cd = 60;
   const ZoneDef& z = g.L.zones[g.zone];
@@ -529,10 +517,10 @@ static void test_kite(int n) {
   }
   snprintf(buf, sizeof(buf), "fermo mentre voleva camminare al massimo %d fotogrammi di fila (a %.1f %.1f), bloccato %d volte; dentro un ostacolo %d, fuori zona %d",
            worst, (double)worst_at.x, (double)worst_at.z, stuck, inside, outside);
-  check(stuck == 0 && inside == 0 && outside == 0, buf);
+  EXPECT(stuck == 0 && inside == 0 && outside == 0, buf);
   snprintf(buf, sizeof(buf), "attacchi: fendenti %d, cariche %d (stordito %d), spaccaterra %d, giavellotti %d, rinforzi %d", acts[BA_SWEEP], acts[BA_RUSH],
            acts[BA_STUN], acts[BA_SLAM], acts[BA_JAVELIN], acts[BA_SUMMON]);
-  check(acts[BA_SWEEP] > 0 && acts[BA_RUSH] > 0 && acts[BA_SLAM] > 0 && acts[BA_JAVELIN] > 0 && acts[BA_SUMMON] == 2, buf);
+  EXPECT(acts[BA_SWEEP] > 0 && acts[BA_RUSH] > 0 && acts[BA_SLAM] > 0 && acts[BA_JAVELIN] > 0 && acts[BA_SUMMON] == 2, buf);
 }
 
 // Partita con n giocatori automatici dalla mappa del boss; restituisce l'impronta di tutti i fotogrammi.
@@ -556,8 +544,7 @@ static uint64_t bot_run(int n, const char* chars, int frames, int pre, uint64_t*
   return h;
 }
 
-static void test_determinism(void) {
-  printf("9) la stessa lotta due volte: la stessa partita fotogramma per fotogramma\n");
+TEST_CASE("9) la stessa lotta due volte: la stessa partita fotogramma per fotogramma") {
   uint64_t h[2], e[2];
   for (int run = 0; run < 2; ++run) {
     open_game(save_dir(run ? "det2" : "det1"));
@@ -567,7 +554,7 @@ static void test_determinism(void) {
   game_set_cards_enabled(g, false);
   snprintf(buf, sizeof(buf), "5000 fotogrammi con 3 giocatori automatici: impronte %016llx e %016llx (ultima %016llx)", (unsigned long long)h[0],
            (unsigned long long)h[1], (unsigned long long)e[0]);
-  check(h[0] == h[1] && e[0] == e[1], buf);
+  EXPECT(h[0] == h[1] && e[0] == e[1], buf);
 }
 
 // --- lotte: partite intere con i giocatori automatici ---------------------------------------------
@@ -773,17 +760,8 @@ int main(int argc, char** argv) {
     printf("manca l'arena del boss\n");
     return 1;
   }
-  if (!g_only) {
-    test_walk();
-    test_sweep();
-    test_rush();
-    test_crash();
-    test_stages();
-    test_target();
-    test_restart();
-    test_kite(20000);
-    test_determinism();
-  }
+  // --solo: only the fights with those heroes, no tests
+  const int failed = g_only ? 0 : run_tests(argc, argv);
   if (g_shots) pictures();
   if (per > 0) fights(per, lag);
   game_shutdown(g);
@@ -791,6 +769,5 @@ int main(int argc, char** argv) {
   char cmd[160];
   snprintf(cmd, sizeof(cmd), "rm -rf %s", g_base);
   if (system(cmd) != 0) printf("  (non riesco a cancellare %s)\n", g_base);
-  printf(g_fail ? "\n%d prove fallite\n" : "\ntutto bene\n", g_fail);
-  return g_fail ? 1 : 0;
+  return failed;
 }

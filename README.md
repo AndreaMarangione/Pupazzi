@@ -374,9 +374,9 @@ Se un controller resta bloccato sullo stesso comando per 30 secondi (per esempio
 "premuto" per la rete), il suo personaggio si ferma finché non arrivano comandi nuovi.
 
 Prove senza una seconda console: dal PC `python3 tools/remote_send.py 192.168.1.228 2 "lx=1@0-2"`
-fa da Remote RetroPad del giocatore 2 (levetta sinistra tutta a destra per 2 secondi); `python3
-tests/test_remote.py` prova i comandi dalla rete con il frontend di prova (`PUPAZZI_REMOTO=0` non
-apre le porte, `PUPAZZI_REMOTO_PORTA` cambia la prima).
+fa da Remote RetroPad del giocatore 2 (levetta sinistra tutta a destra per 2 secondi); `make
+test-remote` prova i comandi dalla rete con il frontend di prova (`PUPAZZI_REMOTO=0` non apre le
+porte, `PUPAZZI_REMOTO_PORTA` cambia la prima).
 
 ## Registri
 
@@ -409,14 +409,20 @@ Serve un pad: la mira è sulla levetta destra. Il PC può entrare nelle partite 
 
 ## Compilare
 
-    make            # core per questo PC e strumenti di prova (serve solo g++)
-    make test       # prove automatiche (testi delle lingue: make_lang.py e test_lang; mira e carte: test_aim;
-                    # salvataggi: test_save; vite e giri: test_rules; mappe chiuse e giocabili: test_maps;
-                    # gladiatore: test_boss)
-    make test-gl    # prove del renderer GPU su un OpenGL ES software (Mesa)
-    make test-audio # prove del sonoro; scrive ogni suono e ogni musica in build/wav/ per ascoltarli
-    make test-net   # gioco in rete: più copie del gioco su questo PC (perdite, ritardi, uscite, rifiuti)
-    python3 tests/test_remote.py   # comandi dalle altre console (Remote RetroPad) con il frontend di prova
+    make             # core per questo PC, frontend e programmi di prova (serve solo g++)
+    make test        # prove automatiche (testi delle lingue: make_lang.py e test_lang; mira e carte: test_aim;
+                     # salvataggi: test_save; vite e giri: test_rules; mappe chiuse e giocabili: test_maps;
+                     # gladiatore: test_boss)
+    make test-gl     # prove del renderer GPU su un OpenGL ES software (Mesa)
+    make test-audio  # prove del sonoro; scrive ogni suono e ogni musica in build/wav/ per ascoltarli
+    make test-net    # gioco in rete: più copie del gioco su questo PC (perdite, ritardi, uscite, rifiuti)
+    make test-remote # comandi dalle altre console (Remote RetroPad) con il frontend di prova
+
+Le prove sono in `tests/` e usano doctest (`third_party/doctest/`): ogni programma è un elenco di casi
+(`TEST_CASE`) che girano in ordine e scrivono ogni controllo ("ok" o "ERRORE"); alla fine doctest
+conta casi e controlli, e il programma esce con errore se uno non passa. Con `-ltc` un programma
+elenca i suoi casi, con `-tc="..."` ne fa solo alcuni (attenzione: alcuni continuano dalla partita
+lasciata dal caso prima).
 
 Il frontend di prova registra anche il sonoro di una partita: `build/native/host
 build/native/pupazzi_libretro.so --frames 3600 --wav partita.wav`.
@@ -659,5 +665,6 @@ modificare, distribuire o usare il gioco o il codice, in tutto o in parte, senza
 dell'autore (restano solo i diritti che i Termini di servizio di GitHub danno sui repository
 pubblici, come vederli e farne un fork su GitHub).
 
-Fanno eccezione i componenti di terzi, con le loro licenze: `src/libretro.h` (MIT, del team di
-RetroArch) e i caratteri in `third_party/fonts/` (SIL Open Font License, vedi `LEGGIMI.txt`).
+Fanno eccezione i componenti di terzi, con le loro licenze: `src/platform/libretro.h` (MIT, del team
+di RetroArch), i caratteri in `third_party/fonts/` (SIL Open Font License, vedi `LEGGIMI.txt`) e
+doctest in `third_party/doctest/` (MIT, di Viktor Kirilov; solo per le prove, non è nel gioco).

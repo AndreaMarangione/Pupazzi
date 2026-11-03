@@ -1,10 +1,11 @@
 # Pupazzi - libretro core
 #
-#   make            core for this PC with the system compiler, plus the test tools
-#   make test       automatic tests without a console
-#   make test-gl    GPU renderer tests on a software OpenGL ES (Mesa)
-#   make test-audio sound tests (every effect and every tune in build/wav)
-#   make test-net   LAN play tests (0.5.4): several copies of the game on this machine
+#   make             core for this PC with the system compiler, the test frontend and the tests
+#   make test        automatic tests without a console
+#   make test-gl     GPU renderer tests on a software OpenGL ES (Mesa)
+#   make test-audio  sound tests (every effect and every tune in build/wav)
+#   make test-net    LAN play tests (0.5.4): several copies of the game on this machine
+#   make test-remote remote controller tests (Remote RetroPad messages to the game)
 #   make console    cores for the console: ARM 32 bit (stock RetroArch) and ARM 64 bit
 #   make pc         core for 64-bit Linux PCs that does not depend on this machine's glibc
 #   make dist       everything deploy.sh needs: dist/APPS (console) and dist/pc
@@ -19,6 +20,7 @@
 #   game/view/    drawing of the game: scene, models, level geometry
 #   game/screens/ menus and screens
 #   net/          LAN play
+# Tests in tests/ (doctest, from third_party/doctest), tools in tools/ (test frontend, generators).
 
 SRC := src/platform/core.cpp src/game/sim/game.cpp src/game/view/game_draw.cpp src/game/view/view.cpp src/game/view/camera.cpp src/game/sim/player.cpp \
        src/game/sim/combat.cpp src/game/sim/monsters.cpp src/game/sim/flow.cpp \
@@ -45,6 +47,7 @@ CXXFLAGS := -std=c++17 -O2 -fPIC -fno-exceptions -fno-rtti -fno-threadsafe-stati
 LDLIBS := -lm -lpthread -ldl
 # Tools and tests: the same flags, built as programs.
 TOOLFLAGS = $(filter-out -fPIC -fvisibility=hidden,$(CXXFLAGS))
+TESTFLAGS = $(TOOLFLAGS) -Itests -Ithird_party
 
 # Build identifier, written in the core's log and in the results.
 VERSION := $(shell sed -n 's/^\#define PUPAZZI_VERSION "\([^"]*\)".*/\1/p' src/game/game.h)
@@ -63,11 +66,14 @@ CHECK_ARM32 = @if command -v readelf >/dev/null 2>&1; then \
 	    readelf --dyn-syms -W $@ | grep -q " UND $$f@" || { echo "ERRORE: $@ non importa $$f da glibc"; rm -f $@; exit 1; }; \
 	  done; fi
 
-.PHONY: all native tools console arm32 arm64 pc dist test test-gl test-audio test-net clean
-all: native tools
+TESTS := build/native/test_lang build/native/test_sys build/native/test_netin build/native/test_raster build/native/test_aim \
+         build/native/test_save build/native/test_rules build/native/test_maps build/native/test_boss
+
+.PHONY: all native tools tests console arm32 arm64 pc dist test test-gl test-audio test-net test-remote clean
+all: native tools tests
 native: build/native/pupazzi_libretro.so
-tools: build/native/host build/native/test_raster build/native/test_aim build/native/test_save build/native/test_rules build/native/test_maps build/native/test_boss \
-       build/native/test_lang build/native/test_sys build/native/test_netin
+tools: build/native/host
+tests: $(TESTS)
 console: arm32 arm64
 arm32: build/arm32/pupazzi_libretro.so
 arm64: build/arm64/pupazzi_libretro.so
@@ -100,54 +106,54 @@ build/native/host: tools/host.cpp src/platform/libretro.h
 	@mkdir -p build/native
 	$(CXX) -std=c++17 -O2 -Wall -DHOST_GL -Isrc -o $@ $< -ldl
 
-build/native/test_raster: tests/test_raster.cpp src/engine/swr.cpp src/engine/mesh.cpp src/engine/hud.cpp src/platform/plat.cpp $(HDR)
+# The doctest runner (tests/test_main.cpp), built once and linked into every test program.
+TEST_MAIN := build/native/test_main.o
+TEST_DEPS = $(TEST_MAIN) tests/test.h third_party/doctest/doctest.h $(HDR)
+$(TEST_MAIN): tests/test_main.cpp tests/test.h third_party/doctest/doctest.h
 	@mkdir -p build/native
-	$(CXX) $(TOOLFLAGS) -o $@ tests/test_raster.cpp src/engine/swr.cpp src/engine/mesh.cpp src/engine/hud.cpp src/platform/plat.cpp -lm -lpthread
+	$(CXX) $(TESTFLAGS) -c -o $@ $<
+
+# Rasterizer: a closed room seen from inside, every pixel exactly once.
+build/native/test_raster: tests/test_raster.cpp src/engine/swr.cpp src/engine/mesh.cpp src/engine/hud.cpp src/platform/plat.cpp $(TEST_DEPS)
+	$(CXX) $(TESTFLAGS) -o $@ tests/test_raster.cpp src/engine/swr.cpp src/engine/mesh.cpp src/engine/hud.cpp src/platform/plat.cpp $(TEST_MAIN) -lm -lpthread
 
 # Aim tests: the game without a frontend (no core.cpp and no renderers).
 GAME_SRC := $(filter-out src/platform/core.cpp src/engine/swr.cpp src/engine/glr.cpp src/net/net.cpp,$(SRC))
-build/native/test_aim: tests/test_aim.cpp $(GAME_SRC) $(GEN) $(HDR)
-	@mkdir -p build/native
-	$(CXX) $(TOOLFLAGS) -o $@ tests/test_aim.cpp $(GAME_SRC) $(GEN) -lm -lpthread
+build/native/test_aim: tests/test_aim.cpp $(GAME_SRC) $(GEN) $(TEST_DEPS)
+	$(CXX) $(TESTFLAGS) -o $@ tests/test_aim.cpp $(GAME_SRC) $(GEN) $(TEST_MAIN) -lm -lpthread
 
 # Rules tests (lives, maps from the start, rounds): the game without a frontend plus the software
 # renderer (with --immagini it writes the HUD screens).
-build/native/test_rules: tests/test_rules.cpp $(GAME_SRC) src/engine/swr.cpp $(GEN) $(HDR)
-	@mkdir -p build/native
-	$(CXX) $(TOOLFLAGS) -o $@ tests/test_rules.cpp $(GAME_SRC) src/engine/swr.cpp $(GEN) -lm -lpthread
+build/native/test_rules: tests/test_rules.cpp $(GAME_SRC) src/engine/swr.cpp $(GEN) $(TEST_DEPS)
+	$(CXX) $(TESTFLAGS) -o $@ tests/test_rules.cpp $(GAME_SRC) src/engine/swr.cpp $(GEN) $(TEST_MAIN) -lm -lpthread
 
 # Map tests (0.5.1): no way out of the zones (fixed checks, random players, targeted cases).
-build/native/test_maps: tests/test_maps.cpp $(GAME_SRC) $(GEN) $(HDR)
-	@mkdir -p build/native
-	$(CXX) $(TOOLFLAGS) -o $@ tests/test_maps.cpp $(GAME_SRC) $(GEN) -lm -lpthread
+build/native/test_maps: tests/test_maps.cpp $(GAME_SRC) $(GEN) $(TEST_DEPS)
+	$(CXX) $(TESTFLAGS) -o $@ tests/test_maps.cpp $(GAME_SRC) $(GEN) $(TEST_MAIN) -lm -lpthread
 
 # Giant Gladiator tests (0.5.1): movement, attacks, phases, restarts (with --immagini the moves, with
 # --lotte whole fights with the bots).
-build/native/test_boss: tests/test_boss.cpp $(GAME_SRC) src/engine/swr.cpp $(GEN) $(HDR)
-	@mkdir -p build/native
-	$(CXX) $(TOOLFLAGS) -o $@ tests/test_boss.cpp $(GAME_SRC) src/engine/swr.cpp $(GEN) -lm -lpthread
+build/native/test_boss: tests/test_boss.cpp $(GAME_SRC) src/engine/swr.cpp $(GEN) $(TEST_DEPS)
+	$(CXX) $(TESTFLAGS) -o $@ tests/test_boss.cpp $(GAME_SRC) src/engine/swr.cpp $(GEN) $(TEST_MAIN) -lm -lpthread
 
 # Language tests (0.5.3): texts, glyphs, line breaks.
-build/native/test_lang: tests/test_lang.cpp src/engine/lang.cpp src/engine/hud.cpp src/engine/ui.cpp src/game/save.cpp src/platform/plat.cpp $(HDR)
-	@mkdir -p build/native
-	$(CXX) $(TOOLFLAGS) -o $@ tests/test_lang.cpp src/engine/lang.cpp src/engine/hud.cpp src/engine/ui.cpp src/game/save.cpp src/platform/plat.cpp -lm -lpthread
+build/native/test_lang: tests/test_lang.cpp src/engine/lang.cpp src/engine/hud.cpp src/engine/ui.cpp src/game/save.cpp src/platform/plat.cpp $(TEST_DEPS)
+	$(CXX) $(TESTFLAGS) -o $@ tests/test_lang.cpp src/engine/lang.cpp src/engine/hud.cpp src/engine/ui.cpp src/game/save.cpp src/platform/plat.cpp $(TEST_MAIN) -lm -lpthread
 
 # Save tests: only save.cpp (and plat.cpp for the log), in a temporary folder.
-build/native/test_save: tests/test_save.cpp src/game/save.cpp src/platform/plat.cpp $(HDR)
-	@mkdir -p build/native
-	$(CXX) $(TOOLFLAGS) -o $@ tests/test_save.cpp src/game/save.cpp src/platform/plat.cpp
+build/native/test_save: tests/test_save.cpp src/game/save.cpp src/platform/plat.cpp $(TEST_DEPS)
+	$(CXX) $(TESTFLAGS) -o $@ tests/test_save.cpp src/game/save.cpp src/platform/plat.cpp $(TEST_MAIN)
 
-# Tests of the commands that reach the host of a LAN game (0.5.4): src/net/net.cpp without a network.
-build/native/test_netin: tests/test_netin.cpp src/net/net.cpp $(GAME_SRC) $(GEN) $(HDR)
-	@mkdir -p build/native
-	$(CXX) $(TOOLFLAGS) -o $@ tests/test_netin.cpp $(GAME_SRC) $(GEN) -lm -lpthread
+# Tests of the commands that reach the host of a LAN game (0.5.4): src/net/net.cpp (included by the
+# test) without a network.
+build/native/test_netin: tests/test_netin.cpp src/net/net.cpp $(GAME_SRC) $(GEN) $(TEST_DEPS)
+	$(CXX) $(TESTFLAGS) -o $@ tests/test_netin.cpp $(GAME_SRC) $(GEN) $(TEST_MAIN) -lm -lpthread
 
 # Battery and CPU tests (0.5.4) with a fake /sys and /proc.
-build/native/test_sys: tests/test_sys.cpp src/platform/sysinfo.cpp $(HDR)
-	@mkdir -p build/native
-	$(CXX) $(TOOLFLAGS) -o $@ tests/test_sys.cpp src/platform/sysinfo.cpp
+build/native/test_sys: tests/test_sys.cpp src/platform/sysinfo.cpp $(TEST_DEPS)
+	$(CXX) $(TESTFLAGS) -o $@ tests/test_sys.cpp src/platform/sysinfo.cpp $(TEST_MAIN)
 
-test: native tools
+test: native tools tests
 	python3 tools/make_lang.py --controlla
 	./build/native/test_lang
 	./build/native/test_sys
@@ -161,9 +167,8 @@ test: native tools
 	./build/native/host build/native/pupazzi_libretro.so --frames 120 --quiet
 
 # Sound tests: every effect and every tune in build/wav (levels, peaks, time per frame).
-build/native/test_audio: tests/test_audio.cpp src/engine/audio.cpp src/engine/audio.h
-	@mkdir -p build/native
-	$(CXX) -std=c++17 -O2 -Wall -Wextra -Isrc -o $@ tests/test_audio.cpp src/engine/audio.cpp
+build/native/test_audio: tests/test_audio.cpp src/engine/audio.cpp $(TEST_DEPS)
+	$(CXX) $(TESTFLAGS) -o $@ tests/test_audio.cpp src/engine/audio.cpp $(TEST_MAIN) -lm
 
 test-audio: build/native/test_audio
 	@mkdir -p build/wav
@@ -178,6 +183,11 @@ test-gl: native tools
 # stay the same frame by frame. A few minutes.
 test-net: native tools
 	sh tests/test_net.sh
+
+# Remote controller (Remote RetroPad): messages from tools/remote_send.py to a running game, mixed with
+# its own pads.
+test-remote: native tools
+	python3 tests/test_remote.py
 
 # Folder ready for the console (to be copied into Roms/APPS) and core for the PC.
 dist: console pc

@@ -7,6 +7,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "engine/swr.h"
+#include "test.h"
 
 static uint32_t g_rng = 0x1234567u;
 static uint32_t rnd(void) {
@@ -75,10 +76,14 @@ static Mesh build_room(void) {
   return mb_finish(&mb);
 }
 
-int main(int argc, char** argv) {
-  const int views = argc > 1 ? atoi(argv[1]) : 300;
+static int g_views = 300;   // primo argomento: quante viste
+
+TEST_CASE("1) stanza chiusa vista dall'interno: ogni pixel una volta sola") {
+  const int views = g_views;
   static const int RES[3][2] = { { 320, 240 }, { 640, 480 }, { 960, 720 } };
-  if (!swr_init(960, 720)) { printf("swr_init fallita\n"); return 1; }
+  const bool init = swr_init(960, 720);
+  EXPECT(init, "swr_init");
+  if (!init) return;
   int bad_views = 0;
   long long holes = 0, doubles = 0, depth_bad = 0, thread_diff = 0, clipped_tris = 0;
   int clipped_views = 0;
@@ -159,7 +164,14 @@ int main(int argc, char** argv) {
   }
   free(ref);
   swr_shutdown();
-  printf("viste=%d fallite=%d | buchi=%lld doppi=%lld profondita'=%lld thread=%lld | viste con ritaglio=%d (%lld triangoli) | thread massimi=%d\n",
+  printf("  viste=%d fallite=%d | buchi=%lld doppi=%lld profondita'=%lld thread=%lld | viste con ritaglio=%d (%lld triangoli) | thread massimi=%d\n",
          views, bad_views, holes, doubles, depth_bad, thread_diff, clipped_views, clipped_tris, swr_max_threads());
-  return bad_views ? 1 : 0;
+  char what[160];
+  snprintf(what, sizeof(what), "%d viste: niente buchi ne' doppi, profondita' nei limiti, la stessa immagine con 1 thread e con tutti", views);
+  EXPECT(bad_views == 0, what);
+}
+
+int main(int argc, char** argv) {
+  if (argc > 1 && argv[1][0] != '-') g_views = atoi(argv[1]);
+  return run_tests(argc, argv);
 }

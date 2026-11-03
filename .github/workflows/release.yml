@@ -53,7 +53,7 @@ jobs:
           make test-audio
           make test-gl
           make test-net
-          python3 tests/test_remote.py
+          make test-remote
 
       - name: Package and notes
         run: |

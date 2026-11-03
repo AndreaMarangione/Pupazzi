@@ -11,6 +11,12 @@ Le note di ogni release su GitHub si prendono da qui (la sezione con il numero d
 - Il gioco si costruisce e si prova da solo su GitHub a ogni modifica (CI); le release si fanno
   con un comando solo: GitHub compila, prova, prepara l'archivio e lo allega con queste note.
 - I binari pronti (`dist/`) non sono più nel repository: stanno nell'archivio di ogni release.
+- Il codice è riordinato con schemi noti, senza cambiare il gioco (partite, immagini e suoni
+  identici, controllati fotogramma per fotogramma): cartelle per parte del programma, tutto lo
+  stato della partita in un oggetto, partita separata dalla grafica (Model-View) con gli eventi
+  (Observer), le schermate come stati (State).
+- Le prove sono in `tests/` e usano doctest: alla fine di ogni programma il conto dei casi e dei
+  controlli passati.
 
 ## [0.5.4] - 2026-10-30
 

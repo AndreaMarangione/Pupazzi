@@ -1,12 +1,12 @@
 // Prove del sonoro senza console: ogni effetto e ogni brano in un WAV con le misure, controllo del punto
 // di ripresa dei brani, una battaglia affollata di 60 s con musica e tempi di calcolo (con il bilanciamento tra
 // musica ed effetti), casi limite.
-//   g++ -std=c++17 -O2 -Wall -Wextra -Isrc tools/test_audio.cpp src/audio.cpp -o build/native/test_audio
-//   ./build/native/test_audio wav
+//   make test-audio    (oppure: make build/native/test_audio && ./build/native/test_audio CARTELLA)
 // Esce con errore se trova NaN o infiniti, campioni al fondo scala, continua oltre l'1%, errori nei brani, brani a
 // ripetizione fuori dalla finestra di livello (RMS tra -28 e -22 dBFS con la musica a 7) o la musica di una mappa
 // che nella battaglia non sta almeno 3 LU sotto gli effetti.
 #include "engine/audio.h"
+#include "test.h"
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -14,7 +14,18 @@
 #include <time.h>
 
 static const int RATE = 48000, FRAME = 800;
-static int g_fail = 0;
+static const char* g_dir = ".";   // primo argomento: dove scrivere i WAV
+
+// A check of the sound tests: silent when it passes (the tables already show the values), a line
+// "ERRORE ..." when it fails (cut to 1 KB); doctest counts both.
+#define AUDIO_CHECK(ok, ...)                                                             \
+  do {                                                                                   \
+    const bool audio_ok_ = (ok);                                                         \
+    char audio_what_[1024];                                                              \
+    if (snprintf(audio_what_, sizeof(audio_what_), __VA_ARGS__) < 0) audio_what_[0] = 0; \
+    if (!audio_ok_) printf("ERRORE %s\n", audio_what_);                                  \
+    CHECK_MESSAGE(audio_ok_, doctest::String(audio_what_));                              \
+  } while (0)
 
 // Tempo di CPU di questo thread: non conta i momenti in cui la macchina fa altro (con altri programmi accesi il tempo
 // dell'orologio salta di millisecondi).
@@ -62,7 +73,8 @@ static void write_wav(const char* dir, const char* name, const Buf& b) {
   char path[512];
   snprintf(path, sizeof(path), "%s/%s.wav", dir, name);
   FILE* f = fopen(path, "wb");
-  if (!f) { printf("ERRORE: non riesco a scrivere %s\n", path); g_fail = 1; return; }
+  AUDIO_CHECK(f != NULL, "non riesco a scrivere %s", path);
+  if (!f) return;
   const unsigned data = (unsigned)b.n * 4u, riff = 36u + data, rate = RATE, brate = RATE * 4u, fmt = 16;
   const unsigned short pcm = 1, ch = 2, align = 4, bits = 16;
   fwrite("RIFF", 1, 4, f); fwrite(&riff, 4, 1, f); fwrite("WAVEfmt ", 1, 8, f); fwrite(&fmt, 4, 1, f);
@@ -146,20 +158,39 @@ static Meas measure(const Buf& b, int from = 0, int to = -1) {
   return m;
 }
 
-static bool check(const char* what, const Meas& m) {
-  bool ok = true;
-  if (m.full) { printf("ERRORE %s: %d campioni al fondo scala\n", what, m.full); ok = false; }
-  if (m.dc > 1.0) { printf("ERRORE %s: continua %.2f%%\n", what, m.dc); ok = false; }
-  if (!ok) g_fail = 1;
-  return ok;
+static void check_meas(const char* what, const Meas& m) {
+  AUDIO_CHECK(!m.full, "%s: %d campioni al fondo scala", what, m.full);
+  AUDIO_CHECK(!(m.dc > 1.0), "%s: continua %.2f%%", what, m.dc);
 }
 
 static void silence(int frames) { Buf b; render(b, frames); free(b.s); }
 
+// la tabella delle tarature in audio.cpp: ogni suono si ritara da zero e si confronta
+TEST_CASE("1) taratura degli effetti") {
+  const char* dir = g_dir;
+  AudioStats st;
+  static char tab[16384];
+  const double c0 = now_ms();
+  const int diff = audio_calibration_table(tab, sizeof(tab));
+  const double c1 = now_ms();
+  audio_get_stats(&st);
+  char path[512];
+  snprintf(path, sizeof(path), "%s/taratura.txt", dir);
+  const char* rows = strchr(tab, '\n');   // la prima riga e' l'elenco dei suoni da rifare, poi la tabella
+  if (FILE* f = fopen(path, "w")) { fputs(rows ? rows + 1 : tab, f); fclose(f); }
+  printf("taratura completa: %.1f ms di CPU, %.1f s di suono; tabella CAL_TAB %s\n", c1 - c0, st.init_samples / (double)RATE,
+         diff == 0 ? "giusta" : "da rifare");
+  const char* list = strchr(tab, ':') ? strchr(tab, ':') + 2 : tab;
+  const int nlist = diff != 0 && rows && rows > list ? (int)(rows - list) : 0;
+  AUDIO_CHECK(diff == 0, "%d suoni cambiati dall'ultima taratura (%.*s): copiare %s in CAL_TAB di src/engine/audio.cpp", diff, nlist,
+              list, path);
+  audio_set_volume(7, 8);
+}
+
 // --- effetti --------------------------------------------------------------------------------------
 
-static void test_sounds(const char* dir) {
-  printf("\n== Effetti, ognuno da solo (effetti a 8, al centro, vol 1) ==\n");
+TEST_CASE("2) effetti, ognuno da solo (effetti a 8, al centro, vol 1)") {
+  const char* dir = g_dir;
   printf("%-20s %7s %7s %7s %7s %7s %7s %6s %5s %5s\n", "suono", "durata", "picco", "RMS", "contin.", ">6kHz", "<200Hz", "f_med",
          "voci", "fine");
   printf("%-20s %7s %7s %7s %7s %7s %7s %6s %5s %5s\n", "", "s", "dBFS", "dBFS", "%", "%", "%", "Hz", "max", "env");
@@ -181,9 +212,9 @@ static void test_sounds(const char* dir) {
     render(b, RATE / 2);
     audio_get_stats(&st);
     const Meas m = measure(b);
-    check(audio_sound_name(id), m);
-    if (st.bad) { printf("ERRORE %s: %u valori non validi\n", audio_sound_name(id), st.bad); g_fail = 1; }
-    if (st.voices > 0) { printf("ERRORE %s: la voce non si spegne\n", audio_sound_name(id)); g_fail = 1; }
+    check_meas(audio_sound_name(id), m);
+    AUDIO_CHECK(!st.bad, "%s: %u valori non validi", audio_sound_name(id), st.bad);
+    AUDIO_CHECK(!(st.voices > 0), "%s: la voce non si spegne", audio_sound_name(id));
     printf("%-20s %7.3f %7.1f %7.1f %7.3f %7.2f %7.1f %6.0f %5d %5.3f\n", audio_sound_name(id), m.dur, m.peak, m.rms, m.dc, m.hf,
            m.lf, m.frms, st.voices_peak, (double)st.end_max);
     char name[64];
@@ -195,8 +226,8 @@ static void test_sounds(const char* dir) {
 
 // --- brani ----------------------------------------------------------------------------------------
 
-static void test_music(const char* dir) {
-  printf("\n== Brani (musica a 7) ==\n");
+TEST_CASE("3) brani (musica a 7)") {
+  const char* dir = g_dir;
   static char text[65536];
   for (int id = 1; id < NMUSIC; ++id) {
     audio_reset();
@@ -216,16 +247,14 @@ static void test_music(const char* dir) {
     int onset = 0;
     while (onset < b.n && b.s[2 * onset] == 0 && b.s[2 * onset + 1] == 0) onset++;
     const Meas m = measure(b, onset);
-    check(audio_music_name(id), m);
-    if (st.bad) { printf("ERRORE %s: %u valori non validi\n", audio_music_name(id), st.bad); g_fail = 1; }
+    check_meas(audio_music_name(id), m);
+    AUDIO_CHECK(!st.bad, "%s: %u valori non validi", audio_music_name(id), st.bad);
     printf("%-10s durata %6.2f s (ripresa %s), suono fino a %6.2f s, picco %6.1f dBFS, RMS %6.1f dBFS, %.1f LUFS, continua %.3f%%, "
            ">6kHz %.2f%%, <200Hz %.1f%%\n", audio_music_name(id), len_s, loop_s < 0 ? "nessuna" : "si'", m.dur, m.peak, m.rms, m.lufs,
            m.dc, m.hf, m.lf);
     // i brani delle mappe stanno sotto gli effetti (0.5: la musica della 0.4 era a -20 dBFS e copriva il gioco)
-    if (loop_s >= 0 && (m.rms < -28.0 || m.rms > -22.0)) {
-      printf("ERRORE %s: livello fuori dalla finestra (RMS tra -28 e -22 dBFS con la musica a 7)\n", audio_music_name(id));
-      g_fail = 1;
-    }
+    AUDIO_CHECK(!(loop_s >= 0 && (m.rms < -28.0 || m.rms > -22.0)),
+                "%s: livello fuori dalla finestra (RMS tra -28 e -22 dBFS con la musica a 7)", audio_music_name(id));
     printf("           tempo per fotogramma di 800 campioni: medio %.4f ms, 99%% sotto %.4f ms, massimo %.4f ms (fotogramma %d); "
            "voci alla fine %d\n", tm.sum / tm.n, tm.pct(0.99), tm.max, tm.at, st.music_voices);
     const int n = audio_music_text(id, text, sizeof(text));
@@ -271,7 +300,7 @@ static void test_music(const char* dir) {
         const bool ok = dj <= ref * 1.25 && fabs(lv) < 6.0 && corr > 0.9;
         printf("           ripresa a %.2f s: salto %d (ai cambi di battuta fino a %d), livello %+.1f dB, "
                "inviluppo come all'inizio %.3f: %s\n", seam / (double)RATE, dj, ref, lv, corr, ok ? "ok" : "DA CONTROLLARE");
-        if (!ok) g_fail = 1;
+        AUDIO_CHECK(ok, "%s: ripresa da controllare", audio_music_name(id));
       }
     }
     char path[512];
@@ -286,10 +315,7 @@ static void test_music(const char* dir) {
   }
   AudioStats st;
   audio_get_stats(&st);
-  if (st.parse_errors) {
-    printf("ERRORE: %d errori nei testi dei brani (vedi i file musica_*.txt)\n", st.parse_errors);
-    g_fail = 1;
-  }
+  AUDIO_CHECK(!st.parse_errors, "%d errori nei testi dei brani (vedi i file musica_*.txt)", st.parse_errors);
 }
 
 // --- battaglia affollata ------------------------------------------------------------------------------
@@ -398,8 +424,8 @@ static Buf run_battle(int mode, Timing* tmp, int* nplays, int song = MUS_PIRAMID
   return b;
 }
 
-static void test_battle(const char* dir) {
-  printf("\n== Battaglia affollata: 60 s, le piramidi, 4 giocatori (ASTRO, MOCHI, MARZIO, ZOLFO) ==\n");
+TEST_CASE("4) battaglia affollata: 60 s, le piramidi, 4 giocatori (ASTRO, MOCHI, MARZIO, ZOLFO)") {
+  const char* dir = g_dir;
   Timing tm, tm2;
   int plays = 0, p2 = 0;
   // bilanciamento: la stessa battaglia con la sola musica e con i soli effetti
@@ -412,8 +438,8 @@ static void test_battle(const char* dir) {
   AudioStats st;
   audio_get_stats(&st);
   const Meas m = measure(b);
-  check("battaglia", m);
-  if (st.bad) { printf("ERRORE battaglia: %u valori non validi\n", st.bad); g_fail = 1; }
+  check_meas("battaglia", m);
+  AUDIO_CHECK(!st.bad, "battaglia: %u valori non validi", st.bad);
   printf("richieste %d (accettate %u, fuse %u), voci rubate %u, scartate %u, voci degli effetti al massimo %d\n", plays, st.plays,
          st.merged, st.stolen, st.dropped, st.voices_peak);
   printf("picco %.1f dBFS, RMS %.1f dBFS, >6kHz %.2f%%, continua %.3f%%; limitatore attivo nel %.2f%% dei blocchi "
@@ -424,7 +450,7 @@ static void test_battle(const char* dir) {
   printf("inviluppo piu' alto allo spegnimento di una voce: %.5f\n", (double)st.end_max);
   printf("bilanciamento: musica da sola %.1f LUFS, effetti da soli %.1f LUFS, insieme %.1f LUFS: la musica sta %.1f LU sotto gli "
          "effetti\n", lm, ls, m.lufs, ls - lm);
-  if (ls - lm < 3.0) { printf("ERRORE battaglia: la musica copre gli effetti (meno di 3 LU sotto)\n"); g_fail = 1; }
+  AUDIO_CHECK(!(ls - lm < 3.0), "battaglia: la musica copre gli effetti (meno di 3 LU sotto)");
   write_wav(dir, "battaglia", b);
   free(b.s);
   // le altre mappe: la stessa battaglia con la loro musica, contro gli stessi effetti
@@ -434,7 +460,8 @@ static void test_battle(const char* dir) {
     Buf bo = run_battle(1, &tm2, &p2, other[k]);
     const double lo = loudness(bo);
     printf(" %s %.1f LUFS (%.1f)", audio_music_name(other[k]), lo, ls - lo);
-    if (ls - lo < 3.0) { printf("\nERRORE battaglia: la musica di %s copre gli effetti (meno di 3 LU sotto)\n", audio_music_name(other[k])); g_fail = 1; }
+    if (ls - lo < 3.0) printf("\n");
+    AUDIO_CHECK(!(ls - lo < 3.0), "battaglia: la musica di %s copre gli effetti (meno di 3 LU sotto)", audio_music_name(other[k]));
     free(bo.s);
   }
   printf("\n");
@@ -442,8 +469,8 @@ static void test_battle(const char* dir) {
 
 // --- dissolvenze e casi limite -------------------------------------------------------------------------
 
-static void test_edges(const char* dir) {
-  printf("\n== Cambi di brano, volumi e casi limite ==\n");
+TEST_CASE("5) cambi di brano, volumi e casi limite") {
+  const char* dir = g_dir;
   audio_reset();
   silence(RATE);
   audio_clear_stats();
@@ -489,49 +516,23 @@ static void test_edges(const char* dir) {
   AudioStats st;
   audio_get_stats(&st);
   const Meas m = measure(b);
-  check("casi limite", m);
-  if (st.bad) { printf("ERRORE casi limite: %u valori non validi\n", st.bad); g_fail = 1; }
+  check_meas("casi limite", m);
+  AUDIO_CHECK(!st.bad, "casi limite: %u valori non validi", st.bad);
   printf("picco %.1f dBFS, limitatore al massimo %.1f dB, voci al massimo %d (limite 24), rubate %u, scartate %u, "
          "inviluppo allo spegnimento %.5f, alla fine voci %d + musica %d\n", m.peak, 20 * log10((double)st.lim_min),
          st.voices_peak, st.stolen, st.dropped, (double)st.end_max, st.voices, st.music_voices);
-  if (st.voices_peak > 24) { printf("ERRORE: piu' di 24 voci\n"); g_fail = 1; }
+  AUDIO_CHECK(!(st.voices_peak > 24), "piu' di 24 voci");
   write_wav(dir, "casi_limite", b);
   free(b.s);
 }
 
 int main(int argc, char** argv) {
-  const char* dir = argc > 1 ? argv[1] : ".";
+  if (argc > 1 && argv[1][0] != '-') g_dir = argv[1];
   const double t0 = now_ms();
   audio_init(RATE);
   const double t1 = now_ms();
   AudioStats st;
   audio_get_stats(&st);
   printf("audio_init: %.2f ms di CPU (taratura degli effetti: %.1f s di suono sintetizzato)\n", t1 - t0, st.init_samples / (double)RATE);
-  // la tabella delle tarature in audio.cpp: ogni suono si ritara da zero e si confronta
-  {
-    static char tab[16384];
-    const double c0 = now_ms();
-    const int diff = audio_calibration_table(tab, sizeof(tab));
-    const double c1 = now_ms();
-    audio_get_stats(&st);
-    char path[512];
-    snprintf(path, sizeof(path), "%s/taratura.txt", dir);
-    const char* rows = strchr(tab, '\n');   // la prima riga e' l'elenco dei suoni da rifare, poi la tabella
-    if (FILE* f = fopen(path, "w")) { fputs(rows ? rows + 1 : tab, f); fclose(f); }
-    printf("taratura completa: %.1f ms di CPU, %.1f s di suono; tabella CAL_TAB %s\n", c1 - c0, st.init_samples / (double)RATE,
-           diff == 0 ? "giusta" : "da rifare");
-    if (diff != 0) {
-      const char* list = strchr(tab, ':') ? strchr(tab, ':') + 2 : tab;
-      printf("ERRORE: %d suoni cambiati dall'ultima taratura (%.*s): copiare %s in CAL_TAB di src/audio.cpp\n", diff,
-             rows ? (int)(rows - list) : 0, list, path);
-      g_fail = 1;
-    }
-  }
-  audio_set_volume(7, 8);
-  test_sounds(dir);
-  test_music(dir);
-  test_battle(dir);
-  test_edges(dir);
-  printf("\n%s\n", g_fail ? "PROVE FALLITE" : "tutte le prove passate");
-  return g_fail ? 1 : 0;
+  return run_tests(argc, argv);
 }

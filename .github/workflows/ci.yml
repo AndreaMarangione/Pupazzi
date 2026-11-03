@@ -43,7 +43,7 @@ jobs:
         run: make test-net
 
       - name: Remote controller tests
-        run: python3 tests/test_remote.py
+        run: make test-remote
 
       - name: Upload console and PC package
         uses: actions/upload-artifact@v4
