@@ -1,30 +1,28 @@
-// Geometria fissa della mappa nello stile della mappa (Piramidi, Chichen Itza, Muraglia, Colosseo).
+// Static geometry of the map in the map's style (Piramidi, Chichen Itza, Muraglia, Colosseo).
 //
-// Terreno senza scacchiera: ogni casella, anche quelle del paesaggio attorno, ha una "chiave" (tipo
-// di superficie e tono). Il terreno si costruisce sulla griglia duale, quadrati di 1 m centrati sugli
-// spigoli delle caselle: dove le chiavi cambiano gli angoli si arrotondano (raggio fino a mezzo
-// metro: una casella d'acqua da sola diventa un cerchio, i gradini di una diagonale un'onda), dove
-// non cambiano i quadrati si uniscono in rettangoli grandi. I toni vengono da un rumore a bassa
-// frequenza (macchie larghe qualche metro, poco contrasto). Le quote diverse (muri, piattaforme,
-// acqua) si raccordano con un profilo che corre lungo il bordo arrotondato (cornici, fasce, rive,
-// schiuma). Le collisioni restano sulle caselle (level.cpp): le forme si scostano dalle caselle al
-// massimo di circa 0,2 m.
+// Ground without a checkerboard: every cell, including those of the surrounding landscape, has a
+// "key" (surface type and tone). The ground is built on the dual grid, 1 m squares centered on the
+// corners of the cells: where the keys change the corners are rounded (radius up to half a meter: a
+// lone water cell becomes a circle, the steps of a diagonal a wave), where they don't change the
+// squares merge into large rectangles. The tones come from a low-frequency noise (patches a few
+// meters wide, little contrast). The different heights (walls, platforms, water) are joined by a
+// profile that runs along the rounded edge (cornices, bands, banks, foam). Collisions stay on the
+// cells (level.cpp): the shapes deviate from the cells by at most about 0.2 m.
 //
-// La geometria e' divisa in blocchi di 8x8 caselle (il renderer scarta quelli fuori
-// dall'inquadratura); il paesaggio lontano sta in L->scenery. Attorno alla mappa (0.5.1) si
-// disegna solo la striscia che la telecamera di gioco puo' mostrare (LV_MARGIN_*: terreno
-// economico e poche sagome), oltre il terreno piatto e qualche forma grande solo dove la vedono i
-// menu (a sud) e la fine della mappa (a nord). Cespugli, erba alta, casse e
-// trampolini sono oggetti mobili: qui si costruiscono le loro mesh (L->dyn_mesh), li disegna
-// game_draw.cpp. Nulla di tutto questo tocca lo stato della partita: la varieta' viene da funzioni
-// hash delle caselle, mai dal generatore di numeri casuali del gioco.
+// The geometry is split into chunks of 8x8 cells (the renderer culls the ones outside the
+// framing); the distant scenery is in L->scenery. Around the map (0.5.1) only the strip that the
+// play camera can show is drawn (LV_MARGIN_*: cheap ground and few silhouettes); beyond it, flat
+// ground and a few large shapes only where the menus (to the south) and the end of the map (to the
+// north) see it. Bushes, tall grass, crates and trampolines are moving objects: their meshes are
+// built here (L->dyn_mesh), game_draw.cpp draws them. None of this touches the game state: the
+// variety comes from hash functions of the cells, never from the game's random number generator.
 #include "game/sim/level.h"
 #include <stdlib.h>
 #include <string.h>
 
 namespace {
 
-// --- utilita' --------------------------------------------------------------------------------
+// --- utilities -------------------------------------------------------------------------------
 
 uint32_t hash2(int x, int y, int s) {
   uint32_t h = (uint32_t)x * 374761393u ^ (uint32_t)y * 668265263u ^ (uint32_t)s * 2246822519u;
@@ -34,7 +32,7 @@ uint32_t hash2(int x, int y, int s) {
 float hf(int x, int y, int s) { return (float)(hash2(x, y, s) & 0xFFFFFFu) * (1.0f / 16777216.0f); }   // [0, 1)
 float hs(int x, int y, int s) { return hf(x, y, s) * 2.0f - 1.0f; }                                    // [-1, 1)
 
-// Rumore a valori, liscio, in [0, 1].
+// Value noise, smooth, in [0, 1].
 float vnoise(float x, float z, int seed) {
   const float fx = floorf(x), fz = floorf(z);
   const int ix = (int)fx, iz = (int)fz;
@@ -44,7 +42,7 @@ float vnoise(float x, float z, int seed) {
   const float a = hf(ix, iz, seed), b = hf(ix + 1, iz, seed), c = hf(ix, iz + 1, seed), d = hf(ix + 1, iz + 1, seed);
   return lerpf(lerpf(a, b, tx), lerpf(c, d, tx), tz);
 }
-// Due ottave: macchie di circa "scale" metri.
+// Two octaves: patches of about "scale" meters.
 float fbm(float x, float z, int seed, float scale) {
   return 0.68f * vnoise(x / scale, z / scale, seed) + 0.32f * vnoise(x / (scale * 0.41f), z / (scale * 0.41f), seed + 101);
 }
@@ -61,7 +59,7 @@ uint32_t mix(uint32_t a, uint32_t b, float t) {
 }
 uint32_t lighten(uint32_t c, float t) { return t >= 0.0f ? mix(c, 0xFFFFFF, t) : mix(c, 0x000000, -t); }
 
-// Triangolo con la faccia verso "facing"; scarta quelli degeneri.
+// Triangle with its face towards "facing"; drops the degenerate ones.
 void tri_f(MeshBuilder* mb, Vec3 a, Vec3 b, Vec3 c, Vec3 facing, uint32_t col) {
   const Vec3 n = cross(b - a, c - a);
   if (dot(n, n) < 1e-12f) return;
@@ -73,7 +71,7 @@ void quad_f(MeshBuilder* mb, Vec3 p0, Vec3 p1, Vec3 p2, Vec3 p3, Vec3 facing, ui
   tri_f(mb, p0, p1, p2, facing, col);
   tri_f(mb, p0, p2, p3, facing, col);
 }
-// Ventaglio di un poligono convesso (p[0] e' il perno), con i vertici in comune.
+// Fan of a convex polygon (p[0] is the pivot), with shared vertices.
 void fan_f(MeshBuilder* mb, const Vec3* p, int n, Vec3 facing, uint32_t col) {
   if (n < 3) return;
   int idx[48];
@@ -94,7 +92,7 @@ void quad_up(MeshBuilder* mb, float x0, float z0, float x1, float z1, float y, u
 }
 void unlit(MeshBuilder* mb, bool on) { mb->flags = on ? (uint8_t)(mb->flags | TRI_UNLIT) : (uint8_t)(mb->flags & ~TRI_UNLIT); }
 
-// Pezzo di mesh costruito attorno all'origine, poi messo al suo posto (ruotato e scalato).
+// Piece of mesh built around the origin, then put in its place (rotated and scaled).
 struct Part { int v0, t0; };
 Part part(const MeshBuilder* mb) { Part p; p.v0 = mb->nv; p.t0 = mb->nt; return p; }
 void place(MeshBuilder* mb, Part p, Vec3 pos, float yaw, float s) {
@@ -103,14 +101,14 @@ void place(MeshBuilder* mb, Part p, Vec3 pos, float yaw, float s) {
 void place_xf(MeshBuilder* mb, Part p, const Xform& xf) { mb_apply(mb, p.v0, p.t0, xf); }
 void outline(MeshBuilder* mb, Part p, float t, uint32_t c) { mb_outline(mb, p.t0, t, c); }
 
-// Cassa con gli spigoli smussati e il contorno.
+// Box with beveled edges and the outline.
 void obox(MeshBuilder* mb, Vec3 mn, Vec3 mx, float bev, uint32_t c, uint32_t line, float t) {
   const Part p = part(mb);
   if (bev > 0.0f) mb_bevel_box(mb, mn, mx, bev, c);
   else mb_box(mb, mn, mx, c);
   if (t > 0.0f) outline(mb, p, t, line);
 }
-// Cassa senza il fondo (10 triangoli): per i dettagli appoggiati su qualcosa.
+// Box without the bottom (10 triangles): for details resting on something.
 void box5(MeshBuilder* mb, Vec3 mn, Vec3 mx, uint32_t c) {
   const Vec3 q[8] = { v3(mn.x, mn.y, mn.z), v3(mx.x, mn.y, mn.z), v3(mx.x, mn.y, mx.z), v3(mn.x, mn.y, mx.z),
                       v3(mn.x, mx.y, mn.z), v3(mx.x, mx.y, mn.z), v3(mx.x, mx.y, mx.z), v3(mn.x, mx.y, mx.z) };
@@ -122,24 +120,24 @@ void box5(MeshBuilder* mb, Vec3 mn, Vec3 mx, uint32_t c) {
   mb_quad(mb, i[3], i[2], i[6], i[7], c);   // +Z
   mb_quad(mb, i[0], i[4], i[5], i[1], c);   // -Z
 }
-// --- stili ----------------------------------------------------------------------------------
+// --- styles ---------------------------------------------------------------------------------
 
-// Tipi di terreno (la chiave di una casella e' tipo * 4 + tono).
+// Ground types (the key of a cell is type * 4 + tone).
 enum { TK_FLOOR = 0, TK_PATH, TK_BED, TK_DIRT, TK_WATER, TK_WALL, TK_PLAT, TK_OUT, TK_PIT, TK_PAVE, TK_BLOCK, TK_NKINDS };
 const int NKEYS = TK_NKINDS * 4;
 
 struct Style {
-  // terreno: colore di base dei tipi e quanto cambiano i toni
+  // ground: base color of the types and how much the tones vary
   uint32_t floor, path, bed, dirt, water, water_deep, out, out2, pave;
   float floor_var, out_var;
   uint32_t foam, bank;
-  // muri
+  // walls
   uint32_t wall, wall_top, wall_dark, wall_band, wall_band2, wall_trim, wall_line;
   float wall_round;
-  // piattaforme
+  // platforms
   uint32_t plat_side, plat_top, plat_trim;
   float plat_round;
-  // oggetti
+  // objects
   uint32_t trunk, trunk_dark, leaf0, leaf1, leaf_line;
   uint32_t rock, rock_dark, rock_line;
   uint32_t low, low_top;
@@ -150,7 +148,7 @@ struct Style {
 };
 
 const Style STYLES[NSTYLES] = {
-  // Piramidi: sabbia calda, lastre di calcare, arenaria, acqua turchese.
+  // Piramidi: warm sand, limestone slabs, sandstone, turquoise water.
   { 0xE8C489, 0xF1E2C2, 0xB7B66A, 0xD6AE72, 0x3DAAD3, 0x2E8FC0, 0xEDC98E, 0xE2B978, 0xD9C7A2, 0.05f, 0.06f,
     0xE4F7FF, 0xB98E57,
     0xCF9455, 0xF4E4C4, 0x9C6E3E, 0x2F6FB0, 0xC4483A, 0xF8EACD, 0x8E6436, 0.10f,
@@ -162,8 +160,8 @@ const Style STYLES[NSTYLES] = {
     0xC77B47, 0x8E6436, 0x5A8A3A,
     0xD5A86E, 0x8E6436, 0x5B5F66,
     0x4A321C },
-  // Chichen Itza: prato della giungla, piazze e sacbe di calcare chiaro, pietra maya con i fregi
-  // dipinti (rosso e blu maya), cenote verde scuro.
+  // Chichen Itza: jungle grass, plazas and sacbe of light limestone, Maya stone with painted
+  // friezes (Maya red and Maya blue), dark green cenote.
   { 0x6CB24A, 0xE6DFC9, 0x5C9C3C, 0x7C6C4A, 0x3DA79E, 0x2C8C86, 0x4C8E39, 0x447F33, 0xD9D1BB, 0.06f, 0.05f,
     0xE4F7F0, 0x8A7A5A,
     0xCDC4A8, 0xE0D8BF, 0x8E856E, 0x3E9DB0, 0xB0412E, 0xEAE3CC, 0x6E6650, 0.10f,
@@ -175,7 +173,7 @@ const Style STYLES[NSTYLES] = {
     0xC2683A, 0x2FB08A, 0xE8C04A,
     0x8A5A34, 0x5A3A22, 0x4A4E50,
     0x2A2820 },
-  // Grande Muraglia: colline verdi, mattoni grigi, pini, bambu'.
+  // Grande Muraglia: green hills, gray bricks, pines, bamboo.
   { 0x92C766, 0xC9BB98, 0x9DB85C, 0x8A7754, 0x48A9CC, 0x3690BA, 0x84BB5C, 0x76AC52, 0xB7B3A8, 0.05f, 0.07f,
     0xE4F7FF, 0x8C8678,
     0x9A9792, 0xB2AFA8, 0x6C6A66, 0xB33A2E, 0x7E7C78, 0xC5C1B9, 0x55534F, 0.08f,
@@ -187,7 +185,7 @@ const Style STYLES[NSTYLES] = {
     0xC0392B, 0xE8B53A, 0x2E2A26,
     0xB33A2E, 0x4A4E57, 0x3A3D44,
     0x262624 },
-  // Colosseo: sabbia chiara dell'arena, travertino, marmo.
+  // Colosseo: light arena sand, travertine, marble.
   { 0xEAD8AA, 0xE0CB98, 0xC6BA78, 0xCFB282, 0x4AAFD3, 0x3A96C0, 0xD9C9A4, 0xCDBB94, 0xD8CCB2, 0.04f, 0.05f,
     0xE4F7FF, 0xB09872,
     0xD6C8AA, 0xEFE7D6, 0x9C8D70, 0xA34A3A, 0x7A2E26, 0xF4EEE0, 0x8C7C60, 0.5f,
@@ -201,7 +199,7 @@ const Style STYLES[NSTYLES] = {
     0x3A3026 },
 };
 
-// --- costruzione: stato comune ----------------------------------------------------------------
+// --- building: shared state -------------------------------------------------------------------
 
 const int EW_MAX = LV_MAX_W + 2 * LV_MARGIN_X, EH_MAX = LV_MAX_H + LV_MARGIN_N + LV_MARGIN_S;
 
@@ -209,24 +207,24 @@ struct Build {
   Level* L;
   const Style* S;
   int style;
-  int MW, MN, ew, eh;     // margine a ovest e a nord, dimensioni della griglia estesa (mappa + paesaggio)
-  bool pits;              // la mappa ha il cenote: il piano sotto tutto scende sotto la sua acqua
-  float ox, oz;           // mondo = griglia estesa + (ox, oz)
+  int MW, MN, ew, eh;     // margin to the west and to the north, size of the extended grid (map + landscape)
+  bool pits;              // the map has the cenote: the plane under everything sinks below its water
+  float ox, oz;           // world = extended grid + (ox, oz)
   uint8_t key[EH_MAX][EW_MAX];
-  float ky[NKEYS];        // quota della superficie
+  float ky[NKEYS];        // height of the surface
   uint32_t krgb[NKEYS];
-  uint8_t kprio[NKEYS];   // chi resta unito negli incroci a scacchiera
-  float kround[NKEYS];    // raggio degli angoli
-  float far_y;            // quota del terreno lontano
-  // Blocchi di muro di almeno 2x2 caselle: piramidi, obelischi, capanne, torri, statue.
+  uint8_t kprio[NKEYS];   // which one stays joined at checkerboard crossings
+  float kround[NKEYS];    // radius of the corners
+  float far_y;            // height of the distant ground
+  // Wall blocks of at least 2x2 cells: pyramids, obelisks, huts, towers, statues.
   int nblocks;
-  int16_t blk[64][4];     // x, z, w, h (caselle della mappa)
+  int16_t blk[64][4];     // x, z, w, h (map cells)
   int8_t blk_at[LV_MAX_H][LV_MAX_W];
 };
 Build B;
 
 inline int kkind(int k) { return k >> 2; }
-inline int cell_ext(int i, int j) {   // tipo di casella della griglia estesa (C_VOID fuori dalla mappa)
+inline int cell_ext(int i, int j) {   // cell type of the extended grid (C_VOID outside the map)
   const int cx = i - B.MW, cz = j - B.MN;
   if (cx < 0 || cz < 0 || cx >= B.L->W || cz >= B.L->H) return C_VOID;
   return B.L->cell[cz][cx];
@@ -241,10 +239,10 @@ inline int keyat(int i, int j) {
   return B.key[j][i];
 }
 inline Vec3 wpos(float ex, float y, float ez) { return v3(ex + B.ox, y, ez + B.oz); }
-// Centro della casella della mappa (cx, cz) in coordinate del mondo.
+// Center of the map cell (cx, cz) in world coordinates.
 inline Vec3 ccenter(int cx, int cz) { return cell_center(B.L, cx, cz); }
 
-// Distanza (in caselle, Chebyshev) dalla mappa di una casella della griglia estesa; 0 dentro.
+// Distance (in cells, Chebyshev) of a cell of the extended grid from the map; 0 inside.
 int dist_out(int i, int j) {
   const int cx = i - B.MW, cz = j - B.MN;
   int dx = cx < 0 ? -cx : (cx >= B.L->W ? cx - B.L->W + 1 : 0);
@@ -252,7 +250,7 @@ int dist_out(int i, int j) {
   return dx > dz ? dx : dz;
 }
 
-// --- chiavi del terreno -----------------------------------------------------------------------
+// --- ground keys ------------------------------------------------------------------------------
 
 void setup_keys(void) {
   const Style& S = *B.S;
@@ -265,7 +263,7 @@ void setup_keys(void) {
     switch (kind) {
       case TK_FLOOR: prio = 2; c = lighten(c, (float)(tone - 1) * S.floor_var); break;
       case TK_OUT: prio = 1; c = lighten(c, (float)(tone - 1) * S.out_var); break;
-      case TK_PIT: y = PIT_WATER_Y; prio = 7; rr = 0.18f; c = tone ? 0x1E4234 : 0x24493A; break;   // acqua del cenote, giu' in fondo
+      case TK_PIT: y = PIT_WATER_Y; prio = 7; rr = 0.18f; c = tone ? 0x1E4234 : 0x24493A; break;   // cenote water, down at the bottom
       case TK_PAVE: prio = 3; c = lighten(c, (float)(tone - 1) * 0.04f); break;
       case TK_PATH: prio = 5; c = lighten(c, tone ? -0.035f : 0.0f); break;
       case TK_BED: prio = 4; break;
@@ -273,7 +271,7 @@ void setup_keys(void) {
       case TK_WATER: y = WATER_Y; prio = 7; c = tone ? S.water_deep : S.water; break;
       case TK_WALL: y = WALL_H; prio = 9; rr = S.wall_round; c = lighten(c, tone == 1 ? -0.09f : (tone == 2 ? 0.07f : 0.0f)); break;
       case TK_PLAT: y = PLAT_H; prio = 8; rr = S.plat_round; c = lighten(c, tone ? -0.04f : 0.0f); break;
-      case TK_BLOCK:   // zoccolo delle piramidi, delle statue e del primo gradone dei templi maya
+      case TK_BLOCK:   // base of the pyramids, of the statues and of the first tier of the Maya temples
         y = B.style == STYLE_PIRAMIDI ? 0.55f : (B.style == STYLE_COLOSSEO ? 0.9f : (B.style == STYLE_CHICHENITZA ? 0.7f : WALL_H));
         prio = 9; rr = 0.06f;
         c = B.style == STYLE_PIRAMIDI ? S.wall_trim : S.wall_top; break;
@@ -287,7 +285,7 @@ void setup_keys(void) {
 
 int tone3(float n) { return n < 0.40f ? 0 : (n < 0.62f ? 1 : 2); }
 
-// Blocchi di muro (rettangoli pieni di almeno 2x2 caselle), dal piu' grande.
+// Wall blocks (solid rectangles of at least 2x2 cells), largest first.
 void find_blocks(void) {
   const Level* L = B.L;
   B.nblocks = 0;
@@ -304,10 +302,10 @@ void find_blocks(void) {
             if (L->cell[cz + h][cx + a] != C_WALL || B.blk_at[cz + h][cx + a] >= 0) { ok = false; break; }
           if (ok) h++;
         }
-        // al primo giro solo i blocchi grandi (3x3 e piu'), al secondo anche i 2x2
+        // on the first pass only the large blocks (3x3 and more), on the second also the 2x2 ones
         const int need = pass == 0 ? 3 : 2;
         if (w < need || h < need || B.nblocks >= 64) continue;
-        // il blocco deve essere staccato dagli altri muri sui lati (non un pezzo di muro spesso)
+        // the block must be detached from the other walls on its sides (not a piece of thick wall)
         int touching = 0;
         for (int a = -1; a <= w; ++a) {
           if (cell_or_void(L, cx + a, cz - 1) == C_WALL) touching++;
@@ -326,7 +324,7 @@ void find_blocks(void) {
       }
 }
 
-// Chiave di ogni casella della griglia estesa.
+// Key of every cell of the extended grid.
 void compute_keys(void) {
   find_blocks();
   for (int j = 0; j < B.eh; ++j)
@@ -336,8 +334,8 @@ void compute_keys(void) {
       int kind = TK_FLOOR, tone = tone3(fbm(wx, wz, 11, 7.0f));
       switch (c) {
         case C_VOID: {
-          // Fuori: qualche macchia vicino ai muri, poi un tono solo (si uniscono in rettangoli
-          // grandi e costano poco). Il Colosseo ha il lastricato attorno all'arena.
+          // Outside: a few patches near the walls, then a single tone (they merge into large
+          // rectangles and cost little). The Colosseo has the paving around the arena.
           kind = TK_OUT;
           const int d = dist_out(i, j);
           tone = d >= 5 || (B.style == STYLE_CHICHENITZA && d >= 2) ? 1 : tone3(fbm(wx, wz, 23, 10.0f));
@@ -346,7 +344,7 @@ void compute_keys(void) {
         }
         case C_PIT: kind = TK_PIT; tone = 0; break;
         case C_FLOOR: case C_BUSH: {
-          // orlo di calcare chiaro attorno al cenote
+          // rim of light limestone around the cenote
           bool rim = false;
           for (int dz = -1; dz <= 1; ++dz)
             for (int dx = -1; dx <= 1; ++dx) rim |= cell_ext(i + dx, j + dz) == C_PIT;
@@ -372,7 +370,7 @@ void compute_keys(void) {
           if (b2 >= 0 && B.style != STYLE_MURAGLIA) kind = TK_BLOCK;
           break;
         }
-        case C_PLATFORM:   // cammino di ronda a chiazze, i podi di pietra di un colore solo
+        case C_PLATFORM:   // wall walk in patches, the stone podiums in a single color
           kind = TK_PLAT;
           tone = B.style == STYLE_MURAGLIA && fbm(wx, wz, 41, 3.0f) > 0.56f ? 1 : 0;
           break;
@@ -383,19 +381,19 @@ void compute_keys(void) {
     }
 }
 
-// --- profili lungo i bordi -------------------------------------------------------------------
+// --- profiles along the edges ----------------------------------------------------------------
 
 struct Profile {
   int n;
-  float o[16], y[16];      // scostamento verso l'esterno (verso la parte bassa) e quota
+  float o[16], y[16];      // offset outwards (towards the low side) and height
   uint32_t c[15];
-  uint8_t ul[15];          // tratto senza luce
-  int nh;                  // contorno: punti (0 = niente)
+  uint8_t ul[15];          // unlit segment
+  int nh;                  // outline: points (0 = none)
   float ho[4], hy[4];
   uint32_t hc;
 };
 void pf_pt(Profile* p, float o, float y) { p->o[p->n] = o; p->y[p->n] = y; p->n++; }
-void pf_seg(Profile* p, float o, float y, uint32_t c, bool ul = false) {   // tratto fino al punto (o, y)
+void pf_seg(Profile* p, float o, float y, uint32_t c, bool ul = false) {   // segment up to the point (o, y)
   p->c[p->n - 1] = c;
   p->ul[p->n - 1] = ul ? 1 : 0;
   pf_pt(p, o, y);
@@ -408,14 +406,14 @@ void pf_hull(Profile* p, float t, uint32_t c, float omax, float ybot, float ytop
   p->hc = c;
 }
 
-// Profilo del bordo tra la parte alta (chiave hi) e quella bassa (lo). false: niente da disegnare.
+// Profile of the edge between the high side (key hi) and the low one (lo). false: nothing to draw.
 bool make_profile(Profile* p, int hi, int lo) {
   const Style& S = *B.S;
   memset(p, 0, sizeof(*p));
   const int kh = kkind(hi), kl = kkind(lo);
   const float yh = B.ky[hi], yl = B.ky[lo];
   if (kh == TK_PATH && fabsf(yh - yl) < 0.001f) {
-    // fascia scura lungo il bordo del sentiero, appena sopra il terreno
+    // dark band along the edge of the path, just above the ground
     pf_pt(p, 0.0f, 0.016f);
     pf_seg(p, -0.12f, 0.016f, lighten(B.krgb[hi], -0.13f));
     return true;
@@ -439,8 +437,8 @@ bool make_profile(Profile* p, int hi, int lo) {
         pf_hull(p, 0.045f, S.outline, 0.12f, ybot, yh);
         return true;
       case STYLE_CHICHENITZA:
-        // muro maya: zoccolo a scarpa, corpo liscio, fregio dipinto tra due cornici (la greca a
-        // gradini la disegna wall_dressing), cornice alta sporgente
+        // Maya wall: battered base, smooth body, painted frieze between two cornices (the stepped
+        // fret is drawn by wall_dressing), protruding top cornice
         pf_pt(p, 0.13f, ybot);
         pf_seg(p, 0.13f, 0.14f, S.wall_dark);
         pf_seg(p, 0.06f, 0.52f, S.wall);
@@ -469,7 +467,7 @@ bool make_profile(Profile* p, int hi, int lo) {
         pf_seg(p, 0.0f, yh, S.wall);
         pf_hull(p, 0.045f, S.outline, 0.07f, ybot, yh);
         return true;
-      default:   // Colosseo: podio dell'arena, rivestito di marmo, con la fascia rossa
+      default:   // Colosseo: the arena's podium, clad in marble, with the red band
         pf_pt(p, 0.05f, ybot);
         pf_seg(p, 0.05f, 0.16f, S.wall_dark);
         pf_seg(p, 0.03f, 0.20f, S.wall_trim);
@@ -487,7 +485,7 @@ bool make_profile(Profile* p, int hi, int lo) {
   }
   if (kh == TK_PLAT) {
     switch (B.style) {
-      case STYLE_MURAGLIA:   // cammino di ronda: mattoni e un cordolo basso sui bordi
+      case STYLE_MURAGLIA:   // wall walk: bricks and a low curb on the edges
         pf_pt(p, 0.05f, ybot);
         pf_seg(p, 0.05f, 0.24f, S.wall_dark);
         pf_seg(p, 0.05f, 0.26f, S.wall_line, true);
@@ -498,7 +496,7 @@ bool make_profile(Profile* p, int hi, int lo) {
         pf_seg(p, -0.11f, yh, lighten(S.plat_side, -0.08f));
         pf_hull(p, 0.04f, S.outline, 0.05f, ybot, yh + 0.13f);
         return true;
-      case STYLE_CHICHENITZA:   // piattaforma a gradoni: un gradino basso, poi la parete fino al piano
+      case STYLE_CHICHENITZA:   // tiered platform: a low step, then the wall up to the top
         pf_pt(p, 0.16f, ybot);
         pf_seg(p, 0.16f, 0.34f, S.plat_side);
         pf_seg(p, 0.17f, 0.38f, S.plat_trim);
@@ -509,7 +507,7 @@ bool make_profile(Profile* p, int hi, int lo) {
         pf_seg(p, 0.0f, yh, S.plat_top);
         pf_hull(p, 0.04f, S.outline, 0.17f, ybot, yh);
         return true;
-      default:   // podio di pietra: zoccolo, fasce e un bordino rialzato attorno al piano
+      default:   // stone podium: base, bands and a small raised border around the top
         pf_pt(p, 0.07f, ybot);
         pf_seg(p, 0.07f, 0.12f, S.wall_dark);
         pf_seg(p, 0.035f, 0.16f, S.plat_trim);
@@ -524,7 +522,7 @@ bool make_profile(Profile* p, int hi, int lo) {
         return true;
     }
   }
-  if (kh == TK_BLOCK) {   // zoccolo di piramidi, obelischi e statue
+  if (kh == TK_BLOCK) {   // base of pyramids, obelisks and statues
     pf_pt(p, 0.05f, ybot);
     pf_seg(p, 0.05f, yh - 0.16f, S.wall);
     pf_seg(p, 0.09f, yh - 0.12f, S.wall_trim);
@@ -534,9 +532,9 @@ bool make_profile(Profile* p, int hi, int lo) {
     return true;
   }
   if (kl == TK_PIT) {
-    // Cenote: dall'acqua scura in fondo la parete di roccia sale a strati, sempre piu' chiara
-    // (giu' in fondo senza luce: e' in ombra), fino all'orlo di calcare. L'orlo e' il bordo della
-    // casella: niente sporgenze sopra il pozzo (chi ci sta sopra col centro cade).
+    // Cenote: from the dark water at the bottom the rock wall rises in layers, lighter and lighter
+    // (unlit down at the bottom: it is in shadow), up to the limestone rim. The rim is the edge of
+    // the cell: no overhangs above the pit (whoever stands over it with their center falls).
     pf_pt(p, 0.0f, PIT_WATER_Y - 0.12f);
     pf_seg(p, 0.0f, -1.85f, 0x2C3A2C, true);
     pf_seg(p, 0.0f, -1.25f, 0x4A5440, true);
@@ -548,19 +546,19 @@ bool make_profile(Profile* p, int hi, int lo) {
     pf_hull(p, 0.03f, S.outline, 0.0f, -0.25f, yh);
     return true;
   }
-  if (kl == TK_WATER) {   // riva: schiuma appena sopra l'acqua e la sponda
+  if (kl == TK_WATER) {   // shore: foam just above the water, and the bank
     pf_pt(p, 0.13f, WATER_Y + 0.014f);
     pf_seg(p, 0.0f, WATER_Y + 0.014f, S.foam, true);
     pf_seg(p, 0.0f, yh, S.bank);
     return true;
   }
-  // gradino di terreno (paesaggio)
+  // ground step (landscape)
   pf_pt(p, 0.0f, ybot);
   pf_seg(p, 0.0f, yh, S.bank);
   return true;
 }
 
-// Fa scorrere il profilo lungo una spezzata pt[0..n-1] con le normali nr[] (verso la parte bassa).
+// Sweeps the profile along a polyline pt[0..n-1] with the normals nr[] (towards the low side).
 void sweep(MeshBuilder* mb, const Profile& p, const Vec3* pt, const Vec3* nr, int n) {
   for (int k = 0; k + 1 < p.n; ++k) {
     const float do_ = p.o[k + 1] - p.o[k], dy = p.y[k + 1] - p.y[k];
@@ -575,7 +573,7 @@ void sweep(MeshBuilder* mb, const Profile& p, const Vec3* pt, const Vec3* nr, in
   }
   unlit(mb, false);
   if (p.nh >= 2) {
-    // Contorno: lo stesso giro un po' piu' fuori, rovesciato e scuro (si vede solo sul bordo).
+    // Outline: the same loop a little further out, flipped and dark (it shows only on the edge).
     unlit(mb, true);
     for (int k = 0; k + 1 < p.nh; ++k) {
       const float do_ = p.ho[k + 1] - p.ho[k], dy = p.hy[k + 1] - p.hy[k];
@@ -591,20 +589,20 @@ void sweep(MeshBuilder* mb, const Profile& p, const Vec3* pt, const Vec3* nr, in
   }
 }
 
-// --- terreno sulla griglia duale -------------------------------------------------------------
+// --- ground on the dual grid -----------------------------------------------------------------
 
-// Pezzo dritto di bordo (meta' lato di casella) da unire ai vicini allineati.
+// Straight edge piece (half a cell side) to be merged with the aligned neighbors.
 struct Straight {
-  uint8_t axis;     // 0: lungo x (lato orizzontale), 1: lungo z
-  int8_t sgn;       // la parte bassa sta dalla parte + (sud o est) o -
+  uint8_t axis;     // 0: along x (horizontal side), 1: along z
+  int8_t sgn;       // the low side is on the + side (south or east) or on the - side
   uint8_t hi, lo;
-  float line, a, b; // coordinata fissa e intervallo lungo l'asse (griglia estesa)
+  float line, a, b; // fixed coordinate and interval along the axis (extended grid)
 };
 Straight g_st[2048];
 int g_nst;
 
-// Punti dell'arco che arrotonda l'angolo del quarto (sx, sz) attorno allo spigolo (vx, vz):
-// da P1 (sul lato verticale) a P2 (sul lato orizzontale), centro in (vx + r sx, vz + r sz).
+// Points of the arc that rounds the corner of the quarter (sx, sz) around the vertex (vx, vz):
+// from P1 (on the vertical side) to P2 (on the horizontal side), center at (vx + r sx, vz + r sz).
 void arc_pts(Vec3* out, float vx, float vz, float y, float r, float sx, float sz, int nseg) {
   for (int i = 0; i <= nseg; ++i) {
     const float t = D_HALF_PI * (float)i / (float)nseg;
@@ -612,13 +610,13 @@ void arc_pts(Vec3* out, float vx, float vz, float y, float r, float sx, float sz
   }
 }
 
-// Bordo del sentiero lastricato verso il terreno alla stessa quota: una fascia scura sottile.
+// Edge of the paved path towards ground at the same height: a thin dark band.
 bool path_band(int a, int b) {
   const int ka = kkind(a), kb = kkind(b);
   if (B.style == STYLE_COLOSSEO || ka != TK_PATH || kb == TK_PATH) return false;
   return kb == TK_FLOOR || kb == TK_BED || kb == TK_DIRT || kb == TK_OUT;
 }
-// Parte "alta" del bordo tra a e b (quella da cui parte il profilo): 1 se a, -1 se b, 0 niente.
+// "High" side of the edge between a and b (the profile starts from it): 1 if a, -1 if b, 0 none.
 int edge_side(int a, int b) {
   if (B.ky[a] > B.ky[b] + 0.001f) return 1;
   if (B.ky[b] > B.ky[a] + 0.001f) return -1;
@@ -627,7 +625,7 @@ int edge_side(int a, int b) {
   return 0;
 }
 
-// Bordo ad arco tra la chiave dentro l'arco e quella fuori: il profilo subito.
+// Arc edge between the key inside the arc and the one outside: the profile right away.
 void edge_arc(MeshBuilder* mb, int inside, int outside, float vx, float vz, float r, float sx, float sz, int nseg) {
   int hi, lo;
   bool convex;
@@ -647,9 +645,9 @@ void edge_arc(MeshBuilder* mb, int inside, int outside, float vx, float vz, floa
   sweep(mb, pf, pt, nr, nseg + 1);
 }
 
-// Bordo dritto: va nella lista e si unisce ai pezzi allineati con lo stesso profilo.
+// Straight edge: it goes into the list and is merged with the aligned pieces with the same profile.
 void edge_straight(int ka, int kb, uint8_t axis, float line, float a, float b, int sgn_b) {
-  // ka dalla parte "-", kb dalla parte "+" dell'asse perpendicolare
+  // ka on the "-" side, kb on the "+" side of the perpendicular axis
   if (b - a < 1e-4f) return;
   int hi, lo, sgn;
   const int side = edge_side(ka, kb);
@@ -661,7 +659,7 @@ void edge_straight(int ka, int kb, uint8_t axis, float line, float a, float b, i
   s.axis = axis; s.sgn = (int8_t)sgn; s.hi = (uint8_t)hi; s.lo = (uint8_t)lo; s.line = line; s.a = a; s.b = b;
 }
 
-// Il profilo dipende solo dal tipo e dalla quota della parte bassa, non dal suo tono.
+// The profile depends only on the type and the height of the low side, not on its tone.
 inline int lo_class(int k) { return kkind(k); }
 
 int cmp_straight(const void* pa, const void* pb) {
@@ -709,15 +707,15 @@ void flush_straights(MeshBuilder* mb) {
   g_nst = 0;
 }
 
-// Griglia fine (mezzo metro) del blocco in costruzione: i quarti senza arrotondamento si
-// segnano qui e alla fine si uniscono in rettangoli (anche lungo i muri e i sentieri).
+// Fine grid (half a meter) of the chunk being built: the quarters without rounding are marked
+// here and at the end they are merged into rectangles (also along the walls and the paths).
 const int FINE = 2 * (LV_CHUNK + 1);
 int16_t g_fine[FINE][FINE];
 int g_fvi0, g_fvj0;
 
-// Quadrato duale attorno allo spigolo (vi, vj) della griglia estesa: q[0] NO, q[1] NE, q[2] SO, q[3] SE.
-// Un quarto diverso da tutti e due i vicini di lato e' un angolo: si arrotonda, e il raccordo
-// prende la chiave dei vicini. Nelle scacchiere resta unita la coppia con la priorita' piu' alta.
+// Dual square around the vertex (vi, vj) of the extended grid: q[0] NW, q[1] NE, q[2] SW, q[3] SE.
+// A quarter different from both of its side neighbors is a corner: it is rounded, and the fillet
+// takes the neighbors' key. In checkerboards the pair with the highest priority stays joined.
 void dual_square(MeshBuilder* mb, int vi, int vj, const int q[4]) {
   bool rnd[4] = { false, false, false, false };
   int fil[4] = { 0, 0, 0, 0 };
@@ -742,12 +740,12 @@ void dual_square(MeshBuilder* mb, int vi, int vj, const int q[4]) {
     if (rnd[s]) {
       const float r0 = B.kround[q[s]], r1 = B.kround[fil[s]];
       rad[s] = r0 < r1 ? r0 : r1;
-      nseg[s] = rad[s] < 0.2f ? 1 : (kkind(q[s]) == kkind(fil[s]) ? 2 : 3);   // angoli piccoli: smusso; tra due toni basta meno
+      nseg[s] = rad[s] < 0.2f ? 1 : (kkind(q[s]) == kkind(fil[s]) ? 2 : 3);   // small corners: a bevel; between two tones less is enough
     }
   const float vx = (float)vi, vz = (float)vj;
   for (int s = 0; s < 4; ++s) {
     const int cx = vi - 1 + (s & 1), cz = vj - 1 + (s >> 1);
-    if (cx < 0 || cz < 0 || cx >= B.ew || cz >= B.eh) continue;   // fuori dalla griglia estesa
+    if (cx < 0 || cz < 0 || cx >= B.ew || cz >= B.eh) continue;   // outside the extended grid
     if (!rnd[s]) {
       g_fine[2 * (vj - g_fvj0) + (s >> 1)][2 * (vi - g_fvi0) + (s & 1)] = (int16_t)q[s];
       continue;
@@ -756,13 +754,13 @@ void dual_square(MeshBuilder* mb, int vi, int vj, const int q[4]) {
     const float y = B.ky[q[s]];
     Vec3 pts[16];
     int n = 0;
-    pts[n++] = wpos(vx + 0.5f * sx, y, vz + 0.5f * sz);   // centro della casella
+    pts[n++] = wpos(vx + 0.5f * sx, y, vz + 0.5f * sz);   // center of the cell
     pts[n++] = wpos(vx, y, vz + 0.5f * sz);
     arc_pts(pts + n, vx, vz, y, r, sx, sz, nseg[s]);
     n += nseg[s] + 1;
     pts[n++] = wpos(vx + 0.5f * sx, y, vz);
     fan_f(mb, pts, n, v3(0, 1, 0), B.krgb[q[s]]);
-    // il raccordo dell'angolo, del colore di chi sta attorno
+    // the corner's fillet, in the color of what is around it
     const float yf = B.ky[fil[s]];
     Vec3 fp[8];
     fp[0] = wpos(vx, yf, vz);
@@ -770,8 +768,8 @@ void dual_square(MeshBuilder* mb, int vi, int vj, const int q[4]) {
     fan_f(mb, fp, nseg[s] + 2, v3(0, 1, 0), B.krgb[fil[s]]);
     edge_arc(mb, q[s], fil[s], vx, vz, r, sx, sz, nseg[s]);
   }
-  // Lati tra quarti diversi (la parte non assorbita da un arrotondamento).
-  // verticali: N tra 0 e 1, S tra 2 e 3; orizzontali: O tra 0 e 2, E tra 1 e 3
+  // Sides between different quarters (the part not absorbed by a rounding).
+  // vertical: N between 0 and 1, S between 2 and 3; horizontal: W between 0 and 2, E between 1 and 3
   static const int SP[4][3] = { { 0, 1, -1 }, { 2, 3, 1 }, { 0, 2, -1 }, { 1, 3, 1 } };
   for (int k = 0; k < 4; ++k) {
     const int a = SP[k][0], b = SP[k][1], dir = SP[k][2];
@@ -779,7 +777,7 @@ void dual_square(MeshBuilder* mb, int vi, int vj, const int q[4]) {
     float r0 = rnd[a] ? rad[a] : (rnd[b] ? rad[b] : 0.0f);
     if (r0 >= 0.499f) continue;
     if (k < 2) {
-      // lato verticale x = vx, da vz verso vz + 0.5 * dir; a a ovest, b a est
+      // vertical side x = vx, from vz towards vz + 0.5 * dir; a to the west, b to the east
       if (vi <= 0 || vi >= B.ew) continue;
       const float z0 = dir < 0 ? vz - 0.5f : vz + r0, z1 = dir < 0 ? vz - r0 : vz + 0.5f;
       edge_straight(q[a], q[b], 1, vx, fmaxf(z0, 0.0f), fminf(z1, (float)B.eh), 1);
@@ -791,7 +789,7 @@ void dual_square(MeshBuilder* mb, int vi, int vj, const int q[4]) {
   }
 }
 
-// Terreno di un blocco: spigoli [vi0, vi1) x [vj0, vj1).
+// Ground of a chunk: vertices [vi0, vi1) x [vj0, vj1).
 void build_ground(MeshBuilder* mb, int vi0, int vj0, int vi1, int vj1) {
   const int nw = 2 * (vi1 - vi0), nh = 2 * (vj1 - vj0);
   g_fvi0 = vi0;
@@ -811,7 +809,7 @@ void build_ground(MeshBuilder* mb, int vi0, int vj0, int vi1, int vj1) {
       }
       dual_square(mb, vi, vj, q);
     }
-  // Rettangoli il piu' grandi possibile sulla griglia fine.
+  // Rectangles as large as possible on the fine grid.
   for (int j = 0; j < nh; ++j)
     for (int i = 0; i < nw; ++i) {
       const int k = g_fine[j][i];
@@ -832,9 +830,9 @@ void build_ground(MeshBuilder* mb, int vi0, int vj0, int vi1, int vj1) {
   flush_straights(mb);
 }
 
-// --- decorazioni dei muri ---------------------------------------------------------------------
+// --- wall decorations -------------------------------------------------------------------------
 
-// Chiave del terreno nel punto (x, z) del mondo.
+// Ground key at the world point (x, z).
 int key_world(float x, float z) { return keyat((int)floorf(x - B.ox), (int)floorf(z - B.oz)); }
 bool outside_kind(int k) { const int kd = kkind(k); return kd == TK_OUT || kd == TK_PAVE; }
 
@@ -846,14 +844,14 @@ void wall_dressing(MeshBuilder* mb, Vec3 p0, Vec3 p1, Vec3 n, int hi, int lo) {
   if (len < 0.2f) return;
   const Vec3 u = d * (1.0f / len);
   const Vec3 mid = (p0 + p1) * 0.5f;
-  // muro di bordo: dall'altra parte c'e' il paesaggio (questo e' il lato verso la mappa)
+  // border wall: on the other side there is the landscape (this is the side facing the map)
   const bool inner = outside_kind(key_world(mid.x - n.x * 1.5f, mid.z - n.z * 1.5f)) && !outside_kind(lo);
   if (B.style == STYLE_MURAGLIA) {
     if (inner) {
-      // verso la mappa un parapetto basso e continuo
+      // towards the map a low, continuous parapet
       const Vec3 a = p0 - n * 0.16f, b = p1 - n * 0.02f;
       box5(mb, v3(fminf(a.x, b.x), WALL_H - 0.02f, fminf(a.z, b.z)), v3(fmaxf(a.x, b.x), WALL_H + 0.16f, fmaxf(a.z, b.z)), S.wall_trim);
-      // e ogni tanto una torretta sopra il muro di bordo (solo estetica: sul muro non si sale)
+      // and now and then a turret on top of the border wall (only cosmetic: nobody climbs the wall)
       for (float t = 3.5f; t < len - 1.0f; t += 9.0f) {
         const Vec3 c = p0 + u * t - n * 0.5f;
         if (fabsf(fmodf(fabsf(c.x) * 0.37f + fabsf(c.z) * 0.61f, 1.0f)) > 0.8f) continue;
@@ -866,7 +864,7 @@ void wall_dressing(MeshBuilder* mb, Vec3 p0, Vec3 p1, Vec3 n, int hi, int lo) {
       }
       return;
     }
-    // merli con le feritoie sul lato esterno (e sui due lati dei muri dentro la mappa)
+    // merlons with the loopholes on the outer side (and on both sides of the walls inside the map)
     const int nm = (int)(len / 0.7f + 0.5f);
     if (nm < 1) return;
     const float step = len / (float)nm;
@@ -876,7 +874,7 @@ void wall_dressing(MeshBuilder* mb, Vec3 p0, Vec3 p1, Vec3 n, int hi, int lo) {
       box5(mb, v3(c.x - ex, WALL_H - 0.02f, c.z - ez), v3(c.x + ex, WALL_H + 0.32f, c.z + ez), (i & 1) ? S.wall : lighten(S.wall, 0.05f));
     }
   } else if (B.style == STYLE_PIRAMIDI && n.z > 0.5f) {
-    // Giunti verticali dei blocchi, sfalsati per corso, sul lato che si vede.
+    // Vertical joints of the blocks, staggered per course, on the visible side.
     unlit(mb, true);
     for (int row = 0; row < 2; ++row) {
       const float y0 = row ? 0.26f : 0.66f, y1 = row ? 0.64f : 1.04f;
@@ -888,8 +886,8 @@ void wall_dressing(MeshBuilder* mb, Vec3 p0, Vec3 p1, Vec3 n, int hi, int lo) {
     }
     unlit(mb, false);
   } else if (B.style == STYLE_CHICHENITZA && n.z > 0.5f) {
-    // Greca a gradini sul fregio dipinto, sul lato che si vede: per ogni mezzo metro un gradino rosso
-    // (in basso, su, in alto) sul fondo blu.
+    // Stepped fret on the painted frieze, on the visible side: for every half meter a red step
+    // (low, up, high) on the blue background.
     unlit(mb, true);
     const int nu = (int)(len / 0.52f);
     const float st = nu > 0 ? len / (float)nu : len;
@@ -906,7 +904,7 @@ void wall_dressing(MeshBuilder* mb, Vec3 p0, Vec3 p1, Vec3 n, int hi, int lo) {
   }
 }
 
-// Liane che pendono lungo la parete del cenote che si vede (verso sud): strisce verdi un po' storte.
+// Lianas hanging down the visible wall of the cenote (towards south): slightly crooked green strips.
 void pit_dressing(MeshBuilder* mb, Vec3 p0, Vec3 p1, Vec3 n) {
   if (n.z < 0.5f) return;
   const Vec3 d = p1 - p0;
@@ -921,13 +919,13 @@ void pit_dressing(MeshBuilder* mb, Vec3 p0, Vec3 p1, Vec3 n) {
     const uint32_t col = (k & 1) ? 0x4E9E3E : 0x3E8A34;
     quad_f(mb, a - u * w + v3(0, 0.02f, 0), a + u * w + v3(0, 0.02f, 0), b + u * w, b - u * w, n, col);
     quad_f(mb, b - u * w, b + u * w, c + u * (w * 0.5f), c - u * (w * 0.5f), n, lighten(col, -0.08f));
-    tri_f(mb, b + u * w, b + u * (w + 0.12f) + v3(0, 0.08f, 0), b + u * w + v3(0, -0.1f, 0), n, 0x4FA040);   // una foglia
+    tri_f(mb, b + u * w, b + u * (w + 0.12f) + v3(0, 0.08f, 0), b + u * w + v3(0, -0.1f, 0), n, 0x4FA040);   // a leaf
   }
 }
 
-// --- oggetti fissi delle caselle ----------------------------------------------------------------
+// --- static objects of the cells ----------------------------------------------------------------
 
-// Cilindro senza i coperchi (tronchi, pali): 2 * seg triangoli.
+// Cylinder without the caps (trunks, poles): 2 * seg triangles.
 void pipe(MeshBuilder* mb, Vec3 a, Vec3 b, float r0, float r1, int seg, uint32_t c) {
   const Vec3 d = normalize(b - a);
   const Vec3 h = fabsf(d.y) < 0.9f ? v3(0, 1, 0) : v3(1, 0, 0);
@@ -949,7 +947,7 @@ void pipe(MeshBuilder* mb, Vec3 a, Vec3 b, float r0, float r1, int seg, uint32_t
   }
 }
 
-// Foglia di palma da un lato solo (si vede dall'alto): 4 triangoli.
+// Palm frond with one side only (it is seen from above): 4 triangles.
 void frond(MeshBuilder* mb, Vec3 a, Vec3 tip, float w, float droop, uint32_t c, uint32_t c2) {
   const Vec3 d = tip - a;
   Vec3 side = normalize(cross(d, v3(0, 1, 0)));
@@ -963,7 +961,7 @@ void frond(MeshBuilder* mb, Vec3 a, Vec3 tip, float w, float droop, uint32_t c, 
   tri_f(mb, mid, tip, r, up, c2);
 }
 
-// Palma da datteri: tronco a segmenti un po' storto, ciuffo di foglie che ricadono.
+// Date palm: slightly crooked segmented trunk, tuft of drooping fronds.
 void palm(MeshBuilder* mb, const Style& S, Vec3 at, float s, uint32_t h, bool detailed) {
   const float lean = 0.16f + 0.24f * (float)(h % 100u) / 100.0f, yaw = (float)((h >> 8) % 628u) * 0.01f;
   const Vec3 dir = v3(lean * d_cos(yaw), 1.0f, lean * d_sin(yaw));
@@ -989,7 +987,7 @@ void palm(MeshBuilder* mb, const Style& S, Vec3 at, float s, uint32_t h, bool de
   if (detailed) mb_ellipsoid(mb, top + v3(0.06f * s, -0.14f * s, 0.04f * s), v3(0.17f * s, 0.13f * s, 0.17f * s), 5, 2, S.deco0);
 }
 
-// Albero a chioma tonda; nel Colosseo il cipresso, alto e stretto.
+// Tree with a round crown; in the Colosseo the cypress, tall and narrow.
 void round_tree(MeshBuilder* mb, const Style& S, Vec3 at, float s, uint32_t h, bool detailed) {
   const Part pt = part(mb);
   pipe(mb, at, at + v3(0, 1.35f * s, 0), 0.17f * s, 0.12f * s, detailed ? 6 : 4, S.trunk);
@@ -1006,7 +1004,7 @@ void round_tree(MeshBuilder* mb, const Style& S, Vec3 at, float s, uint32_t h, b
   if (detailed) outline(mb, pc, 0.045f, S.leaf_line);
 }
 
-// Pino cinese: rami a strati piatti.
+// Chinese pine: branches in flat layers.
 void pine(MeshBuilder* mb, const Style& S, Vec3 at, float s, uint32_t h, bool detailed) {
   const Part pt = part(mb);
   const float lean = 0.12f * hs((int)h, 1, 9);
@@ -1023,14 +1021,14 @@ void pine(MeshBuilder* mb, const Style& S, Vec3 at, float s, uint32_t h, bool de
   if (detailed) outline(mb, pc, 0.045f, S.leaf_line);
 }
 
-// Ceiba (Chichen Itza): tronco dritto e chiaro con le radici a contrafforte, chioma larga e piatta.
+// Ceiba (Chichen Itza): straight, light trunk with buttress roots, wide and flat crown.
 void ceiba(MeshBuilder* mb, const Style& S, Vec3 at, float s, uint32_t h, bool detailed) {
   const Part pt = part(mb);
   const float hgt = 2.35f * s;
   const Vec3 top = at + v3(0.07f * hs((int)h, 1, 9) * s, hgt, 0.07f * hs((int)h, 2, 9) * s);
   pipe(mb, at, top, 0.2f * s, 0.13f * s, detailed ? 6 : 4, S.trunk);
   if (detailed) {
-    for (int k = 0; k < 3; ++k) {   // radici a contrafforte: tre lame
+    for (int k = 0; k < 3; ++k) {   // buttress roots: three blades
       const float a = (float)(h % 628u) * 0.01f + D_TWO_PI * (float)k / 3.0f;
       const Vec3 d = v3(d_cos(a), 0.0f, d_sin(a));
       const Vec3 b0 = at + d * (0.1f * s), b1 = at + d * (0.55f * s), t = at + d * (0.08f * s) + v3(0, 0.75f * s, 0);
@@ -1057,7 +1055,7 @@ void tree_at(MeshBuilder* mb, const Style& S, Vec3 at, float s, uint32_t h, bool
   }
 }
 
-// Masso irregolare (ellissoide schiacciato e un sasso accanto).
+// Irregular boulder (squashed ellipsoid and a stone next to it).
 void boulder(MeshBuilder* mb, const Style& S, Vec3 at, float s, uint32_t h, bool detailed) {
   const Part p = part(mb);
   const float k = 0.85f + 0.3f * (float)(h % 100u) / 100.0f;
@@ -1067,7 +1065,7 @@ void boulder(MeshBuilder* mb, const Style& S, Vec3 at, float s, uint32_t h, bool
   if (detailed) outline(mb, p, 0.035f, S.rock_line);
 }
 
-// Rocchio di colonna in piedi o a terra, con le scanalature accennate (7 lati).
+// Column drum, standing or lying on the ground, with hinted fluting (7 sides).
 void column_drum(MeshBuilder* mb, const Style& S, Vec3 at, float r, float hgt, bool lying, float yaw, uint32_t c) {
   const Part p = part(mb);
   mb_cylinder(mb, v3(0, 0, 0), r, r, hgt, 7, c);
@@ -1076,28 +1074,28 @@ void column_drum(MeshBuilder* mb, const Style& S, Vec3 at, float r, float hgt, b
   outline(mb, p, 0.03f, S.rock_line);
 }
 
-// Sfinge su un piedistallo, rivolta verso yaw: corpo di leone sdraiato, testa col copricapo a righe.
+// Sphinx on a pedestal, facing yaw: lying lion's body, head with the striped headdress.
 void sphinx(MeshBuilder* mb, const Style& S, Vec3 at, float yaw, float sc) {
   const Part p = part(mb);
   const uint32_t st = lighten(S.rock, 0.06f), dk = S.rock_dark;
-  mb_box(mb, v3(-0.36f, 0.0f, -0.48f), v3(0.36f, 0.26f, 0.48f), dk);                 // piedistallo
-  mb_box(mb, v3(-0.22f, 0.26f, -0.44f), v3(0.22f, 0.56f, 0.18f), st);                // corpo sdraiato
-  mb_box(mb, v3(-0.19f, 0.26f, 0.12f), v3(-0.05f, 0.38f, 0.46f), st);                // zampe davanti
+  mb_box(mb, v3(-0.36f, 0.0f, -0.48f), v3(0.36f, 0.26f, 0.48f), dk);                 // pedestal
+  mb_box(mb, v3(-0.22f, 0.26f, -0.44f), v3(0.22f, 0.56f, 0.18f), st);                // lying body
+  mb_box(mb, v3(-0.19f, 0.26f, 0.12f), v3(-0.05f, 0.38f, 0.46f), st);                // front paws
   mb_box(mb, v3(0.05f, 0.26f, 0.12f), v3(0.19f, 0.38f, 0.46f), st);
-  mb_box(mb, v3(-0.16f, 0.5f, 0.02f), v3(0.16f, 1.02f, 0.3f), st);                   // petto e testa
-  mb_box(mb, v3(-0.22f, 0.72f, -0.02f), v3(0.22f, 1.07f, 0.22f), S.wall_band);       // copricapo
-  mb_box(mb, v3(-0.23f, 0.5f, 0.06f), v3(-0.15f, 0.84f, 0.2f), S.wall_band);         // bande ai lati
+  mb_box(mb, v3(-0.16f, 0.5f, 0.02f), v3(0.16f, 1.02f, 0.3f), st);                   // chest and head
+  mb_box(mb, v3(-0.22f, 0.72f, -0.02f), v3(0.22f, 1.07f, 0.22f), S.wall_band);       // headdress
+  mb_box(mb, v3(-0.23f, 0.5f, 0.06f), v3(-0.15f, 0.84f, 0.2f), S.wall_band);         // side bands
   mb_box(mb, v3(0.15f, 0.5f, 0.06f), v3(0.23f, 0.84f, 0.2f), S.wall_band);
-  mb_box(mb, v3(-0.13f, 0.66f, 0.2f), v3(0.13f, 0.98f, 0.34f), st);                  // viso
+  mb_box(mb, v3(-0.13f, 0.66f, 0.2f), v3(0.13f, 0.98f, 0.34f), st);                  // face
   outline(mb, p, 0.03f, S.rock_line);
-  // righe d'oro sul copricapo e coda arrotolata
+  // gold stripes on the headdress and curled tail
   mb_box(mb, v3(-0.225f, 0.98f, -0.025f), v3(0.225f, 1.0f, 0.225f), 0xF2C94C);
   mb_box(mb, v3(-0.225f, 0.86f, -0.025f), v3(0.225f, 0.88f, 0.225f), 0xF2C94C);
   mb_box(mb, v3(0.1f, 0.26f, -0.47f), v3(0.24f, 0.33f, -0.3f), st);
   place(mb, p, at, yaw, sc);
 }
 
-// Statua spezzata: testa enorme caduta a terra.
+// Broken statue: huge head fallen to the ground.
 void fallen_head(MeshBuilder* mb, const Style& S, Vec3 at, float yaw) {
   const Part p = part(mb);
   mb_box(mb, v3(-0.42f, 0.0f, -0.38f), v3(0.42f, 0.62f, 0.26f), S.wall_band);
@@ -1110,40 +1108,40 @@ void fallen_head(MeshBuilder* mb, const Style& S, Vec3 at, float yaw) {
   place_xf(mb, q, xf_mul(xf_translate(at), xf_mul(xf_rot_y(yaw), xf_rot_z(0.3f))));
 }
 
-// Chac Mool: figura sdraiata sui gomiti, ginocchia alzate, il piatto delle offerte sulla pancia.
+// Chac Mool: figure reclining on its elbows, knees raised, the offering plate on its belly.
 void chac_mool(MeshBuilder* mb, const Style& S, Vec3 at, float yaw) {
   const Part p = part(mb);
   const uint32_t st = S.rock, dk = S.rock_dark;
-  mb_box(mb, v3(-0.44f, 0.0f, -0.3f), v3(0.44f, 0.16f, 0.3f), dk);                       // basamento
-  mb_box(mb, v3(-0.36f, 0.16f, -0.19f), v3(0.08f, 0.36f, 0.19f), st);                    // busto
-  mb_box(mb, v3(-0.44f, 0.28f, -0.16f), v3(-0.22f, 0.6f, 0.16f), st);                    // spalle alzate
-  mb_box(mb, v3(-0.47f, 0.5f, -0.13f), v3(-0.25f, 0.76f, 0.13f), lighten(st, 0.06f));    // testa
-  mb_box(mb, v3(0.04f, 0.16f, -0.18f), v3(0.23f, 0.56f, -0.04f), st);                    // ginocchia
+  mb_box(mb, v3(-0.44f, 0.0f, -0.3f), v3(0.44f, 0.16f, 0.3f), dk);                       // plinth
+  mb_box(mb, v3(-0.36f, 0.16f, -0.19f), v3(0.08f, 0.36f, 0.19f), st);                    // torso
+  mb_box(mb, v3(-0.44f, 0.28f, -0.16f), v3(-0.22f, 0.6f, 0.16f), st);                    // raised shoulders
+  mb_box(mb, v3(-0.47f, 0.5f, -0.13f), v3(-0.25f, 0.76f, 0.13f), lighten(st, 0.06f));    // head
+  mb_box(mb, v3(0.04f, 0.16f, -0.18f), v3(0.23f, 0.56f, -0.04f), st);                    // knees
   mb_box(mb, v3(0.04f, 0.16f, 0.04f), v3(0.23f, 0.56f, 0.18f), st);
-  mb_box(mb, v3(0.23f, 0.16f, -0.18f), v3(0.4f, 0.3f, 0.18f), st);                       // piedi
+  mb_box(mb, v3(0.23f, 0.16f, -0.18f), v3(0.4f, 0.3f, 0.18f), st);                       // feet
   outline(mb, p, 0.03f, S.rock_line);
-  mb_cylinder(mb, v3(-0.13f, 0.36f, 0.0f), 0.16f, 0.19f, 0.06f, 7, S.deco2);              // il piatto
+  mb_cylinder(mb, v3(-0.13f, 0.36f, 0.0f), 0.16f, 0.19f, 0.06f, 7, S.deco2);              // the plate
   place(mb, p, at, yaw, 1.15f);
 }
 
-// Testa del serpente piumato (Kukulkan): grande testa di pietra con le fauci aperte, verso yaw.
+// Head of the feathered serpent (Kukulkan): large stone head with open jaws, facing yaw.
 void serpent_head(MeshBuilder* mb, const Style& S, Vec3 at, float yaw, float sc) {
   const Part p = part(mb);
   const uint32_t st = S.rock, dk = S.rock_dark;
   mb_box(mb, v3(-0.34f, 0.0f, -0.42f), v3(0.34f, 0.16f, 0.36f), dk);                     // base
-  mb_box(mb, v3(-0.3f, 0.16f, -0.4f), v3(0.3f, 0.66f, 0.1f), st);                        // cranio
-  mb_box(mb, v3(-0.26f, 0.16f, 0.1f), v3(0.26f, 0.3f, 0.5f), st);                        // mascella
-  mb_box(mb, v3(-0.28f, 0.42f, 0.06f), v3(0.28f, 0.62f, 0.5f), st);                      // muso
-  mb_box(mb, v3(-0.33f, 0.62f, -0.38f), v3(0.33f, 0.74f, 0.02f), lighten(st, 0.07f));    // piume sopra gli occhi
+  mb_box(mb, v3(-0.3f, 0.16f, -0.4f), v3(0.3f, 0.66f, 0.1f), st);                        // skull
+  mb_box(mb, v3(-0.26f, 0.16f, 0.1f), v3(0.26f, 0.3f, 0.5f), st);                        // jaw
+  mb_box(mb, v3(-0.28f, 0.42f, 0.06f), v3(0.28f, 0.62f, 0.5f), st);                      // snout
+  mb_box(mb, v3(-0.33f, 0.62f, -0.38f), v3(0.33f, 0.74f, 0.02f), lighten(st, 0.07f));    // feathers above the eyes
   outline(mb, p, 0.03f, S.rock_line);
-  mb_box(mb, v3(-0.21f, 0.3f, 0.3f), v3(0.21f, 0.42f, 0.49f), 0x2A2420);                 // bocca aperta
-  mb_box(mb, v3(-0.23f, 0.5f, -0.02f), v3(-0.12f, 0.59f, 0.08f), 0x2A2420);              // occhi
+  mb_box(mb, v3(-0.21f, 0.3f, 0.3f), v3(0.21f, 0.42f, 0.49f), 0x2A2420);                 // open mouth
+  mb_box(mb, v3(-0.23f, 0.5f, -0.02f), v3(-0.12f, 0.59f, 0.08f), 0x2A2420);              // eyes
   mb_box(mb, v3(0.12f, 0.5f, -0.02f), v3(0.23f, 0.59f, 0.08f), 0x2A2420);
-  mb_box(mb, v3(-0.05f, 0.31f, 0.46f), v3(0.05f, 0.34f, 0.64f), S.wall_band2);           // lingua
+  mb_box(mb, v3(-0.05f, 0.31f, 0.46f), v3(0.05f, 0.34f, 0.64f), S.wall_band2);           // tongue
   place(mb, p, at, yaw, sc);
 }
 
-// Stele: lastra di pietra con i glifi dipinti sulla faccia.
+// Stela: stone slab with glyphs painted on its face.
 void stela(MeshBuilder* mb, const Style& S, Vec3 at, float yaw) {
   const Part p = part(mb);
   mb_box(mb, v3(-0.36f, 0.0f, -0.2f), v3(0.36f, 0.14f, 0.2f), S.rock_dark);
@@ -1157,7 +1155,7 @@ void stela(MeshBuilder* mb, const Style& S, Vec3 at, float yaw) {
   place(mb, p, at, yaw, 1.0f);
 }
 
-// Colonna del Tempio dei Guerrieri (le Mille Colonne): pilastro quadrato con i guerrieri scolpiti.
+// Column of the Temple of the Warriors (the Thousand Columns): square pillar with carved warriors.
 void maya_column(MeshBuilder* mb, const Style& S, Vec3 at) {
   const Part p = part(mb);
   mb_box(mb, v3(-0.32f, 0.0f, -0.32f), v3(0.32f, 0.12f, 0.32f), S.rock_dark);
@@ -1174,14 +1172,14 @@ void maya_column(MeshBuilder* mb, const Style& S, Vec3 at) {
   place(mb, p, at, 0.0f, 1.0f);
 }
 
-// Masso / rovina della casella 'o' secondo lo stile.
+// Boulder / ruin of the 'o' cell, depending on the style.
 void rock_cell(MeshBuilder* mb, const Style& S, int cx, int cz, Vec3 c, uint32_t h) {
   const Level* L = B.L;
   const float yaw = (float)((h >> 9) % 628u) * 0.01f;
   const Vec3 at = c + v3(0.08f * hs(cx, cz, 41), 0, 0.08f * hs(cx, cz, 42));
   switch (B.style) {
     case STYLE_PIRAMIDI: {
-      // Accanto al sentiero: una sfinge rivolta verso il sentiero (il viale delle sfingi).
+      // Next to the path: a sphinx facing the path (the avenue of sphinxes).
       int px = 0, pz = 0;
       for (int r = 1; r <= 2 && !px && !pz; ++r) {
         if (cell_or_void(L, cx + r, cz) == C_PATH) px = 1;
@@ -1226,8 +1224,8 @@ void rock_cell(MeshBuilder* mb, const Style& S, int cx, int cz, Vec3 c, uint32_t
       return;
     }
     case STYLE_CHICHENITZA: {
-      // Colonne in fila (o.o): le Mille Colonne. Accanto a un sentiero: testa del serpente rivolta
-      // verso il sentiero. Altrove Chac Mool o stele.
+      // Columns in a row (o.o): the Thousand Columns. Next to a path: serpent head facing the
+      // path. Elsewhere Chac Mool or stelae.
       const bool row = cell_or_void(L, cx + 2, cz) == C_ROCK || cell_or_void(L, cx - 2, cz) == C_ROCK ||
                        cell_or_void(L, cx, cz + 2) == C_ROCK || cell_or_void(L, cx, cz - 2) == C_ROCK;
       if (row) {
@@ -1256,20 +1254,20 @@ void rock_cell(MeshBuilder* mb, const Style& S, int cx, int cz, Vec3 c, uint32_t
   }
 }
 
-// Muretto basso '=' secondo lo stile: tratti continui verso i vicini.
+// Low wall '=' depending on the style: continuous runs towards the neighbors.
 void low_wall(MeshBuilder* mb, const Style& S, int cx, int cz, Vec3 c, uint32_t h) {
   const Level* L = B.L;
   auto lowish = [&](int a, int b) { const int t = cell_or_void(L, a, b); return t == C_LOW || t == C_WALL; };
   const bool w = lowish(cx - 1, cz), e = lowish(cx + 1, cz), n = lowish(cx, cz - 1), s = lowish(cx, cz + 1);
   const bool any = w || e || n || s;
   if (B.style == STYLE_PIRAMIDI && !any) {
-    // Rocchi di colonna in fila (o uno solo).
+    // Column drums in a row (or a single one).
     column_drum(mb, S, c + v3(0.06f * hs(cx, cz, 2), 0, 0.06f * hs(cx, cz, 3)), 0.34f, LOW_H, false, (float)(h % 628u) * 0.01f, S.low);
     return;
   }
   const float t = B.style == STYLE_MURAGLIA ? 0.2f : 0.17f;
   const float top = LOW_H;
-  // pezzo centrale e bracci verso i vicini
+  // central piece and arms towards the neighbors
   float x0 = c.x - t, x1 = c.x + t, z0 = c.z - t, z1 = c.z + t;
   if (w || !any) x0 = c.x - 0.5f;
   if (e || !any) x1 = c.x + 0.5f;
@@ -1278,7 +1276,7 @@ void low_wall(MeshBuilder* mb, const Style& S, int cx, int cz, Vec3 c, uint32_t 
   if (n) obox(mb, v3(c.x - t, -0.05f, c.z - 0.5f), v3(c.x + t, top - 0.06f, c.z), 0.0f, col, S.outline, 0.03f);
   if (s) obox(mb, v3(c.x - t, -0.05f, c.z), v3(c.x + t, top - 0.06f, c.z + 0.5f), 0.0f, col, S.outline, 0.03f);
   if (!(x1 - x0 > 2.0f * t + 0.01f) && !n && !s) obox(mb, v3(x0, -0.05f, z0), v3(x1, top - 0.06f, z1), 0.0f, col, S.outline, 0.03f);
-  // copertina
+  // coping
   const float ct = t + 0.04f;
   if (x1 - x0 > 2.0f * t + 0.01f) box5(mb, v3(x0, top - 0.07f, c.z - ct), v3(x1, top, c.z + ct), ctop);
   if (n) box5(mb, v3(c.x - ct, top - 0.07f, c.z - 0.5f), v3(c.x + ct, top, c.z), ctop);
@@ -1290,8 +1288,8 @@ void low_wall(MeshBuilder* mb, const Style& S, int cx, int cz, Vec3 c, uint32_t 
     }
   }
   if (B.style == STYLE_CHICHENITZA) {
-    // Campo della pelota: a meta' di un muretto lungo (almeno 5 caselle in fila) l'anello di pietra,
-    // girato verso la telecamera.
+    // Ball court: halfway along a long low wall (at least 5 cells in a row) the stone ring, turned
+    // towards the camera.
     int a = 0, b = 0;
     const bool vert = n || s;
     while (cell_or_void(L, cx - (vert ? 0 : a + 1), cz - (vert ? a + 1 : 0)) == C_LOW) a++;
@@ -1310,11 +1308,11 @@ void low_wall(MeshBuilder* mb, const Style& S, int cx, int cz, Vec3 c, uint32_t 
   }
 }
 
-// Blocco da 1 m 'c' secondo lo stile.
+// 1 m block 'c' depending on the style.
 void block_cell(MeshBuilder* mb, const Style& S, int cx, int cz, Vec3 c, uint32_t h) {
   const float yaw = 0.07f * hs(cx, cz, 61);
   if (B.style == STYLE_COLOSSEO) {
-    // cassa di legno delle scorte dei gladiatori
+    // wooden crate of the gladiators' supplies
     const Part p = part(mb);
     mb_bevel_box(mb, v3(-0.45f, 0.0f, -0.45f), v3(0.45f, CRATE_H, 0.45f), 0.05f, S.block);
     outline(mb, p, 0.035f, S.outline);
@@ -1333,7 +1331,7 @@ void block_cell(MeshBuilder* mb, const Style& S, int cx, int cz, Vec3 c, uint32_
   const Part q = part(mb);
   box5(mb, v3(-0.38f, CRATE_H - 0.02f, -0.38f), v3(0.38f, CRATE_H + 0.012f, 0.38f), S.block_top);
   if (B.style == STYLE_CHICHENITZA) {
-    // blocco scolpito: due glifi sulla faccia verso la telecamera
+    // carved block: two glyphs on the face towards the camera
     unlit(mb, true);
     for (int k = 0; k < 2; ++k) {
       const float x = -0.34f + 0.38f * (float)k;
@@ -1346,7 +1344,7 @@ void block_cell(MeshBuilder* mb, const Style& S, int cx, int cz, Vec3 c, uint32_
   place(mb, q, c, yaw, 1.0f);
 }
 
-// --- decorazioni sparse ------------------------------------------------------------------------
+// --- scattered decorations ---------------------------------------------------------------------
 
 void tuft(MeshBuilder* mb, Vec3 at, float hgt, uint32_t c, uint32_t h) {
   for (int k = 0; k < 3; ++k) {
@@ -1364,7 +1362,7 @@ void flower(MeshBuilder* mb, Vec3 at, uint32_t petal, uint32_t heart) {
   unlit(mb, false);
 }
 void pebble(MeshBuilder* mb, Vec3 at, float s, uint32_t c) {
-  // sasso piatto: quattro facce verso l'alto
+  // flat stone: four faces pointing up
   const Vec3 top = at + v3(0.02f * s, 0.08f * s, 0.0f);
   const Vec3 q[4] = { at + v3(-0.12f * s, 0, -0.02f * s), at + v3(0.0f, 0, -0.1f * s), at + v3(0.13f * s, 0, 0.01f * s), at + v3(0.01f * s, 0, 0.09f * s) };
   for (int k = 0; k < 4; ++k) tri_f(mb, q[k], q[(k + 1) & 3], top, (q[k] + q[(k + 1) & 3]) * 0.5f - at + v3(0, 0.2f, 0), k & 1 ? c : lighten(c, 0.1f));
@@ -1381,7 +1379,7 @@ void reeds(MeshBuilder* mb, const Style& S, Vec3 at, uint32_t h) {
   }
 }
 
-// Decorazione piccola su una casella di terreno libero (a gruppi, guidati dal rumore).
+// Small decoration on a free ground cell (in groups, driven by the noise).
 void ground_deco(MeshBuilder* mb, const Style& S, int cx, int cz, Vec3 c, int ccell) {
   const float cl = fbm(c.x, c.z, 77, 5.0f);
   if (cl < 0.52f) return;
@@ -1409,7 +1407,7 @@ void ground_deco(MeshBuilder* mb, const Style& S, int cx, int cz, Vec3 c, int cc
   }
 }
 
-// Botola di legno nella sabbia (i punti da cui escono i mostri, nel Colosseo).
+// Wooden trapdoor in the sand (the points the monsters come out of, in the Colosseo).
 void trapdoor(MeshBuilder* mb, const Style& S, Vec3 c) {
   const float y = 0.028f;
   const Part p = part(mb);
@@ -1423,7 +1421,7 @@ void trapdoor(MeshBuilder* mb, const Style& S, Vec3 c) {
   place(mb, p, c, 0.0f, 1.0f);
 }
 
-// Oggetti fissi del blocco di caselle [cx0, cx1) x [cz0, cz1) della mappa.
+// Static objects of the chunk of map cells [cx0, cx1) x [cz0, cz1).
 void build_cells(MeshBuilder* mb, int cx0, int cz0, int cx1, int cz1) {
   const Level* L = B.L;
   const Style& S = *B.S;
@@ -1452,8 +1450,8 @@ void build_cells(MeshBuilder* mb, int cx0, int cz0, int cx1, int cz1) {
         const int sx = L->zones[z].spawn[i][0], sz = L->zones[z].spawn[i][1];
         if (sx >= cx0 && sx < cx1 && sz >= cz0 && sz < cz1) trapdoor(mb, S, ccenter(sx, sz));
       }
-  // Canne lungo le rive (Piramidi e stagni della giungla): dove il rumore lo vuole, sulle caselle
-  // libere accanto all'acqua.
+  // Reeds along the banks (Piramidi and jungle ponds): where the noise wants them, on the free
+  // cells next to the water.
   if (B.style == STYLE_PIRAMIDI || B.style == STYLE_CHICHENITZA)
     for (int cz = cz0; cz < cz1; ++cz)
       for (int cx = cx0; cx < cx1; ++cx) {
@@ -1468,7 +1466,7 @@ void build_cells(MeshBuilder* mb, int cx0, int cz0, int cx1, int cz1) {
       }
 }
 
-// Riflessi chiari sparsi sull'acqua aperta (anche quella che continua fuori dalla mappa).
+// Light glints scattered on the open water (also the water that continues outside the map).
 void water_glints(MeshBuilder* mb, int i0, int j0, int i1, int j1) {
   unlit(mb, true);
   for (int j = j0; j < j1; ++j)
@@ -1484,11 +1482,11 @@ void water_glints(MeshBuilder* mb, int i0, int j0, int i1, int j1) {
   unlit(mb, false);
 }
 
-// --- paesaggio vicino (caselle fuori dalla mappa) ------------------------------------------------
+// --- near landscape (cells outside the map) ------------------------------------------------------
 
-// Poche cose piccole ed economiche sulla striscia attorno alla mappa (le sagome grandi, dune,
-// colline e la chioma della giungla, le mette il paesaggio dello stile): ciuffi, sassi, qualche
-// palma o pino rado. Niente contro i muri del bordo e niente nel Colosseo (le gradinate).
+// A few small, cheap things on the strip around the map (the large silhouettes, dunes, hills and
+// the jungle canopy, come from the style's landscape): tufts, stones, the odd sparse palm or pine.
+// Nothing against the border walls and nothing in the Colosseo (the stands).
 void build_margin(MeshBuilder* mb, int i0, int j0, int i1, int j1) {
   const Style& S = *B.S;
   if (B.style == STYLE_COLOSSEO || B.style == STYLE_CHICHENITZA) return;
@@ -1497,7 +1495,7 @@ void build_margin(MeshBuilder* mb, int i0, int j0, int i1, int j1) {
       if (cell_ext(i, j) != C_VOID) continue;
       const int d = dist_out(i, j);
       if (d < 2 || d > 11) continue;
-      // niente dove la mappa ha caselle vuote accanto (dentro la griglia)
+      // nothing right next to the cells of the map (inside the grid)
       bool near = false;
       for (int dz = -1; dz <= 1 && !near; ++dz)
         for (int dx = -1; dx <= 1; ++dx)
@@ -1515,9 +1513,9 @@ void build_margin(MeshBuilder* mb, int i0, int j0, int i1, int j1) {
     }
 }
 
-// --- forme grandi -------------------------------------------------------------------------------
+// --- large shapes -------------------------------------------------------------------------------
 
-// Cupola: meta' superiore di un ellissoide con la base sul piano y = c.y (dune, colline, nebbia).
+// Dome: upper half of an ellipsoid with its base on the plane y = c.y (dunes, hills, fog).
 void dome(MeshBuilder* mb, Vec3 c, float rx, float hgt, float rz, int seg, int rings, uint32_t col) {
   const int top = mb_vert(mb, c + v3(0, hgt, 0));
   const int first = mb->nv;
@@ -1538,14 +1536,14 @@ void dome(MeshBuilder* mb, Vec3 c, float rx, float hgt, float rz, int seg, int r
     }
   }
 }
-// Quota di una cupola nel punto (x, z), -1 fuori.
+// Height of a dome at the point (x, z), -1 outside.
 float dome_h(Vec3 c, float rx, float hgt, float rz, float x, float z) {
   const float u = (x - c.x) / rx, w = (z - c.z) / rz, d2 = u * u + w * w;
   if (d2 >= 1.0f) return -1.0f;
   return c.y + hgt * sqrtf(1.0f - d2);
 }
 
-// Piramide a base rettangolare con la punta di un altro colore.
+// Pyramid with a rectangular base and the tip in another color.
 void pyramid(MeshBuilder* mb, Vec3 c, float hx, float hz, float hgt, uint32_t col, uint32_t cap, float capk, uint32_t line, float t) {
   const Part p = part(mb);
   const Vec3 apex = c + v3(0, hgt, 0);
@@ -1563,7 +1561,7 @@ void pyramid(MeshBuilder* mb, Vec3 c, float hx, float hz, float hgt, uint32_t co
   if (t > 0.0f) outline(mb, p, t, line);
 }
 
-// Prisma a base quadrata che si stringe in alto, senza fondo (obelischi, torri lontane).
+// Square-based prism that narrows towards the top, without a bottom (obelisks, distant towers).
 void taper_box(MeshBuilder* mb, Vec3 c, float h0, float h1, float y0, float y1, uint32_t col) {
   int lo[4], hi[4];
   const float sx[4] = { -1, 1, 1, -1 }, sz[4] = { -1, -1, 1, 1 };
@@ -1585,7 +1583,7 @@ void obelisk(MeshBuilder* mb, const Style& S, Vec3 c, float y0, float hgt, float
   outline(mb, p, 0.05f, S.outline);
 }
 
-// Merli lungo il bordo di un rettangolo [x0, x1] x [z0, z1] alla quota y.
+// Merlons along the edge of a rectangle [x0, x1] x [z0, z1] at height y.
 void merlons(MeshBuilder* mb, const Style& S, float x0, float z0, float x1, float z1, float y, float hgt) {
   const float w = 0.3f, d = 0.16f, step = 0.62f;
   const Part p = part(mb);
@@ -1596,7 +1594,7 @@ void merlons(MeshBuilder* mb, const Style& S, float x0, float z0, float x1, floa
     if (n < 1) continue;
     const float st = (a1 - a0) / (float)n;
     for (int i = 0; i < n; ++i) {
-      if (side >= 2 && (i == 0 || i == n - 1)) continue;   // gli angoli li fanno i lati lunghi
+      if (side >= 2 && (i == 0 || i == n - 1)) continue;   // the corners are made by the long sides
       const float u = a0 + st * ((float)i + 0.5f);
       Vec3 mn, mx;
       if (hx) {
@@ -1612,12 +1610,12 @@ void merlons(MeshBuilder* mb, const Style& S, float x0, float z0, float x1, floa
   outline(mb, p, 0.03f, S.outline);
 }
 
-// Torretta di guardia della Muraglia sopra un blocco di muro.
+// Watchtower of the Muraglia on top of a wall block.
 void watch_tower(MeshBuilder* mb, const Style& S, float x0, float z0, float x1, float z1, bool big) {
   const float y0 = WALL_H, k = 0.32f;
   const float rx0 = x0 + k, rz0 = z0 + k, rx1 = x1 - k, rz1 = z1 - k, top = y0 + 1.05f;
   obox(mb, v3(rx0, y0 - 0.05f, rz0), v3(rx1, top, rz1), 0.03f, lighten(S.wall, 0.04f), S.outline, 0.04f);
-  // feritoie sul lato sud e cornice
+  // loopholes on the south side, and cornice
   unlit(mb, true);
   for (float x = rx0 + 0.45f; x < rx1 - 0.3f; x += 0.7f)
     quad_f(mb, v3(x - 0.09f, y0 + 0.35f, rz1 + 0.004f), v3(x + 0.09f, y0 + 0.35f, rz1 + 0.004f), v3(x + 0.09f, y0 + 0.75f, rz1 + 0.004f),
@@ -1626,7 +1624,7 @@ void watch_tower(MeshBuilder* mb, const Style& S, float x0, float z0, float x1, 
   box5(mb, v3(rx0 - 0.06f, top - 0.04f, rz0 - 0.06f), v3(rx1 + 0.06f, top + 0.08f, rz1 + 0.06f), S.wall_trim);
   merlons(mb, S, rx0 - 0.06f, rz0 - 0.06f, rx1 + 0.06f, rz1 + 0.06f, top + 0.08f, 0.32f);
   if (!big) return;
-  // padiglione col tetto di tegole e le gronde all'insu'
+  // pavilion with a tiled roof and upturned eaves
   const float px0 = rx0 + 0.45f, pz0 = rz0 + 0.45f, px1 = rx1 - 0.45f, pz1 = rz1 - 0.45f, py = top + 0.08f;
   for (int c = 0; c < 4; ++c) {
     const float x = (c & 1) ? px1 - 0.08f : px0 + 0.08f, z = (c & 2) ? pz1 - 0.08f : pz0 + 0.08f;
@@ -1650,25 +1648,25 @@ void watch_tower(MeshBuilder* mb, const Style& S, float x0, float z0, float x1, 
   mb_ellipsoid(mb, apex + v3(0, 0.08f, 0), v3(0.12f, 0.14f, 0.12f), 5, 3, S.deco1);
 }
 
-// Statua di marmo su un piedistallo (Colosseo): figura con la lancia.
+// Marble statue on a pedestal (Colosseo): figure with a spear.
 void statue(MeshBuilder* mb, const Style& S, Vec3 c, float y0, float yaw) {
   const Part p = part(mb);
   const uint32_t m = 0xF2EDE2, m2 = 0xDCD5C6;
-  mb_cylinder(mb, v3(0, y0, 0), 0.42f, 0.3f, 1.3f, 8, m2);                      // veste
-  mb_ellipsoid(mb, v3(0, y0 + 1.55f, 0), v3(0.36f, 0.34f, 0.26f), 7, 4, m);       // spalle e torso
-  mb_ellipsoid(mb, v3(0, y0 + 2.08f, 0.02f), v3(0.19f, 0.22f, 0.19f), 6, 4, m);   // testa
-  mb_ellipsoid(mb, v3(0, y0 + 2.18f, -0.03f), v3(0.21f, 0.12f, 0.2f), 6, 3, 0xC9B98E);   // corona d'alloro
-  mb_cylinder(mb, v3(0.4f, y0 + 1.5f, 0.05f), 0.08f, 0.07f, 0.55f, 5, m);         // braccio alzato
+  mb_cylinder(mb, v3(0, y0, 0), 0.42f, 0.3f, 1.3f, 8, m2);                      // robe
+  mb_ellipsoid(mb, v3(0, y0 + 1.55f, 0), v3(0.36f, 0.34f, 0.26f), 7, 4, m);       // shoulders and torso
+  mb_ellipsoid(mb, v3(0, y0 + 2.08f, 0.02f), v3(0.19f, 0.22f, 0.19f), 6, 4, m);   // head
+  mb_ellipsoid(mb, v3(0, y0 + 2.18f, -0.03f), v3(0.21f, 0.12f, 0.2f), 6, 3, 0xC9B98E);   // laurel wreath
+  mb_cylinder(mb, v3(0.4f, y0 + 1.5f, 0.05f), 0.08f, 0.07f, 0.55f, 5, m);         // raised arm
   outline(mb, p, 0.04f, S.outline);
   const Part q = part(mb);
-  mb_cylinder(mb, v3(0.48f, y0 + 0.35f, 0.05f), 0.035f, 0.035f, 2.4f, 4, 0xB08A40);   // lancia
+  mb_cylinder(mb, v3(0.48f, y0 + 0.35f, 0.05f), 0.035f, 0.035f, 2.4f, 4, 0xB08A40);   // spear
   mb_cylinder(mb, v3(0.48f, y0 + 2.75f, 0.05f), 0.08f, 0.0f, 0.3f, 4, 0xD9B860);
   place(mb, p, c, yaw, 1.0f);
   place(mb, q, c, yaw, 1.0f);
 }
 
-// Gradone: tronco di piramide dal rettangolo [x0, x1] x [z0, z1] alla quota y0 a quello rientrato di
-// "in" alla quota y1 (fianchi col colore col, piano con top): 10 triangoli.
+// Tier: truncated pyramid from the rectangle [x0, x1] x [z0, z1] at height y0 to the one inset by
+// "in" at height y1 (sides with the color col, top surface with top): 10 triangles.
 void tier(MeshBuilder* mb, float x0, float z0, float x1, float z1, float in, float y0, float y1, uint32_t col, uint32_t top) {
   const Vec3 b[4] = { v3(x0, y0, z0), v3(x1, y0, z0), v3(x1, y0, z1), v3(x0, y0, z1) };
   const Vec3 t[4] = { v3(x0 + in, y1, z0 + in), v3(x1 - in, y1, z0 + in), v3(x1 - in, y1, z1 - in), v3(x0 + in, y1, z1 - in) };
@@ -1680,8 +1678,9 @@ void tier(MeshBuilder* mb, float x0, float z0, float x1, float z1, float in, flo
   quad_f(mb, t[0], t[1], t[2], t[3], v3(0, 1, 0), top);
 }
 
-// Scalinata sul lato (sx, sz) di un tempio maya: dal piede (centro m0, quota y0) alla cima (m1, y1),
-// larga w, con i gradini segnati e le balaustre; serpent: le teste di Kukulkan in basso.
+// Staircase on the side (sx, sz) of a Maya temple: from the foot (center m0, height y0) to the top
+// (m1, y1), w wide, with the steps marked and the balustrades; serpent: Kukulkan's heads at the
+// bottom.
 void maya_stair(MeshBuilder* mb, const Style& S, Vec3 m0, Vec3 m1, Vec3 side, float w, bool serpent, float yaw) {
   const Vec3 h = side * (0.5f * w);
   const Vec3 up = m1 - m0;
@@ -1695,7 +1694,7 @@ void maya_stair(MeshBuilder* mb, const Style& S, Vec3 m0, Vec3 m1, Vec3 side, fl
     quad_f(mb, a - h * 0.96f, a + h * 0.96f, b + h * 0.96f, b - h * 0.96f, v3(0, 1, 0), S.wall_dark);
   }
   unlit(mb, false);
-  for (int k = -1; k <= 1; k += 2) {   // balaustre
+  for (int k = -1; k <= 1; k += 2) {   // balustrades
     const Vec3 e0 = m0 + h * (float)k, e1 = m1 + h * (float)k, o = side * (0.14f * (float)k);
     quad_f(mb, e0 + v3(0, 0.12f, 0), e1 + v3(0, 0.12f, 0), e1 + o + v3(0, 0.12f, 0), e0 + o + v3(0, 0.12f, 0), v3(0, 1, 0), S.wall_trim);
     quad_f(mb, e0 + o, e1 + o, e1 + o + v3(0, 0.12f, 0), e0 + o + v3(0, 0.12f, 0), side * (float)k, S.wall);
@@ -1703,8 +1702,8 @@ void maya_stair(MeshBuilder* mb, const Style& S, Vec3 m0, Vec3 m1, Vec3 side, fl
   }
 }
 
-// El Castillo (Chichen Itza), sopra un blocco di muro grande: gradoni, scalinate al centro dei lati
-// che si vedono (sud con le teste del serpente, est, ovest) e il tempio in cima con le porte.
+// El Castillo (Chichen Itza), on top of a large wall block: tiers, staircases in the middle of the
+// visible sides (south with the serpent heads, east, west) and the temple on top with the doors.
 void el_castillo(MeshBuilder* mb, const Style& S, float x0, float z0, float x1, float z1) {
   const Part p = part(mb);
   const float w = x1 - x0, d = z1 - z0, sh = fminf(w, d);
@@ -1716,18 +1715,18 @@ void el_castillo(MeshBuilder* mb, const Style& S, float x0, float z0, float x1, 
     tier(mb, x0 + e, z0 + e, x1 - e, z1 - e, 0.07f, y, y + th, lighten(S.wall, (k & 1) ? -0.13f : -0.07f), S.wall_top);
     y += th;
   }
-  const float et = 0.1f + step_in * (float)(tiers - 1) + 0.07f;   // bordo del piano in cima
+  const float et = 0.1f + step_in * (float)(tiers - 1) + 0.07f;   // edge of the top level
   const float xm = 0.5f * (x0 + x1), zm = 0.5f * (z0 + z1), sw = 0.24f * sh;
   maya_stair(mb, S, v3(xm, 0.7f, z1 + 0.05f), v3(xm, y, z1 - et), v3(1, 0, 0), sw, true, 0.0f);
   maya_stair(mb, S, v3(x1 + 0.05f, 0.7f, zm), v3(x1 - et, y, zm), v3(0, 0, 1), sw, false, 0.0f);
   maya_stair(mb, S, v3(x0 - 0.05f, 0.7f, zm), v3(x0 + et, y, zm), v3(0, 0, -1), sw, false, 0.0f);
-  // tempio in cima: corpo, fregio, tetto
+  // temple on top: body, frieze, roof
   const float tw = 0.36f * w, td = 0.36f * d;
   obox(mb, v3(xm - 0.5f * tw, y, zm - 0.5f * td), v3(xm + 0.5f * tw, y + 0.95f, zm + 0.5f * td), 0.0f, S.wall, S.outline, 0.0f);
   box5(mb, v3(xm - 0.5f * tw - 0.06f, y + 0.95f, zm - 0.5f * td - 0.06f), v3(xm + 0.5f * tw + 0.06f, y + 1.25f, zm + 0.5f * td + 0.06f), S.wall_band);
   box5(mb, v3(xm - 0.5f * tw - 0.1f, y + 1.25f, zm - 0.5f * td - 0.1f), v3(xm + 0.5f * tw + 0.1f, y + 1.36f, zm + 0.5f * td + 0.1f), S.wall_trim);
   outline(mb, p, 0.05f, S.outline);
-  unlit(mb, true);   // tre porte verso sud e la greca sul fregio
+  unlit(mb, true);   // three doors facing south and the fret on the frieze
   for (int k = -1; k <= 1; ++k) {
     const float xc = xm + (float)k * tw * 0.3f, hw = k ? 0.12f : 0.18f;
     quad_f(mb, v3(xc - hw, y + 0.02f, zm + 0.5f * td + 0.005f), v3(xc + hw, y + 0.02f, zm + 0.5f * td + 0.005f),
@@ -1739,8 +1738,8 @@ void el_castillo(MeshBuilder* mb, const Style& S, float x0, float z0, float x1, 
   unlit(mb, false);
 }
 
-// Tempietto maya sopra un blocco piccolo: due gradoni, il tempio con le colonne davanti (a sud) e la
-// cresta sul tetto.
+// Small Maya temple on top of a small block: two tiers, the temple with the columns in front (to
+// the south) and the crest on the roof.
 void maya_temple(MeshBuilder* mb, const Style& S, float x0, float z0, float x1, float z1, uint32_t h) {
   const Part p = part(mb);
   const float w = x1 - x0, d = z1 - z0;
@@ -1750,13 +1749,13 @@ void maya_temple(MeshBuilder* mb, const Style& S, float x0, float z0, float x1, 
   obox(mb, v3(xm - 0.5f * tw, y, zm - 0.5f * td - 0.05f), v3(xm + 0.5f * tw, y + 0.9f, zm + 0.5f * td - 0.25f), 0.0f, S.wall, S.outline, 0.0f);
   box5(mb, v3(xm - 0.5f * tw - 0.08f, y + 0.9f, zm - 0.5f * td - 0.13f), v3(xm + 0.5f * tw + 0.08f, y + 1.18f, zm + 0.5f * td + 0.08f), S.wall_band);
   box5(mb, v3(xm - 0.5f * tw - 0.12f, y + 1.18f, zm - 0.5f * td - 0.17f), v3(xm + 0.5f * tw + 0.12f, y + 1.28f, zm + 0.5f * td + 0.12f), S.wall_trim);
-  // colonne del portico (tra il corpo e il bordo sud)
+  // portico columns (between the body and the south edge)
   const int nc = w >= 3.5f ? 4 : 2;
   for (int k = 0; k < nc; ++k) {
     const float xc = xm - 0.5f * tw + 0.15f + (tw - 0.3f) * (float)k / (float)(nc - 1);
     mb_box(mb, v3(xc - 0.09f, y, zm + 0.5f * td - 0.05f), v3(xc + 0.09f, y + 0.9f, zm + 0.5f * td + 0.08f), S.rock);
   }
-  if ((h & 3u) != 0) box5(mb, v3(xm - 0.25f * tw, y + 1.28f, zm - 0.06f), v3(xm + 0.25f * tw, y + 1.75f, zm + 0.06f), S.wall_top);   // cresta
+  if ((h & 3u) != 0) box5(mb, v3(xm - 0.25f * tw, y + 1.28f, zm - 0.06f), v3(xm + 0.25f * tw, y + 1.75f, zm + 0.06f), S.wall_top);   // crest
   outline(mb, p, 0.045f, S.outline);
   unlit(mb, true);
   quad_f(mb, v3(xm - 0.2f, y + 0.02f, zm + 0.5f * td - 0.245f), v3(xm + 0.2f, y + 0.02f, zm + 0.5f * td - 0.245f),
@@ -1765,7 +1764,7 @@ void maya_temple(MeshBuilder* mb, const Style& S, float x0, float z0, float x1, 
   maya_stair(mb, S, v3(xm, 0.7f, z1 + 0.05f), v3(xm, y, z1 - 0.14f), v3(1, 0, 0), fminf(1.0f, 0.4f * w), false, 0.0f);
 }
 
-// Strutture sopra i blocchi di muro che hanno il centro nel blocco di caselle [cx0, cx1) x [cz0, cz1).
+// Structures on top of the wall blocks whose center is in the chunk of cells [cx0, cx1) x [cz0, cz1).
 void build_blocks_in(MeshBuilder* mb, int cx0, int cz0, int cx1, int cz1) {
   const Style& S = *B.S;
   for (int b = 0; b < B.nblocks; ++b) {
@@ -1791,9 +1790,9 @@ void build_blocks_in(MeshBuilder* mb, int cx0, int cz0, int cx1, int cz1) {
   }
 }
 
-// --- paesaggio lontano per stile ------------------------------------------------------------------
+// --- distant scenery by style ---------------------------------------------------------------------
 
-// Centro del rettangolo della mappa e mezze dimensioni (mondo).
+// Center of the map's rectangle and half sizes (world).
 void map_box(float* cx, float* cz, float* hx, float* hz) {
   *cx = 0.0f;
   *cz = -0.5f * (float)B.L->H;
@@ -1801,11 +1800,11 @@ void map_box(float* cx, float* cz, float* hx, float* hz) {
   *hz = 0.5f * (float)B.L->H;
 }
 
-// Le forme del paesaggio vanno nel blocco di caselle che le contiene (dentro la griglia estesa) o
-// in tessere di 24 m oltre: il renderer scarta i pezzi fuori dall'inquadratura.
+// The landscape shapes go into the chunk of cells that contains them (inside the extended grid) or
+// into 24 m tiles beyond it: the renderer culls the pieces outside the framing.
 const int TILE_N = 9;
 const float TILE = 24.0f;
-MeshBuilder g_cmb[LV_MAX_CHUNKS];   // un costruttore per blocco
+MeshBuilder g_cmb[LV_MAX_CHUNKS];   // one builder per chunk
 int g_ncx, g_ncz;
 MeshBuilder g_tile[TILE_N * TILE_N];
 MeshBuilder* scene_mb(float x, float z) {
@@ -1822,23 +1821,23 @@ MeshBuilder* scene_mb(float x, float z) {
   return &g_tile[tz * TILE_N + tx];
 }
 
-// Sulla striscia attorno alla mappa (quella che vede la telecamera di gioco)?
+// On the strip around the map (the one the play camera sees)?
 bool in_ring(float x, float z, float r) {
   const float ex = x - B.ox, ez = z - B.oz;
   return ex > -r && ez > -r && ex < (float)B.ew + r && ez < (float)B.eh + r;
 }
 
-// Oltre la striscia il paesaggio si vede solo dai menu, che guardano a sud dalla partenza della
-// zona 1 con la telecamera bassa (la scelta dei personaggi vede fino all'orizzonte, 120 m), e dalla
-// fine della mappa, che guarda a nord da dove sono i giocatori nell'ultima zona (inclinata di 0,5:
-// oltre i 60 m dall'occhio non si vede piu' nulla); circa 32 gradi di lato (game.cpp,
-// update_camera). Qui con margine: 40 gradi di lato (tan 0,84). Quello che non cade in questi
-// spicchi non si fa.
+// Beyond the strip the landscape is seen only from the menus, which look south from the start of
+// zone 1 with the low camera (the character selection sees up to the horizon, 120 m), and from the
+// end of the map, which looks north from where the players are in the last zone (pitched at 0.5:
+// beyond 60 m from the eye nothing is visible any more); about 32 degrees to each side (view/camera.cpp,
+// view_camera). Here with a margin: 40 degrees to each side (tan 0.84). Whatever does not fall
+// in these wedges is not built.
 bool far_seen(float x, float z, float r) {
   const Level* L = B.L;
   Vec3 st = v3(0, 0, 0);
   for (int k = 0; k < 4; ++k) st = st + L->zones[0].start[k] * 0.25f;
-  const float mz = st.z - 6.5f;                           // occhio dei menu, poco a nord della partenza
+  const float mz = st.z - 6.5f;                           // eye of the menus, a little north of the start
   if (z + r > mz && fabsf(x - st.x) < 0.84f * (z - mz) + r + 1.0f && z - r - mz < 122.0f) return true;
   const ZoneDef& zl = L->zones[L->nzones - 1];
   const float ez = zl.wz1 + 6.5f, ex = 0.5f * (zl.wx0 + zl.wx1), ehx = 0.5f * (zl.wx1 - zl.wx0);
@@ -1847,7 +1846,7 @@ bool far_seen(float x, float z, float r) {
 }
 bool shown(float x, float z, float r) { return in_ring(x, z, r) || far_seen(x, z, r); }
 
-// Distanza (mondo) dal rettangolo della mappa: 0 dentro.
+// Distance (world) from the map's rectangle: 0 inside.
 float out_dist(float x, float z) {
   float cx, cz, hx, hz;
   map_box(&cx, &cz, &hx, &hz);
@@ -1858,7 +1857,7 @@ void desert_far(void) {
   const Style& S = *B.S;
   float cx, cz, hx, hz;
   map_box(&cx, &cz, &hx, &hz);
-  // Dune basse sulla striscia (lontano dai muri) e quelle che vedono i menu e la fine della mappa.
+  // Low dunes on the strip (away from the walls) and the ones seen by the menus and the map's end.
   for (int gz = -16; gz <= 16; ++gz)
     for (int gx = -12; gx <= 12; ++gx) {
       const float x = cx + (float)gx * 7.0f + 2.5f * hs(gx, gz, 501), z = cz + (float)gz * 7.0f + 2.5f * hs(gx, gz, 502);
@@ -1870,7 +1869,7 @@ void desert_far(void) {
       MeshBuilder* mb = scene_mb(x, z);
       dome(mb, v3(x, 0.0f, z), rx * s, (0.55f + 0.7f * hf(gx, gz, 506)) * s, rz * s, 9, 2, lighten(S.out, hs(gx, gz, 507) * 0.03f));
     }
-  // Le tre grandi piramidi a sud (si vedono dalla scelta dei personaggi).
+  // The three great pyramids to the south (seen from the character selection).
   const float zs = cz + hz;
   struct Pyr { float x, z, half, h; };
   const Pyr P[3] = { { cx - 22.0f, zs + 58.0f, 17.0f, 21.0f }, { cx + 14.0f, zs + 72.0f, 15.0f, 19.0f }, { cx + 40.0f, zs + 52.0f, 8.0f, 10.0f } };
@@ -1879,7 +1878,7 @@ void desert_far(void) {
     MeshBuilder* mb = scene_mb(P[k].x, P[k].z);
     pyramid(mb, v3(P[k].x, 0.0f, P[k].z), P[k].half, P[k].half, P[k].h, S.wall, k == 1 ? 0xF4E6C4 : S.wall_top, k == 1 ? 0.2f : 0.08f, S.outline, 0.12f);
   }
-  // Palme rade sulla striscia e nei menu.
+  // Sparse palms on the strip and in the menus.
   for (int gz = -16; gz <= 16; ++gz)
     for (int gx = -10; gx <= 10; ++gx) {
       const float x = cx + (float)gx * 3.2f + 1.2f * hs(gx, gz, 511), z = cz + (float)gz * 3.2f + 1.2f * hs(gx, gz, 512);
@@ -1889,9 +1888,9 @@ void desert_far(void) {
     }
 }
 
-// Giungla dello Yucatan (Chichen Itza): una fascia fitta ed economica di chiome tonde (cupole di tre
-// verdi, senza contorni) sulla striscia attorno alla mappa, con qualche ceiba piu' alta che spunta.
-// Oltre i 22 m non serve nulla: dai menu (telecamera bassa) la chioma vicina copre tutto il resto.
+// Yucatan jungle (Chichen Itza): a dense and cheap band of round canopies (domes in three greens,
+// without outlines) on the strip around the map, with a few taller ceibas poking out.
+// Beyond 22 m nothing is needed: from the menus (low camera) the near canopy covers all the rest.
 void jungle_far(void) {
   const Style& S = *B.S;
   float cx, cz, hx, hz;
@@ -1906,7 +1905,7 @@ void jungle_far(void) {
       const float hgt = (d < 4.0f ? 1.6f : 2.4f) + 1.4f * hf(gx, gz, 704);
       MeshBuilder* mb = scene_mb(x, z);
       dome(mb, v3(x, 0.0f, z), r, hgt, r * (0.85f + 0.2f * hf(gx, gz, 705)), 7, 2, CAN[hash2(gx, gz, 706) % 3u]);
-      if (hf(gx, gz, 707) < 0.12f && d > 5.0f) {   // ceiba che spunta sopra la chioma
+      if (hf(gx, gz, 707) < 0.12f && d > 5.0f) {   // ceiba poking out above the canopy
         const Vec3 t = v3(x + 0.8f * hs(gx, gz, 708), hgt + 1.6f, z);
         pipe(mb, v3(t.x, hgt - 0.5f, t.z), t, 0.18f, 0.14f, 4, S.trunk);
         mb_ellipsoid(mb, t + v3(0, 0.25f, 0), v3(2.2f, 0.6f, 2.0f), 7, 2, CAN[(hash2(gx, gz, 709) + 1u) % 3u]);
@@ -1914,7 +1913,7 @@ void jungle_far(void) {
     }
 }
 
-// Quota delle colline lontane della Muraglia (anche per appoggiarci sopra il muro).
+// Height of the Muraglia's distant hills (also to rest the wall on them).
 struct Hill { float x, z, rx, h, rz; };
 Hill g_hill[24];
 int g_nhill;
@@ -1931,7 +1930,7 @@ void wall_far(void) {
   const Style& S = *B.S;
   float cx, cz, hx, hz;
   map_box(&cx, &cz, &hx, &hz);
-  // Colline basse vicine (la Muraglia ci corre sopra) e grandi lontane: solo quelle che si vedono.
+  // Low near hills (the Muraglia runs over them) and large distant ones: only the visible ones.
   g_nhill = 0;
   for (int k = 0; k < 14 && g_nhill < 24; ++k) {
     const float a = D_TWO_PI * (float)k / 14.0f + 0.2f * hs(k, 1, 531);
@@ -1957,7 +1956,7 @@ void wall_far(void) {
     MeshBuilder* mb = scene_mb(h.x, h.z);
     dome(mb, v3(h.x, 0.0f, h.z), h.rx, h.h, h.rz, 12, 3, k & 1 ? 0x7DB357 : 0x8BBE5E);
   }
-  // La Muraglia che serpeggia sulle colline a sud, con le torri (si vede dai menu).
+  // The Muraglia winding over the hills to the south, with the towers (seen from the menus).
   Vec3 prev = v3(0, 0, 0);
   const int n = 16;
   for (int i = 0; i <= n; ++i) {
@@ -1985,7 +1984,7 @@ void wall_far(void) {
     }
     prev = cur;
   }
-  // Nebbia tra le colline e pini radi.
+  // Fog between the hills, and sparse pines.
   for (int k = 0; k < 10; ++k) {
     const float a = D_TWO_PI * (float)k / 10.0f + 0.4f;
     const float x = cx + (hx + 40.0f) * d_cos(a), z = cz + (hz + 36.0f) * d_sin(a);
@@ -2003,7 +2002,7 @@ void wall_far(void) {
   }
 }
 
-// Gradinate e facciata del Colosseo attorno all'arena (ellisse dei muri dell'arena).
+// Stands and facade of the Colosseo around the arena (ellipse of the arena walls).
 void colosseum_far(void) {
   const Style& S = *B.S;
   const Level* L = B.L;
@@ -2019,8 +2018,8 @@ void colosseum_far(void) {
   if (x1 < 0) return;
   const Vec3 a = ccenter(x0, z0), b = ccenter(x1, z1);
   const float ecx = 0.5f * (a.x + b.x), ecz = 0.5f * (a.z + b.z);
-  float A = 0.5f * (b.x - a.x) + 0.5f, Bz = 0.5f * (b.z - a.z) + 0.5f;   // bordo esterno del muro
-  // L'ellisse deve contenere tutti i muri dell'arena, qualunque forma abbia (anche rettangolare).
+  float A = 0.5f * (b.x - a.x) + 0.5f, Bz = 0.5f * (b.z - a.z) + 0.5f;   // outer edge of the wall
+  // The ellipse must contain all the arena walls, whatever shape it has (even rectangular).
   float k2 = 1.0f;
   for (int cz = z0; cz <= z1; ++cz)
     for (int cx = x0; cx <= x1; ++cx) {
@@ -2044,17 +2043,17 @@ void colosseum_far(void) {
     const float xm = ecx + A * d_cos(0.5f * (t0 + t1)), zm = ecz + Bz * d_sin(0.5f * (t0 + t1));
     MeshBuilder* mb = scene_mb(xm + 5.0f * d_cos(0.5f * (t0 + t1)), zm + 5.0f * d_sin(0.5f * (t0 + t1)));
     const Vec3 inward = v3(-(c0 + c1), 0, -(s0 + s1) * A / Bz);
-    // podio: ripiano sopra il muro dell'arena, con il parapetto
+    // podium: ledge above the arena wall, with the parapet
     const float e0 = -0.75f;
     quad_f(mb, P(e0, c0, s0, base), P(e0, c1, s1, base), P(0.9f, c1, s1, base), P(0.9f, c0, s0, base), v3(0, 1, 0), S.wall_top);
     quad_f(mb, P(e0, c0, s0, base - 0.3f), P(e0, c1, s1, base - 0.3f), P(e0, c1, s1, base), P(e0, c0, s0, base), inward, S.wall_band);
-    // gradoni
+    // tiers
     for (int k = 0; k < TIERS; ++k) {
       const float r0 = 0.9f + depth * (float)k, r1 = r0 + depth, y = base + rise * (float)k, yt = y + rise;
       const uint32_t riser = (k & 1) ? S.wall : lighten(S.wall, 0.05f), tread = (k & 1) ? S.wall_top : lighten(S.wall_top, -0.04f);
       quad_f(mb, P(r0, c0, s0, y), P(r0, c1, s1, y), P(r0, c1, s1, yt), P(r0, c0, s0, yt), inward, riser);
       quad_f(mb, P(r0, c0, s0, yt), P(r0, c1, s1, yt), P(r1, c1, s1, yt), P(r1, c0, s0, yt), v3(0, 1, 0), tread);
-      // ingressi (vomitori) ogni tanto, sulla terza fila
+      // entrances (vomitoria) now and then, on the third row
       if (k == 2 && (i % 4) == 1) {
         unlit(mb, true);
         const Vec3 q0 = P(r0 - 0.01f, c0, s0, y), q1 = P(r0 - 0.01f, c1, s1, y);
@@ -2063,7 +2062,7 @@ void colosseum_far(void) {
         unlit(mb, false);
       }
     }
-    // muro esterno con le arcate (lato interno a fasce, cornice in cima)
+    // outer wall with the arcades (inner side in bands, cornice on top)
     const float rw = 0.9f + depth * (float)TIERS, yb = base + rise * (float)TIERS, yt = yb + 3.6f;
     quad_f(mb, P(rw, c0, s0, yb), P(rw, c1, s1, yb), P(rw, c1, s1, yt), P(rw, c0, s0, yt), inward, S.wall);
     unlit(mb, true);
@@ -2075,7 +2074,7 @@ void colosseum_far(void) {
     unlit(mb, false);
     quad_f(mb, P(rw - 0.25f, c0, s0, yt), P(rw - 0.25f, c1, s1, yt), P(rw + 0.8f, c1, s1, yt), P(rw + 0.8f, c0, s0, yt), v3(0, 1, 0), S.wall_trim);
     quad_f(mb, P(rw - 0.25f, c0, s0, yt - 0.25f), P(rw - 0.25f, c1, s1, yt - 0.25f), P(rw - 0.25f, c1, s1, yt), P(rw - 0.25f, c0, s0, yt), inward, S.wall_trim);
-    // (la facciata esterna con le arcate non c'e' piu': tutte le telecamere stanno dentro l'arena)
+    // (the outer facade with the arcades is gone: all the cameras are inside the arena)
   }
 }
 
@@ -2093,11 +2092,11 @@ void build_landscape(Level* L) {
   }
 }
 
-// --- cancelli ------------------------------------------------------------------------------------
+// --- gates ---------------------------------------------------------------------------------------
 
-// Battenti (0.5.4: cancelli a battente, prima una saracinesca che scendeva sotto terra): ognuno con
-// il cardine nell'origine e da chiuso, lungo +X (il battente al capo u0) o -X (quello al capo u1)
-// per i cancelli da ovest a est, lungo Z per quelli da nord a sud. Li gira game_draw.cpp.
+// Leaves (0.5.4: swing gates, before that a portcullis that went down into the ground): each one
+// with the hinge at the origin and, when closed, along +X (the leaf at end u0) or -X (the one at
+// end u1) for the west-east gates, along Z for the north-south ones. game_draw.cpp turns them.
 void build_gate_leaf(Level* L, int gi, int side) {
   const Style& S = *B.S;
   Gate& gt = L->gates[gi];
@@ -2108,7 +2107,7 @@ void build_gate_leaf(Level* L, int gi, int side) {
   const bool horiz = gt.horiz;
   MeshBuilder mb;
   mb_init(&mb);
-  // s: dal cardine verso il centro del cancello; w: mezzo spessore.
+  // s: from the hinge towards the center of the gate; w: half thickness.
   auto P = [&](float s, float y, float w) { return horiz ? v3(sg * s, y, w) : v3(w, y, sg * s); };
   auto box = [&](float s0, float s1, float y0, float y1, float w, uint32_t col, float bev, float t) {
     const Vec3 a = P(s0, y0, -w), b = P(s1, y1, w);
@@ -2119,7 +2118,7 @@ void build_gate_leaf(Level* L, int gi, int side) {
   };
   switch (B.style) {
     case STYLE_PIRAMIDI: {
-      // Battente di cedro con le assi, le fasce dipinte e le bandelle di bronzo dei cardini.
+      // Cedar leaf with the planks, the painted bands and the bronze straps of the hinges.
       box(-0.1f, 0.1f, -0.05f, 1.72f, 0.11f, S.gate_dark, 0.03f, 0.035f);
       box(-0.12f, 0.12f, 1.72f, 1.8f, 0.13f, 0xF2C94C, 0.02f, 0.03f);
       box(0.06f, len, -0.05f, 1.62f, 0.09f, S.gate, 0.04f, 0.035f);
@@ -2133,8 +2132,8 @@ void build_gate_leaf(Level* L, int gi, int side) {
       break;
     }
     case STYLE_CHICHENITZA: {
-      // Palizzata di pali appuntiti legati da due traverse dipinte (rosso e blu maya), con le
-      // borchie di giada; il palo del cardine e' un tronco.
+      // Palisade of pointed stakes tied by two painted crossbars (Maya red and Maya blue), with
+      // the jade studs; the hinge post is a log.
       {
         const Part p = part(&mb);
         pipe(&mb, P(0.0f, -0.1f, 0.0f), P(0.0f, 1.66f, 0.0f), 0.12f, 0.12f, 8, S.gate_dark);
@@ -2154,8 +2153,8 @@ void build_gate_leaf(Level* L, int gi, int side) {
       break;
     }
     case STYLE_MURAGLIA: {
-      // Battente del portone rosso: file di borchie d'oro, il battiporta con l'anello vicino al
-      // bordo dove si chiude.
+      // Leaf of the red main gate: rows of gold studs, the door knocker with the ring near the
+      // edge where it closes.
       box(-0.09f, 0.09f, -0.1f, 1.72f, 0.12f, S.gate_dark, 0.03f, 0.035f);
       box(0.05f, len, -0.1f, 1.65f, 0.1f, S.gate, 0.04f, 0.035f);
       for (int row = 0; row < 4; ++row)
@@ -2173,7 +2172,7 @@ void build_gate_leaf(Level* L, int gi, int side) {
       break;
     }
     default: {
-      // Cancellata di ferro con le punte a lancia, due traverse scure.
+      // Iron railing with spear-point tips, two dark crossbars.
       box(-0.08f, 0.08f, 0.0f, 1.72f, 0.08f, S.gate_metal, 0.02f, 0.03f);
       tip(0.0f, 1.72f, 0.08f, 0.08f, 0.2f, 0xF2C94C, 0.03f);
       for (float s = 0.32f; s < len - 0.3f; s += 0.48f) {
@@ -2190,9 +2189,9 @@ void build_gate_leaf(Level* L, int gi, int side) {
   gt.leaf[side] = mb_finish(&mb);
 }
 
-// Parti fisse attorno ai cancelli (obelischi, stipiti, torri): restano anche col cancello aperto.
-// Stanno sulle caselle di muro accanto al cancello; niente tetti sopra il passaggio, che
-// nasconderebbero il cancello alla telecamera.
+// Static parts around the gates (obelisks, jambs, towers): they stay even with the gate open.
+// They stand on the wall cells next to the gate; no roofs over the passage, which would hide the
+// gate from the camera.
 void build_gate_frame(MeshBuilder* mb, int gi) {
   const Level* L = B.L;
   const Style& S = *B.S;
@@ -2207,7 +2206,7 @@ void build_gate_frame(MeshBuilder* mb, int gi) {
     const Vec3 base = P(u, 0.0f, 0.0f);
     switch (B.style) {
       case STYLE_PIRAMIDI: {
-        // Obelisco di granito rosa sul muro accanto al cancello.
+        // Pink granite obelisk on the wall next to the gate.
         const Part p = part(mb);
         mb_box(mb, v3(-0.46f, 0.0f, -0.52f), v3(0.46f, WALL_H + 0.25f, 0.52f), S.wall_trim);
         taper_box(mb, v3(0, 0, 0), 0.3f, 0.19f, WALL_H + 0.25f, WALL_H + 2.9f, 0xC98B73);
@@ -2220,7 +2219,7 @@ void build_gate_frame(MeshBuilder* mb, int gi) {
         break;
       }
       case STYLE_CHICHENITZA: {
-        // Pilastro di pietra accanto al passaggio, con il fregio dipinto in alto.
+        // Stone pillar next to the passage, with the painted frieze at the top.
         const Part p = part(mb);
         mb_box(mb, v3(-0.46f, 0.0f, -0.5f), v3(0.46f, 2.05f, 0.5f), S.wall);
         place(mb, p, base, 0.0f, 1.0f);
@@ -2232,7 +2231,7 @@ void build_gate_frame(MeshBuilder* mb, int gi) {
         break;
       }
       case STYLE_MURAGLIA: {
-        // Torretta accanto al portone, con il tetto di tegole a quattro falde.
+        // Turret next to the main gate, with a four-sided tiled roof.
         const Part p = part(mb);
         mb_box(mb, v3(-0.62f, 0.0f, -0.62f), v3(0.62f, 2.55f, 0.62f), lighten(S.wall, 0.04f));
         box5(mb, v3(-0.68f, 2.55f, -0.68f), v3(0.68f, 2.68f, 0.68f), S.wall_trim);
@@ -2253,9 +2252,9 @@ void build_gate_frame(MeshBuilder* mb, int gi) {
   }
   const float um = 0.5f * (u0 + u1), span = u1 - u0;
   if (B.style == STYLE_CHICHENITZA) {
-    // Arco maya a mensola (falsa volta): dai due pilastri le pietre sporgono a gradini verso il
-    // centro e si chiudono a triangolo con la pietra di chiave. Sottile e sopra il cancello, che
-    // sotto si vede.
+    // Maya corbel arch (false vault): from the two pillars the stones jut out in steps towards the
+    // center and close in a triangle with the capstone. Thin and above the gate, which shows
+    // underneath.
     const Part p = part(mb);
     const float hw = 0.5f * span, y0 = 2.05f, n = 5.0f, ch = 0.36f;
     for (int k = 0; k < 5; ++k) {
@@ -2272,7 +2271,7 @@ void build_gate_frame(MeshBuilder* mb, int gi) {
     place(mb, p, P(um, 0.0f, 0.0f), horiz ? 0.0f : D_HALF_PI, 1.0f);
     outline(mb, p, 0.04f, S.outline);
   } else if (B.style == STYLE_MURAGLIA) {
-    // trave rossa con l'insegna tra le due torrette
+    // red beam with the sign between the two turrets
     const Part p = part(mb);
     mb_box(mb, v3(-0.5f * span - 0.1f, 2.25f, -0.1f), v3(0.5f * span + 0.1f, 2.45f, 0.1f), S.gate);
     mb_box(mb, v3(-0.42f, 2.05f, -0.12f), v3(0.42f, 2.62f, 0.12f), S.gate_dark);
@@ -2280,7 +2279,7 @@ void build_gate_frame(MeshBuilder* mb, int gi) {
     outline(mb, p, 0.035f, S.outline);
     const Part q = part(mb);
     mb_box(mb, v3(-0.3f, 2.17f, -0.13f), v3(0.3f, 2.5f, 0.13f), S.deco1);
-    // due lanterne rosse appese alla trave
+    // two red lanterns hanging from the beam
     for (int k = 0; k < 2; ++k) {
       const float x = (k ? 1.0f : -1.0f) * (0.5f * span - 0.45f);
       mb_cylinder(mb, v3(x, 1.95f, 0.0f), 0.015f, 0.015f, 0.3f, 3, 0x2A2622);
@@ -2292,9 +2291,9 @@ void build_gate_frame(MeshBuilder* mb, int gi) {
   }
 }
 
-// --- oggetti mobili nello stile della mappa -------------------------------------------------------
+// --- moving objects in the map's style ------------------------------------------------------------
 
-// Ciuffo di fili d'erba (due facce per filo), alti hg, larghi w, attorno all'origine.
+// Tuft of grass blades (two faces per blade), hg tall, w wide, around the origin.
 void blades(MeshBuilder* mb, int n, float r, float hg, float hv, float w, uint32_t c0, uint32_t c1, int seed) {
   for (int k = 0; k < n; ++k) {
     const float a = 2.4f * (float)k + 0.3f * hs(k, seed, 1), rr = r * (0.25f + 0.75f * hf(k, seed, 2));
@@ -2314,7 +2313,7 @@ void build_dyn_meshes(Level* L) {
     mb_init(&mb);
     switch (d) {
       case DM_BUSH: {
-        // cespuglio tondo a tre gobbe (nel deserto grigioverde, coi fiori gialli)
+        // round bush with three humps (in the desert gray-green, with yellow flowers)
         const bool desert = B.style == STYLE_PIRAMIDI;
         const uint32_t c0 = desert ? 0x8DA25A : (B.style == STYLE_COLOSSEO ? 0x3F7A3A : 0x3E9441);
         const uint32_t c1 = desert ? 0xA5B86C : (B.style == STYLE_COLOSSEO ? 0x4E8C45 : 0x4DA84A);
@@ -2334,7 +2333,7 @@ void build_dyn_meshes(Level* L) {
       }
       case DM_GRASS: {
         if (B.style == STYLE_PIRAMIDI) {
-          // papiri: fusti lisci e il ciuffo a ombrello in cima
+          // papyrus: smooth stems and the umbrella tuft on top
           Part p = part(&mb);
           dome(&mb, v3(0, 0, 0), 0.46f, 0.16f, 0.46f, 7, 1, 0x557F2E);
           outline(&mb, p, 0.03f, 0x24360F);
@@ -2353,7 +2352,7 @@ void build_dyn_meshes(Level* L) {
             }
           }
         } else if (B.style == STYLE_MURAGLIA) {
-          // bambu': canne con i nodi e le foglie in cima
+          // bamboo: canes with the nodes and the leaves on top
           Part p = part(&mb);
           dome(&mb, v3(0, 0, 0), 0.45f, 0.14f, 0.45f, 7, 1, 0x4E7E30);
           outline(&mb, p, 0.03f, 0x1E3A12);
@@ -2368,7 +2367,7 @@ void build_dyn_meshes(Level* L) {
             }
           }
         } else if (B.style == STYLE_CHICHENITZA) {
-          // felci della giungla: fronde lunghe che si aprono dal centro e ricadono
+          // jungle ferns: long fronds that open out from the center and droop
           Part p = part(&mb);
           dome(&mb, v3(0, 0, 0), 0.4f, 0.16f, 0.4f, 7, 1, 0x2E7A32);
           outline(&mb, p, 0.03f, 0x123A16);
@@ -2379,7 +2378,7 @@ void build_dyn_meshes(Level* L) {
             frond(&mb, base, tip, 0.12f, 0.32f, (k & 1) ? 0x3E9A3A : 0x4FAE44, (k & 1) ? 0x2E8430 : 0x3E9A3A);
           }
         } else {
-          // erba alta dell'arena
+          // tall grass of the arena
           Part p = part(&mb);
           dome(&mb, v3(0, 0, 0), 0.46f, 0.14f, 0.46f, 7, 1, 0x9AA048);
           outline(&mb, p, 0.03f, 0x3A3A14);
@@ -2391,7 +2390,7 @@ void build_dyn_meshes(Level* L) {
         const bool tal = d == DM_CRATE_TAL;
         const uint32_t mark = 0x3CE07A;
         if (B.style == STYLE_PIRAMIDI || B.style == STYLE_COLOSSEO) {
-          // anfora di terracotta (verde dipinta e con le gemme se c'e' il talismano)
+          // terracotta amphora (painted green and with the gems if the talisman is inside)
           const uint32_t clay = S.deco0, dark = mix(S.deco0, 0x000000, 0.25f);
           Part p = part(&mb);
           mb_ellipsoid(&mb, v3(0, 0.44f, 0), v3(0.37f, 0.44f, 0.37f), 7, 4, clay);
@@ -2414,8 +2413,8 @@ void build_dyn_meshes(Level* L) {
             unlit(&mb, false);
           }
         } else if (B.style == STYLE_CHICHENITZA) {
-          // vaso maya di terracotta dipinta: pancia larga, collo basso, fasce crema e nere (verde di
-          // giada col talismano)
+          // Maya vase of painted terracotta: wide belly, low neck, cream and black bands (jade green
+          // with the talisman)
           const uint32_t clay = S.deco0, dark = mix(S.deco0, 0x000000, 0.3f);
           Part p = part(&mb);
           mb_ellipsoid(&mb, v3(0, 0.4f, 0), v3(0.42f, 0.4f, 0.42f), 8, 4, clay);
@@ -2431,7 +2430,7 @@ void build_dyn_meshes(Level* L) {
             unlit(&mb, false);
           }
         } else {
-          // cassa di legno laccata di rosso, angoli scuri e una placca (verde di giada col talismano)
+          // red-lacquered wooden crate, dark corners and a plaque (jade green with the talisman)
           Part p = part(&mb);
           mb_bevel_box(&mb, v3(-0.45f, 0.0f, -0.45f), v3(0.45f, 0.92f, 0.45f), 0.05f, 0xB8432F);
           outline(&mb, p, 0.035f, 0x2A0E08);
@@ -2450,7 +2449,7 @@ void build_dyn_meshes(Level* L) {
         break;
       }
       case DM_TRAMP: {
-        // trampolino: un tamburo (pelle tesa, fascia dipinta, pioli)
+        // trampoline: a drum (stretched skin, painted band, pegs)
         const uint32_t skin = B.style == STYLE_CHICHENITZA ? 0xE8D9A8 : 0xF2E6C8;
         const uint32_t body = B.style == STYLE_MURAGLIA ? 0xC0392B : (B.style == STYLE_CHICHENITZA ? S.wall_band2 : S.deco0);
         Part p = part(&mb);
@@ -2472,12 +2471,12 @@ void build_dyn_meshes(Level* L) {
   }
 }
 
-// --- paesaggio lontano ---------------------------------------------------------------------------
+// --- distant scenery -----------------------------------------------------------------------------
 
-// Terreno oltre la griglia estesa: quattro rettangoli grandi alla quota del bordo, senza
-// sovrapposizioni, fin dove arrivano le telecamere dei menu (120 m); sotto tutto un piano dello
-// stesso colore del terreno, che copre le eventuali fessure di un pixel tra i pezzi del terreno
-// (con il cenote sta sotto la sua acqua).
+// Ground beyond the extended grid: four large rectangles at the height of the edge, without
+// overlaps, as far as the menu cameras reach (120 m); under everything a plane of the same color
+// as the ground, which covers any one-pixel cracks between the pieces of the ground (with the
+// cenote it lies below its water).
 void build_far_ground(Level* L) {
   const float x0 = B.ox, x1 = (float)B.ew + B.ox, z0 = B.oz, z1 = (float)B.eh + B.oz;
   const float F = 130.0f;
@@ -2537,7 +2536,7 @@ void level_build_mesh(Level* L) {
       MeshBuilder& mb = g_cmb[kz * g_ncx + kx];
       const int i0 = kx * LV_CHUNK, j0 = kz * LV_CHUNK;
       const int i1 = i0 + LV_CHUNK < B.ew ? i0 + LV_CHUNK : B.ew, j1 = j0 + LV_CHUNK < B.eh ? j0 + LV_CHUNK : B.eh;
-      // spigoli: l'ultimo blocco di ogni fila prende anche lo spigolo del bordo esterno
+      // vertices: the last chunk of every row also takes the vertex of the outer edge
       build_ground(&mb, i0, j0, i1 == B.ew ? B.ew + 1 : i1, j1 == B.eh ? B.eh + 1 : j1);
       build_cells(&mb, i0 - B.MW, j0 - B.MN, i1 - B.MW, j1 - B.MN);
       build_blocks_in(&mb, i0 - B.MW, j0 - B.MN, i1 - B.MW, j1 - B.MN);

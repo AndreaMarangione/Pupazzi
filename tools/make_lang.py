@@ -1,19 +1,19 @@
 #!/usr/bin/env python3
-# Testi del gioco nelle 7 lingue: legge lang/testi.txt, lo controlla e genera src/engine/lang_data.h.
-#   python3 tools/make_lang.py              controlla e scrive src/engine/lang_data.h
-#   python3 tools/make_lang.py --controlla  solo i controlli (make test): esce con 1 se c'e' un errore
-#   python3 tools/make_lang.py --elenco     i testi che il codice passa a tr() o segna con N_()
+# Game texts in the 7 languages: reads lang/testi.txt, checks it and generates src/engine/lang_data.h.
+#   python3 tools/make_lang.py              checks and writes src/engine/lang_data.h
+#   python3 tools/make_lang.py --controlla  only the checks (make test): exits with 1 on an error
+#   python3 tools/make_lang.py --elenco     the texts the code passes to tr() or marks with N_()
 #
-# lang/testi.txt: un blocco per testo, separati da righe vuote; le righe che cominciano con # sono
-# commenti. Nel blocco una riga per lingua, "xx testo", nell'ordine it en es pt zh ja hi: la riga
-# it e' la chiave, cioe' il testo italiano scritto uguale nel codice. Prima delle lingue una riga
-# facoltativa con le facce grandi in cui il testo si disegna (@T25 @T32 @T38 @T44 @B22): per
-# cinese, giapponese e hindi quelle facce hanno solo i caratteri che servono (make_font.py).
+# lang/testi.txt: one block per text, separated by blank lines; lines starting with # are
+# comments. In the block one line per language, "xx text", in the order it en es pt zh ja hi: the
+# it line is the key, that is the Italian text written exactly as in the code. Before the languages
+# an optional line with the big faces the text is drawn in (@T25 @T32 @T38 @T44 @B22): for
+# Chinese, Japanese and Hindi those faces have only the glyphs that are needed (make_font.py).
 #
-# Controlli: ogni testo del codice (tr("..."), tr_in(x, "..."), N_("...")) e ogni nome di mappa
-# di maps/*.txt e' nella tabella; nella tabella ci sono tutte le lingue, nessuna chiave doppia, e
-# ogni traduzione ha gli stessi %d, %s, %u dell'italiano (nello stesso ordine, oppure tutti con la
-# posizione: %1$d, %2$s...).
+# Checks: every text of the code (tr("..."), tr_in(x, "..."), N_("...")) and every map name in
+# maps/*.txt is in the table; the table has all the languages, no duplicate key, and every
+# translation has the same %d, %s, %u as the Italian (in the same order, or all with the
+# position: %1$d, %2$s...).
 import glob
 import os
 import re
@@ -34,7 +34,7 @@ class Text:
 
 
 def parse(path=TABLE):
-    """Blocchi di lang/testi.txt: elenco di Text, ed errori (riga, messaggio)."""
+    """Blocks of lang/testi.txt: list of Text, and errors (line, message)."""
     texts, errors = [], []
     cur = None
     with open(path, encoding="utf-8") as f:
@@ -89,14 +89,14 @@ def parse(path=TABLE):
     return texts, errors
 
 
-# --- formati di printf ---------------------------------------------------------------------------
+# --- printf formats ------------------------------------------------------------------------------
 
-# Conversioni di printf come le usa il gioco (senza il flag spazio: "il 40% più" e' testo, non "% p").
+# printf conversions as the game uses them (without the space flag: "il 40% più" is text, not "% p").
 CONV = re.compile(r"%(?:(\d+)\$)?([-+#0]*)(\d+|\*)?(?:\.(\d+))?(hh|h|ll|l|z|j|t|L)?([diouxXeEfgGcsp%])")
 
 
 def conversions(s):
-    """[(posizione o None, tipo)] dei %... di s (senza %%); un % che non comincia una conversione e' testo."""
+    """[(position or None, type)] of the %... in s (no %%); a % that does not start a conversion is text."""
     out = []
     i = 0
     while True:
@@ -116,8 +116,8 @@ def conversions(s):
 
 
 def lone_percent(s):
-    """Il primo % di s che non comincia una conversione (ne' %%), o None. In un testo usato come
-    formato printf lo leggerebbe lo stesso ("50% di" diventa "% d", con il flag spazio)."""
+    """The first % in s that does not start a conversion (nor %%), or None. In a text used as a
+    printf format, printf would read it anyway ("50% di" becomes "% d", with the space flag)."""
     i = 0
     while True:
         j = s.find("%", i)
@@ -150,7 +150,7 @@ def check_format(it, tr):
     return None
 
 
-# --- testi del codice ----------------------------------------------------------------------------
+# --- texts in the code ---------------------------------------------------------------------------
 
 LIT = r'"(?:[^"\\\n]|\\.)*"'
 CALL = re.compile(r"\b(?:tr|N_)\(\s*((?:" + LIT + r"\s*)+)\)|\btr_in\([^,()]*,\s*((?:" + LIT + r"\s*)+)\)")
@@ -180,13 +180,13 @@ def unescape(lits):
 
 
 def code_keys():
-    """{testo: [file:riga, ...]} dei testi del codice."""
+    """{text: [file:line, ...]} of the texts in the code."""
     keys = {}
     for path in sorted(glob.glob(os.path.join(ROOT, "src", "**", "*.cpp"), recursive=True) + glob.glob(os.path.join(ROOT, "src", "**", "*.h"), recursive=True)):
         if path.endswith(("lang_data.h", "font_hud.h", "font_hud_data.h", "libretro.h")):
             continue
         src = open(path, encoding="utf-8").read()
-        # i commenti non contano (ma le righe si', per i messaggi)
+        # comments do not count (but their lines do, for the messages)
         clean = re.sub(r"//[^\n]*", lambda m: " " * len(m.group(0)), src)
         for m in CALL.finditer(clean):
             lits = m.group(1) or m.group(2)
@@ -196,17 +196,17 @@ def code_keys():
     return keys
 
 
-NAME_MAX = 39                         # byte del nome di una mappa (Level::name in level.h, meno lo 0)
+NAME_MAX = 39                         # bytes of a map name (Level::name in level.h, minus the 0)
 
 
 def map_names(errors=None):
-    """{nome: file:riga} delle mappe di serie, letti come level.cpp: solo le righe prima di ---, la
-    chiave in minuscolo o maiuscolo, spazi attorno tolti. Un nome piu' lungo di NAME_MAX byte il
-    gioco lo taglierebbe (e non lo troverebbe piu' nella tabella): errore."""
+    """{name: file:line} of the built-in maps, read like level.cpp does: only the lines before ---,
+    the key in lowercase or uppercase, surrounding spaces removed. A name longer than NAME_MAX bytes
+    would be truncated by the game (which would then no longer find it in the table): error."""
     out = {}
     for path in sorted(glob.glob(os.path.join(ROOT, "maps", "*.txt"))):
         lines = open(path, encoding="utf-8").read().split("\n")
-        if "---" not in (l.strip() for l in lines):          # non e' una mappa (LEGGIMI.txt)
+        if "---" not in (l.strip() for l in lines):          # not a map (LEGGIMI.txt)
             continue
         for n, line in enumerate(lines, 1):
             if line.strip() == "---":
@@ -237,7 +237,7 @@ def check(texts, errors):
             if any("\u0900" <= c <= "\u097f" for c in near):
                 errors.append((t.line, "%s, hi: %%s attaccato a una parola (%r): le parole hindi si compongono intere, serve uno spazio"
                                % (it[:40], hi[max(0, m.start() - 6):m.end() + 6])))
-        if conversions(it):                  # si usa come formato: un % da solo si scrive %%
+        if conversions(it):                  # used as a format: a lone % is written %%
             for l in LANGS:
                 p = lone_percent(t.t.get(l, ""))
                 if p is not None:
@@ -254,7 +254,7 @@ def check(texts, errors):
     return unused
 
 
-# --- uscita ----------------------------------------------------------------------------------
+# --- output ----------------------------------------------------------------------------------
 
 def fnv(s):
     h = 2166136261
@@ -273,22 +273,22 @@ def c_str(s):
         elif ch == "?":
             out.append("?")
         elif ord(ch) < 0x20:
-            out.append("\\%03o" % ord(ch))     # ottale: al massimo 3 cifre, non si attacca a quelle dopo
+            out.append("\\%03o" % ord(ch))     # octal: at most 3 digits, never merges with the next ones
         else:
             out.append(ch)
     return '"' + "".join(out) + '"'
 
 
-BIG = ["@B22", "@T25", "@T32", "@T38", "@T44"]       # bit delle facce grandi in LANG_BIG
+BIG = ["@B22", "@T25", "@T32", "@T38", "@T44"]       # bits of the big faces in LANG_BIG
 
 
 def generate(texts):
     rows = sorted(((fnv(t.t["it"]), t) for t in texts), key=lambda r: (r[0], r[1].t["it"]))
-    o = ["// Generato da tools/make_lang.py da lang/testi.txt: non modificare a mano.",
+    o = ["// Generated by tools/make_lang.py from lang/testi.txt: do not edit by hand.",
          "#pragma once",
          "#include <stdint.h>",
          "#define LANG_NTEXTS %d" % len(rows),
-         "// Hash FNV-1a dell'italiano, in ordine crescente; per ogni testo le 7 lingue (%s)." % " ".join(LANGS),
+         "// FNV-1a hashes of the Italian texts, in ascending order; for each text the 7 languages (%s)." % " ".join(LANGS),
          "static const uint32_t LANG_HASH[LANG_NTEXTS] = {"]
     for i in range(0, len(rows), 8):
         o.append("  " + ", ".join("0x%08xu" % h for h, _ in rows[i:i + 8]) + ",")
@@ -297,7 +297,7 @@ def generate(texts):
     for _, t in rows:
         o.append("  { " + ", ".join(c_str(t.t[l]) for l in LANGS) + " },")
     o.append("};")
-    o.append("// Facce grandi in cui si disegna il testo (prove): bit 0 B22, 1 T25, 2 T32, 3 T38, 4 T44.")
+    o.append("// Big faces the text is drawn in (tests): bit 0 B22, 1 T25, 2 T32, 3 T38, 4 T44.")
     o.append("static const uint8_t LANG_BIG[LANG_NTEXTS] = {")
     bits = [sum(1 << i for i, f in enumerate(BIG) if f in t.faces) for _, t in rows]
     for i in range(0, len(bits), 32):

@@ -1,5 +1,5 @@
-// Flusso del gioco: schermate, campagna, mappe, zone, ondate, cancelli, vite e mappe da capo,
-// stelle e giri dei pianeti, telecamera.
+// Game flow: screens, campaign, maps, zones, waves, gates, lives and map restarts, stars and
+// rounds of the planets, camera.
 #include "game/sim/game_int.h"
 #include "engine/lang.h"
 #include "game/sim/maps.h"
@@ -32,8 +32,8 @@ static_assert(NET_NAME_LEN == SAVE_NAME_LEN, "game.h e save.h: stessa lunghezza 
 namespace {
 
 bool g_inited;                 // models and maps built (shared by every game in the process)
-// Mostri di un gruppo: piu' giocatori in gioco (chi e' senza vite non conta), piu' mostri; e
-// di piu' a ogni giro.
+// Monsters of a group: more players in play (whoever is out of lives does not count), more
+// monsters; and more at every round.
 int wave_size(Game& g, int base) {
   if (base <= 0) return 0;
   const int np = count_in_play(g) > 0 ? count_in_play(g) : 1;
@@ -57,7 +57,7 @@ void begin_zone(Game& g, int z, bool entering) {
   g.spawn_wait = 90;
   memset(g.spawn_left, 0, sizeof(g.spawn_left));
   begin_wave(g, 0);
-  boss_start(g);      // solo nell'ultima zona di un'arena; altrimenti nessun boss
+  boss_start(g);      // only in the last zone of an arena; otherwise no boss
   cards_zone_start(g);
   int n = 0;
   for (int k = 0; k < MO_NTYPES; ++k) n += g.spawn_left[k];
@@ -79,13 +79,13 @@ void clear_actors(Game& g) {
   memset(g.mk, 0, sizeof(g.mk));
 }
 
-// Da soli, caduti con vite rimaste: la zona ricomincia (mostri e oggetti della zona da capo,
-// vita piena alla partenza della zona).
+// Playing alone, fallen with lives left: the zone starts again (the zone's monsters and items from
+// the start, full health at the zone's start).
 void restart_zone(Game& g) {
   clear_actors(g);
   items_reset(g, g.zone);
   level_reset_dynamic(&g.L, g.zone);
-  if (g.explorer_free && g.L.capsule_dyn >= 0) g.L.dyn[g.L.capsule_dyn].hp = 0.0f;   // l'esploratore resta salvo
+  if (g.explorer_free && g.L.capsule_dyn >= 0) g.L.dyn[g.L.capsule_dyn].hp = 0.0f;   // the explorer stays rescued
   for (int i = 0; i < g.L.ngates; ++i) g.gate_want[i] = g.L.gates[i].open;
   place_players(g, g.zone);
   cards_zone_start(g);
@@ -94,7 +94,7 @@ void restart_zone(Game& g) {
     if (g.pl[i].active) lives += g.pl[i].lives;
   char sub[224];
   if (g.wipe_cleared) {
-    // La zona era gia' stata ripulita (l'ha preso un colpo arrivato dopo): resta libera.
+    // The zone had already been cleared (a shot that arrived later got them): it stays clear.
     g.phase = PH_CLEAR;
     g.phase_t = 0;
     const int gi = g.L.zones[g.zone].exit_gate;
@@ -112,10 +112,10 @@ void restart_zone(Game& g) {
   ev_camera(g, CAM_CUT);
 }
 
-// Boss del pianeta battuto: si apre il pianeta dopo e, con almeno GIRO_STARS stelle nel giro in
-// corso, il giro dopo (mostri piu' forti) con le stelle del pianeta da zero. Si guarda a fine
-// mappa e di nuovo se l'esploratore viene salvato durante la festa (la sua puo' essere la decima).
-// Solo in memoria: chi la chiama poi scrive il salvataggio.
+// Planet boss beaten: the next planet opens and, with at least GIRO_STARS stars in the current
+// round, the next round (stronger monsters) with the planet's stars from zero. Checked at the end
+// of the map and again if the explorer is rescued during the party (their star may be the tenth).
+// Only in memory: the caller then writes the save.
 void giro_check(Game& g) {
   if (!maps_is_boss(g.map_idx) || g.giro_up) return;
   SaveData* sd = save_data();
@@ -142,9 +142,9 @@ void giro_check(Game& g) {
   }
 }
 
-// Fine mappa: stelle (finita; esploratore salvato; senza ricominciare la mappa da capo), mappa
-// dopo del pianeta aperta, giro (dopo il boss), salvataggio. Una mappa personalizzata senza
-// capsula da' comunque la stella dell'esploratore.
+// End of map: stars (finished; explorer rescued; without restarting the map from the start), next
+// map of the planet opened, round (after the boss), save. A custom map without a capsule gives
+// the explorer's star anyway.
 void award_stars(Game& g) {
   uint8_t got = SAVE_STAR_DONE;
   if (g.explorer_free || g.L.capsule_dyn < 0) got |= SAVE_STAR_EXPLORER;
@@ -201,7 +201,7 @@ void update_spawning(Game& g) {
     g.phase = PH_CLEAR;
     g.phase_t = 0;
     const int gi = g.L.zones[g.zone].exit_gate;
-    if (gi >= 0) g.gate_want[gi] = 1.0f;          // si apre (e cigola: update_gates)
+    if (gi >= 0) g.gate_want[gi] = 1.0f;          // it opens (and creaks: update_gates)
     show_msg(g, tr("ZONA LIBERA!"), tr("avanti: il cancello è aperto"), 0x7CF29A, 2, 180);
     ev_sound_ui(g, SND_ZONE_CLEAR);
     plat_log("mappa %d, zona %d libera", g.map_idx + 1, g.zone + 1);
@@ -215,7 +215,7 @@ void update_spawning(Game& g) {
   }
 }
 
-// Il giocatore i alla sua partenza nella zona in corso (uno sbuffo dove era e uno dove arriva).
+// Player i to their start in the current zone (a puff where they were and one where they arrive).
 void to_zone_start(Game& g, int i) {
   Player& p = g.pl[i];
   p.leap_n = p.leap_t = 0;
@@ -230,20 +230,20 @@ void to_zone_start(Game& g, int i) {
   burst(g, p.pos + v3(0, 0.6f, 0), 8, i, 2.5f);
 }
 
-// Chi e' rimasto indietro quando la zona comincia viene portato alla sua partenza nella zona.
+// Whoever stayed behind when the zone starts is taken to their start in the zone.
 void regroup(Game& g) {
   for (int i = 0; i < MAX_PLAYERS; ++i) {
     Player& p = g.pl[i];
     if (!p.active || !p.alive) continue;
     if (p.leap_n == 0 && level_zone_at(&g.L, p.pos.x, p.pos.z) == g.zone) continue;
-    if (p.leap_n > 0 && level_zone_at(&g.L, p.leap_b.x, p.leap_b.z) == g.zone) continue;   // atterra dentro
+    if (p.leap_n > 0 && level_zone_at(&g.L, p.leap_b.x, p.leap_b.z) == g.zone) continue;   // lands inside
     to_zone_start(g, i);
   }
 }
 
-// 0.5.4 (revisione): chi, a cancello chiuso, si ritrova in una zona di prima (tornato indietro proprio
-// mentre il cancello si chiudeva, spinto...) torna alla sua partenza nella zona in corso: da li' non
-// potrebbe piu' uscire, e da soli la zona non finirebbe mai.
+// 0.5.4 (review): whoever, with the gate closed, ends up in an earlier zone (went back just as the
+// gate was closing, pushed...) goes back to their start in the current zone: from there they could
+// no longer get out, and playing alone the zone would never end.
 void strays_back(Game& g) {
   for (int i = 0; i < MAX_PLAYERS; ++i) {
     const Player& p = g.pl[i];
@@ -266,22 +266,22 @@ void compute_mvp(Game& g) {
   }
 }
 
-// Cancelli a battente (0.5.4). Si aprono come una porta pesante tirata (accelerano, poi frenano e si
-// fermano aperti: 50 fotogrammi) e si chiudono sbattendo: accelerano fino in fondo (41 fotogrammi),
-// battono con un tonfo e un po' di polvere, rimbalzano di qualche grado e si fermano. Mentre girano
-// spingono via chi trovano davanti (si aprono verso chi li sta aspettando).
+// Swing gates (0.5.4). They open like a heavy door being pulled (they speed up, then brake and stop
+// open: 50 frames) and they close by slamming: they speed up all the way (41 frames), hit with a
+// thud and a bit of dust, bounce back a few degrees and stop. While turning they push away whoever
+// they find in front of them (they open towards whoever is waiting for them).
 namespace {
 const float GATE_OPEN_ACC = 0.0016f;
 const float GATE_SHUT_ACC = 0.0012f;
-const float GATE_BOUNCE = 0.28f;          // della velocita' del colpo
-const float GATE_REST = 0.004f;           // rimbalzi piu' lenti: fermo
-const float GATE_SLAM = 0.02f;            // da questa velocita' il colpo si sente (chiuso da tutto aperto: 0,049)
-const float GATE_TOP = 1.75f;             // chi e' piu' in alto (salto, trampolino) passa sopra ai battenti
+const float GATE_BOUNCE = 0.28f;          // of the speed of the hit
+const float GATE_REST = 0.004f;           // slower bounces: at rest
+const float GATE_SLAM = 0.02f;            // from this speed the hit can be heard (closed from fully open: 0.049)
+const float GATE_TOP = 1.75f;             // whoever is higher up (jump, trampoline) passes over the leaves
 const int GATE_DUST[NSTYLES] = { PC_SAND, PC_EARTH, PC_STONE, PC_SAND };
 
-// Un battente nella sua posizione di adesso (girato di th) e da che parte gira (turn: +1 si apre).
+// A leaf in its current position (turned by th) and which way it turns (turn: +1 opens).
 struct Leaf {
-  Vec3 h, d, n;                                          // cardine, verso la punta, verso cui gira aprendosi
+  Vec3 h, d, n;                                          // hinge, towards the tip, the way it turns when opening
   float len, turn;
 };
 
@@ -295,8 +295,8 @@ Leaf gate_leaf_now(Game& g, int gi, int side, float th, float turn) {
   return lf;
 }
 
-// Il giocatore toccato dal battente viene spinto fuori, dalla parte dove ha il centro (in punta: via
-// dalla punta). true se l'ha spostato.
+// The player touched by the leaf is pushed out, on the side where their centre is (at the tip: away
+// from the tip). true if it moved them.
 bool leaf_push(Game& g, Player& p, const Leaf& lf) {
   const float rr = PL_R + GATE_LEAF_HALF;
   const Vec3 rel = v3(p.pos.x - lf.h.x, 0.0f, p.pos.z - lf.h.z);
@@ -321,9 +321,9 @@ bool leaf_push(Game& g, Player& p, const Leaf& lf) {
     nx = tip.x + dx / l * rr;
     nz = tip.z + dz / l * rr;
   } else {
-    return false;                                        // dietro il cardine: dentro il pilastro
+    return false;                                        // behind the hinge: inside the pillar
   }
-  level_push_out(&g.L, &nx, &nz, p.pos.y, PL_R, PL_STEP, BODY_WALK | BODY_PIT);             // mai dentro un cenote
+  level_push_out(&g.L, &nx, &nz, p.pos.y, PL_R, PL_STEP, BODY_WALK | BODY_PIT);             // never into a cenote
   level_body_guard(&g.L, p.pos.x, p.pos.z, &nx, &nz, p.pos.y, PL_R, PL_STEP, BODY_WALK | BODY_PIT);
   const bool moved = nx != p.pos.x || nz != p.pos.z;
   p.pos.x = nx;
@@ -331,8 +331,8 @@ bool leaf_push(Game& g, Player& p, const Leaf& lf) {
   return moved;
 }
 
-// Il cancello gi si e' mosso da open0: chi i battenti trovano davanti viene spinto via (piu' volte se
-// in mezzo lo spingono tutti e due, con le punte vicine).
+// Gate gi has moved from open0: whoever the leaves find in front of them is pushed away (several
+// times if, in the middle, both of them push them, with the tips close together).
 void gate_sweep(Game& g, int gi, float open0) {
   const Gate& gt = g.L.gates[gi];
   const float turn = gt.open > open0 ? 1.0f : -1.0f;
@@ -353,8 +353,7 @@ Vec3 gate_mid(Game& g, const Gate& gt) {
   return (cell_center(&g.L, gt.x0, gt.z0) + cell_center(&g.L, gt.x1, gt.z1)) * 0.5f;
 }
 
-// Il colpo del cancello che si chiude: tonfo, una nuvola di polvere dalla parte dei battenti, un
-// piccolo scossone.
+// The slam of the closing gate: a thud, a cloud of dust on the side of the leaves, a small shake.
 void gate_slam(Game& g, int gi) {
   const Gate& gt = g.L.gates[gi];
   const Vec3 mid = gate_mid(g, gt), m = v3(gt.mx, 0.0f, gt.mz);
@@ -362,7 +361,7 @@ void gate_slam(Game& g, int gi) {
   const float half = 0.5f * (float)(gt.horiz ? gt.x1 - gt.x0 + 1 : gt.z1 - gt.z0 + 1);
   const int col = GATE_DUST[g.L.style >= 0 && g.L.style < NSTYLES ? g.L.style : 0];
   for (int k = 0; k < 14; ++k) {
-    // Una chiamata al generatore per istruzione: l'ordine resta lo stesso con ogni compilatore.
+    // One call to the generator per statement: the order stays the same with every compiler.
     const float r0 = rng_f(g);
     const float r1 = rng_f(g);
     const float r2 = rng_f(g);
@@ -385,8 +384,8 @@ void update_gates(Game& g) {
     const float w = g.gate_want[i], o0 = gt.open;
     const bool rest = gt.vel == 0.0f;
     if (w >= 0.1f) {
-      // Verso w (di solito aperto del tutto): accelera e frena in tempo per fermarsi li'. Piu' chiuso
-      // di cosi' (anche un cancello fermato a meta' rimbalzo da una zona rifatta) si chiude.
+      // Towards w (usually fully open): it speeds up and brakes in time to stop there. Any more
+      // closed than this (even a gate stopped mid-bounce by a zone replayed) and it closes.
       const float dist = w - gt.open, dir = dist > 0.0f ? 1.0f : -1.0f;
       float sp = gt.vel * dir > 0.0f ? fabsf(gt.vel) : 0.0f;
       sp = fminf(sp + GATE_OPEN_ACC, sqrtf(2.0f * GATE_OPEN_ACC * fabsf(dist)));
@@ -398,7 +397,7 @@ void update_gates(Game& g) {
         gt.open += gt.vel;
       }
     } else if (gt.open > 0.0f || gt.vel != 0.0f) {
-      // Si chiude: accelera fino al colpo, rimbalza e ricade finche' si ferma.
+      // It closes: it speeds up until the hit, bounces and falls back until it stops.
       gt.vel -= GATE_SHUT_ACC;
       gt.open += gt.vel;
       if (gt.open <= 0.0f) {
@@ -410,14 +409,14 @@ void update_gates(Game& g) {
       }
     }
     if (gt.open == o0) continue;
-    if (rest && gt.vel != 0.0f) ev_sound(g, SND_GATE, gate_mid(g, gt));   // comincia a girare: cigola
+    if (rest && gt.vel != 0.0f) ev_sound(g, SND_GATE, gate_mid(g, gt));   // it starts turning: it creaks
     gate_sweep(g, i, o0);
   }
 }
 
-// Comincia la mappa gia' caricata (g.map_idx) dalla zona 1, come appena scelta: 3 vite a testa,
-// carte da scegliere, oggetti, casse e capsula come all'inizio. again: la stessa mappa da capo
-// nella stessa visita (statistiche dei giocatori e ripartenze restano).
+// Starts the already loaded map (g.map_idx) from zone 1, as if just chosen: 3 lives each, cards
+// to choose, items, crates and capsule as at the beginning. again: the same map from the start in
+// the same visit (the players' stats and restarts are kept).
 static void map_start_msg(Game& g, bool again, bool log = true);
 
 void begin_map(Game& g, bool again) {
@@ -431,7 +430,7 @@ void begin_map(Game& g, bool again) {
   items_reset(g, -1);
   level_reset_dynamic(&g.L, -1);
   for (int i = 0; i < LV_MAX_GATES; ++i) g.gate_want[i] = 0.0f;
-  g.loop = world_giro(maps_world(g.map_idx)) - 1;   // difficolta': il giro del pianeta
+  g.loop = world_giro(maps_world(g.map_idx)) - 1;   // difficulty: the planet's round
   for (int i = 0; i < MAX_PLAYERS; ++i) {
     g.lives_kept[i] = -1;
     g.vita_kept[i] = false;
@@ -448,7 +447,7 @@ void begin_map(Game& g, bool again) {
     }
     p.charge = 0.0f;
     p.bombs = 0;
-    for (int k = 0; k < NPW_TIMED; ++k) p.pw_t[k] = 0;   // bonus delle casse: si ricomincia senza
+    for (int k = 0; k < NPW_TIMED; ++k) p.pw_t[k] = 0;   // crate power-ups: everyone starts again without them
     p.hp_max = CHARS[p.ch].hp;
     p.joining = false;
     p.lives = START_LIVES;
@@ -470,10 +469,10 @@ void begin_map(Game& g, bool again) {
   g.paused = false;
   map_start_msg(g, again);
   ev_camera(g, CAM_CUT_PLAY);
-  cards_offer(g);     // prima della prima ondata; il messaggio della mappa si vede dopo le carte
+  cards_offer(g);     // before the first wave; the map's message is shown after the cards
 }
 
-// Messaggio grande all'inizio della mappa (nome e "pronti... via!", oppure "si ricomincia").
+// Big message at the start of the map (name and "pronti... via!", or "si ricomincia").
 static void map_start_msg(Game& g, bool again, bool log) {
   char big[160], sub[224];
   const int w = maps_world(g.map_idx);
@@ -497,7 +496,7 @@ static void map_start_msg(Game& g, bool again, bool log) {
 void restart_map(Game& g) { begin_map(g, true); }
 
 void play_update(Game& g, const Pad pads[MAX_PLAYERS]) {
-  // Scelta delle carte aperta: conta solo quella (niente pausa, niente ingressi), gioco fermo.
+  // Card choice open: only that counts (no pause, no joining), game stopped.
   if (g.cards_open) cards_update(g);
   else play_menus_update(g);
   if (g.screen != SC_PLAY) return;
@@ -537,7 +536,7 @@ void play_update(Game& g, const Pad pads[MAX_PLAYERS]) {
     }
     case PH_CLEAR: {
       if (g.zone + 1 >= g.L.nzones) break;
-      // Prima le carte per la zona che segue: si aprono poco dopo "ZONA LIBERA!".
+      // First the cards for the next zone: they open shortly after "ZONA LIBERA!".
       if (g.cards_due > 0) {
         if (--g.cards_due == 0) cards_offer(g);
         break;
@@ -553,7 +552,7 @@ void play_update(Game& g, const Pad pads[MAX_PLAYERS]) {
       if (++g.phase_t >= 210) {
         compute_mvp(g);
         g.maps_done++;
-        players_gather(g);      // chi e' a terra (o senza vite) festeggia con gli altri
+        players_gather(g);      // whoever is down (or out of lives) celebrates with the others
         go_screen(g, SC_STATS);
         return;
       }
@@ -565,15 +564,15 @@ void play_update(Game& g, const Pad pads[MAX_PLAYERS]) {
       }
       break;
   }
-  // Boss senza vita ma ancora in piedi (cade al prossimo boss_update): ha vinto la squadra, anche se
-  // l'ultimo giocatore e' caduto nello stesso fotogramma (bolla di lava, razzo o bomba arrivati
-  // dopo il turno del boss).
+  // Boss with no health left but still standing (it falls at the next boss_update): the team has
+  // won, even if the last player fell in the same frame (lava bubble, rocket or bomb arriving after
+  // the boss's turn).
   const bool boss_beaten = g.boss.alive && g.boss.hp <= 0.0f;
   if (!boss_beaten && (g.phase == PH_FIGHT || g.phase == PH_CLEAR || g.phase == PH_ENTER) && count_active(g) > 0 &&
       count_alive(g) == 0) {
-    // Tutti a terra. Da soli (un giocatore attivo) la caduta ha gia' tolto una vita: con vite
-    // rimaste si rifa' la zona, senza vite la mappa ricomincia da capo. In piu' giocatori, a
-    // terra tutti nello stesso momento, la mappa ricomincia da capo anche con vite rimaste.
+    // Everyone down. Playing alone (one active player) the fall has already taken a life: with
+    // lives left the zone is replayed, out of lives the map restarts from the start. With more
+    // players, all down at the same moment, the map restarts from the start even with lives left.
     const bool solo = count_active(g) == 1;
     int lives = 0;
     for (int i = 0; i < MAX_PLAYERS; ++i)
@@ -623,7 +622,7 @@ void update_pad_states(Game& g, const Pad pads[MAX_PLAYERS]) {
 
 }  // namespace
 
-// --- funzioni condivise -------------------------------------------------------------
+// --- shared functions ---------------------------------------------------------------
 
 int count_active(Game& g) {
   int n = 0;
@@ -646,8 +645,8 @@ int count_monsters(const Game& g) {
   return n;
 }
 
-// Pianeti e giri: giro e mappe aperte stanno nel salvataggio, le mappe in maps.h (in ordine di
-// campagna, un pianeta dopo l'altro).
+// Planets and rounds: round and open maps are in the save, the maps in maps.h (in campaign
+// order, one planet after the other).
 int world_giro(int w) { return w >= 0 && w < NWORLDS ? save_data()->giro[w] : 1; }
 
 int world_maps(int w) {
@@ -672,7 +671,7 @@ int world_stars(int w) {
 }
 
 int giro_need(int w) {
-  const int n = 3 * world_maps(w) - 2;      // 4 mappe: 10 su 12; con meno mappe tutte le stelle meno due
+  const int n = 3 * world_maps(w) - 2;      // 4 maps: 10 out of 12; with fewer maps all the stars but two
   return n >= GIRO_STARS ? GIRO_STARS : (n > 1 ? n : 1);
 }
 
@@ -687,10 +686,10 @@ bool map_unlocked(int i) {
   const int w = maps_world(i);
   if (w < 0 || w >= NWORLDS) return false;
   const int open = save_data()->maps_open[w];
-  return map_in_world(i) < (w == 0 && open < 1 ? 1 : open);   // la prima mappa della Terra e' sempre aperta
+  return map_in_world(i) < (w == 0 && open < 1 ? 1 : open);   // the first map of Terra is always open
 }
 
-// Mostri piu' forti a ogni giro del pianeta (g.loop: giro - 1).
+// Stronger monsters at every round of the planet (g.loop: round - 1).
 float diff_hp(Game& g) { return 1.0f + 0.6f * (float)g.loop; }
 float diff_dmg(Game& g) { return 1.0f + 0.25f * (float)g.loop; }
 float diff_speed(Game& g) { return fminf(1.0f + 0.05f * (float)g.loop, 1.25f); }
@@ -729,30 +728,30 @@ bool load_map_preview(Game& g, int idx) {
 void start_map(Game& g, int idx) {
   if (!load_map_preview(g, idx)) return;
   g.map_idx = idx;
-  // Il generatore casuale riparte mescolato con i fotogrammi passati dall'avvio (tempo nei menu
-  // compreso): carte e ondate cambiano da una partita all'altra, ma con gli stessi comandi dal
-  // primo fotogramma la partita resta la stessa su ogni processore.
+  // The random generator restarts mixed with the frames elapsed since start-up (time in the menus
+  // included): cards and waves change from one game to the next, but with the same inputs from
+  // the first frame the game stays the same on every processor.
   g.rng ^= 0x9E3779B9u * (g.ui_tick + 1u);
   if (g.rng == 0u) g.rng = 0x9E3779B9u;
   g.map_wipes = 0;
   begin_map(g, false);
 }
 
-// Nei menu i personaggi stanno in fila alla partenza della zona 1; la telecamera li guarda da
-// nord, quindi il giocatore 1 sta a est (a sinistra sullo schermo).
+// In the menus the characters stand in a row at the start of zone 1; the camera looks at them
+// from the north, so player 1 is to the east (on the left of the screen).
 Vec3 menu_spot(const Game& g, int i) {
   Vec3 c = v3(0, 0, 0);
   for (int k = 0; k < 4; ++k) c = c + g.L.zones[0].start[k] * 0.25f;
   return v3(c.x + (1.5f - (float)i) * 1.25f, 0.0f, c.z);
 }
 
-// --- interfaccia ------------------------------------------------------------------------
+// --- interface --------------------------------------------------------------------------
 
 void game_init(Game& g) {
   if (g_inited) game_shutdown(g);
   memset(&g, 0, offsetof(Game, session));   // everything but the session, which outlives game_init (the last member)
-  for (int i = 0; i < MAX_PLAYERS; ++i) g.aim_level[i] = AIM_DEFAULT;   // resta per tutta la sessione
-  g.aa_level = 1;                                                       // antialias: il migliore che il renderer sa fare
+  for (int i = 0; i < MAX_PLAYERS; ++i) g.aim_level[i] = AIM_DEFAULT;   // it stays for the whole session
+  g.aa_level = 1;                                                       // antialiasing: the best the renderer can do
   g.aa_cap = 8;
   models_build();
   maps_init();
@@ -806,10 +805,8 @@ void game_quick_start(Game& g, int map, int players, const char* chars) {
   start_map(g, map);
 }
 
-// Musica secondo la schermata (lo stesso brano continua senza ripartire) e musica piu' bassa
-// mentre la partita e' ferma (pausa, carte).
-// Impostazioni cambiate nella pausa (mira, antialias, volumi; la pausa le mette subito in
-// save_data): il file si scrive quando la pausa si chiude.
+// Settings changed in the pause (aim, antialiasing, volumes; the pause puts them in save_data
+// right away): the file is written when the pause closes.
 static void settings_save(Game& g) {
   if (!g.session.settings_dirty || (g.screen == SC_PLAY && g.paused)) return;
   g.session.settings_dirty = false;
@@ -819,8 +816,8 @@ static void settings_save(Game& g) {
 void game_update(Game& g, const Pad pads[MAX_PLAYERS]) {
   g.ui_tick++;
   g.screen_t++;
-  // Tempo di gioco della partita attiva (fuori dalla prima schermata e dalle sue pagine: salvataggi,
-  // lingua, nome, gioco in rete).
+  // Play time of the active game (outside the first screen and its pages: saves, language, name,
+  // LAN play).
   if (save_slot() >= 0 && g.screen != SC_TITLE && g.screen != SC_SLOTS && g.screen != SC_LANG && g.screen != SC_NAME &&
       g.screen != SC_NET && g.screen != SC_LOBBY && ++g.time_frames >= 60) {
     g.time_frames = 0;
@@ -854,12 +851,12 @@ int game_aa_level(Game& g) { return g.aa_level; }
 void game_aa_cap(Game& g, int samples) { g.aa_cap = samples; }
 int game_aa_wanted(const Game& g) {
   if (g.aa_max <= 0 || g.aa_level <= 0) return 0;
-  int want = g.aa_level == 1 ? g.aa_cap : g.aa_level;     // il migliore: fin dove arriva, salvo il tetto
+  int want = g.aa_level == 1 ? g.aa_cap : g.aa_level;     // the best: as far as it goes, except for the cap
   if (want > g.aa_max) want = g.aa_max;
   return want;
 }
 void game_save_loaded(Game& g) {
-  // Impostazioni salvate: mira di ogni posto, antialias, volumi, lingua.
+  // Saved settings: aim of every slot, antialiasing, volumes, language.
   const SaveData* sd = save_data();
   for (int i = 0; i < MAX_PLAYERS && i < SAVE_PLAYERS; ++i)
     if (sd->aim[i] < NAIMLEVELS) g.aim_level[i] = sd->aim[i];
@@ -867,11 +864,11 @@ void game_save_loaded(Game& g) {
   audio_set_volume(sd->music_vol, sd->sfx_vol);
   lang_set(sd->lang);
   g.session.settings_dirty = false;
-  // Prove: la partita veloce (giocatori automatici, PUPAZZI_MAPPA) comincia prima che il core legga
-  // il salvataggio e gioca nella partita 1 (se non c'e' la crea); se il pianeta e' a un altro giro
-  // la mappa riparte con quello.
+  // Tests: the quick game (bots, PUPAZZI_MAPPA) starts before the core reads the save and plays
+  // in game 1 (it creates it if it does not exist); if the planet is at another round the map
+  // restarts with that one.
   if (g.screen == SC_PLAY && g.tick == 0 && save_slot() < 0 && !save_slot_load(0)) save_slot_new(0);
-  if (g.screen == SC_PLAY && g.tick == 0) map_start_msg(g, false, false);      // nella lingua salvata
+  if (g.screen == SC_PLAY && g.tick == 0) map_start_msg(g, false, false);      // in the saved language
   if (g.screen == SC_PLAY && g.tick == 0 && g.loop != world_giro(maps_world(g.map_idx)) - 1) {
     plat_log("salvataggio letto: %s e' al giro %d, la mappa di prova riparte", WORLD_NAMES[maps_world(g.map_idx)],
              world_giro(maps_world(g.map_idx)));
@@ -885,14 +882,14 @@ void stars_late_explorer(Game& g) {
   g.stars_got |= SAVE_STAR_EXPLORER;
   if (!(g.stars_had & SAVE_STAR_EXPLORER)) g.stars_new |= SAVE_STAR_EXPLORER;
   if (g.giro_up) {
-    // Il giro dopo e' gia' aperto (stelle da zero): questa stella era del giro finito.
+    // The next round is already open (stars from zero): this star belonged to the finished round.
     plat_log("stella dell'esploratore a mappa finita (mappa %d): il giro %d e' gia' aperto, vale solo per questa volta",
              g.map_idx + 1, g.giro_was + 1);
     return;
   }
   save_add_stars(maps_id(g.map_idx), SAVE_STAR_EXPLORER);
   plat_log("stella dell'esploratore aggiunta a mappa finita (mappa %d)", g.map_idx + 1);
-  giro_check(g);      // dopo il boss puo' essere la decima stella
+  giro_check(g);      // after the boss it may be the tenth star
   save_write();
 }
 bool game_wants_quit(Game& g) { return g.session.quit; }
@@ -916,17 +913,17 @@ uint64_t game_state_hash(Game& g) {
     mix(&p.charge, sizeof(p.charge));
     mix(&p.yaw, sizeof(p.yaw));
     mix(&p.aim_yaw, sizeof(p.aim_yaw));
-    // Vite (0.5): quante ne restano, a terra, senza vite.
+    // Lives (0.5): how many are left, down, out of lives.
     const int8_t lv[4] = { (int8_t)p.lives, (int8_t)p.active, (int8_t)p.alive, (int8_t)p.out };
     mix(lv, sizeof(lv));
-    mix(p.pw_t, sizeof(p.pw_t));    // bonus delle casse (0.5.4)
+    mix(p.pw_t, sizeof(p.pw_t));    // crate power-ups (0.5.4)
   }
   for (int it = 0; it < g.L.nitems; ++it)
     if (g.L.items[it].kind == IT_POWER && g.item_on[it]) {
       const uint8_t pw[2] = { (uint8_t)it, g.item_pw[it] };
       mix(pw, sizeof(pw));
     }
-  // Giro del pianeta, mappa e zona in corso, mappa ricominciata da capo, vite di chi e' uscito.
+  // Round of the planet, current map and zone, map restarted from the start, lives of whoever left.
   const int st[6] = { g.loop, g.map_idx, g.zone, g.phase, g.map_wipes, (int)g.wipe_map };
   mix(st, sizeof(st));
   mix(g.lives_kept, sizeof(g.lives_kept));
@@ -943,9 +940,9 @@ uint64_t game_state_hash(Game& g) {
   }
   for (int i = 0; i < MAX_SHOTS; ++i)
     if (g.sh[i].alive) mix(&g.sh[i].pos, sizeof(Vec3));
-  // Gladiatore (0.5.1): dove sta e dove guarda, vita, azione in corso, bersaglio.
+  // Gladiator (0.5.1): where it stands and where it faces, health, current action, target.
   if (g.boss.alive) { const float bf[4] = { g.boss.pos.x, g.boss.pos.z, g.boss.hp, g.boss.face }; const int bi[3] = { g.boss.act, g.boss.act_t, g.boss.target }; mix(bf, sizeof(bf)); mix(bi, sizeof(bi)); }
-  // Carte: solo se attive, cosi' a carte spente l'impronta resta quella di prima.
+  // Cards: only if enabled, so with the cards off the hash stays the same as before.
   if (cards_enabled(g)) {
     for (int i = 0; i < MAX_PLAYERS; ++i) {
       const Player& p = g.pl[i];
@@ -962,20 +959,20 @@ uint64_t game_state_hash(Game& g) {
     const uint8_t open = g.cards_open;
     mix(&open, 1);
   }
-  // Cancelli a battente (0.5.4): quanto sono aperti e come si muovono.
+  // Swing gates (0.5.4): how open they are and how they move.
   for (int i = 0; i < g.L.ngates; ++i) {
     const float gf[2] = { g.L.gates[i].open, g.L.gates[i].vel };
     mix(gf, sizeof(gf));
   }
-  // Esploratore della capsula.
+  // The explorer of the capsule.
   const uint8_t pf = g.explorer_free;
   mix(&pf, 1);
   if (g.expl_t >= 0) mix(&g.expl_pos, sizeof(Vec3));
   return h;
 }
 
-// Prove: tutti i campi dei mostri vivi, in esadecimale esatto, per trovare dove due processori
-// cominciano a dare risultati diversi.
+// Tests: all the fields of the living monsters, in exact hexadecimal, to find where two
+// processors start giving different results.
 void game_trace_monsters(Game& g, void (*out)(const char* line)) {
   char buf[512];
   for (int k = 0; k < MAX_MONSTERS; ++k) {
@@ -1009,7 +1006,7 @@ void game_info(Game& g, GameInfo* gi) {
   snprintf(gi->map_name, sizeof(gi->map_name), "%s", g.L.name);
 }
 
-// --- gioco in rete (0.5.4) ------------------------------------------------------------------------
+// --- LAN play (0.5.4) -----------------------------------------------------------------------------
 
 const NetView& net_view(const Game& g) { return g.session.net_view; }
 void net_req(Game& g, int req, int arg) {
@@ -1036,7 +1033,7 @@ void game_net_summary(NetGame* out) {
   memcpy(out->name, sd->name, NET_NAME_LEN);
   out->name[NET_NAME_LEN - 1] = 0;
   out->slot = save_slot() >= 0 ? save_slot() : 0;
-  int w = 0;      // il pianeta piu' lontano raggiunto (come nella pagina dei salvataggi)
+  int w = 0;      // the farthest planet reached (as in the saves page)
   for (int k = 1; k < NWORLDS; ++k)
     if (world_maps(k) > 0 && (sd->maps_open[k] > 0 || sd->giro[k] > 1)) w = k;
   out->world = w;
@@ -1056,9 +1053,10 @@ void game_net_prepare(Game& g, NetStart* s) {
   for (int i = 0; i < MAX_PLAYERS; ++i) s->aim[i] = (uint8_t)aim_level_of(g, i);
 }
 
-// La partita come appena accesa la console, uguale su tutte: tutto cio' che conta per la partita
-// riparte da zero e la mappa di partenza si rilegge da capo (oggetti, casse, cancelli, mostri,
-// colpi, particelle). Restano solo le cose di questa console (telecamera, antialias, lingua).
+// The game as if the console had just been switched on, the same on all of them: everything
+// that matters for the game starts again from zero and the starting map is read again from
+// scratch (items, crates, gates, monsters, shots, particles). Only the things of this console
+// remain (camera, antialiasing, language).
 static void net_reset_sim(Game& g) {
   for (int i = 0; i < MAX_PLAYERS; ++i) {
     memset(&g.pl[i], 0, sizeof(Player));
@@ -1071,8 +1069,8 @@ static void net_reset_sim(Game& g) {
     g.start_tap[i] = false;
   }
   memset(g.in, 0, sizeof(g.in));
-  // Tasti tenuti da prima (la A con cui chi ha creato la partita la fa cominciare) contano solo
-  // dopo essere stati lasciati: uguale su tutte le console.
+  // Buttons held from before (the A with which the host starts the game) count only after being
+  // released: the same on all the consoles.
   for (int i = 0; i < MAX_PLAYERS; ++i) g.in[i].btn = 0xFFFFu;
   memset(g.offer, 0, sizeof(g.offer));
   memset(g.last_vis, 0, sizeof(g.last_vis));
@@ -1142,7 +1140,7 @@ void game_net_frame(Game& g, uint8_t consoles, uint8_t silent, const bool taps[M
   g.net_consoles = (uint8_t)(g.net_consoles & consoles);
   for (int i = 0; i < MAX_PLAYERS; ++i) {
     if (!((gone >> i) & 1u)) continue;
-    // Chi si scollega esce come dalla pausa (LASCIA LA PARTITA): il suo posto si libera.
+    // Whoever disconnects leaves as from the pause (LASCIA LA PARTITA): their slot is freed.
     plat_log("rete: la console del giocatore %d non c'e' piu': il suo eroe esce (fotogramma %u)", i + 1, g.ui_tick);
     if (g.pl[i].active) player_leave(g, i);
     g.pl[i].joining = false;
@@ -1166,12 +1164,12 @@ void game_net_end(Game& g, int reason, bool host) {
   g.session.net_local = -1;
   g.session.net_wait = 0;
   g.session.net_silent = 0;
-  // Di nuovo le mire salvate su questa console (in rete ogni posto aveva quella della sua console).
+  // The aims saved on this console again (on the network each slot had the one of its console).
   for (int i = 0; i < MAX_PLAYERS && i < SAVE_PLAYERS; ++i)
     if (save_data()->aim[i] < NAIMLEVELS) g.aim_level[i] = save_data()->aim[i];
   char buf[256];
   if (!host) {
-    // Di nuovo i salvataggi di questa console, dal titolo.
+    // This console's saves again, from the title.
     save_guest_end();
     game_reset(g);
     menu_info(g, net_error_text(g, reason, buf, sizeof(buf)));

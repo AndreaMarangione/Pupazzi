@@ -11,8 +11,8 @@ char g_name[MAX_MAPS][40];
 char g_note[MAX_MAPS][120];
 bool g_boss[MAX_MAPS];
 int g_world[MAX_MAPS];
-char* g_custom[MAX_MAPS];   // testo del file personalizzato, se c'e' (anche se non valido)
-Level g_tmp;                // per leggere i nomi senza toccare la mappa in gioco
+char* g_custom[MAX_MAPS];   // text of the custom file, if there is one (even if not valid)
+Level g_tmp;                // to read the names without touching the map in play
 
 char* read_file(const char* path) {
   FILE* f = fopen(path, "rb");
@@ -82,7 +82,7 @@ bool maps_load(int i, Level* L, char* note, int notelen) {
 }
 
 uint64_t maps_content_hash(void) {
-  // FNV-1a su nome e testo di ogni mappa, come si caricano (il file personalizzato se e' valido).
+  // FNV-1a over the name and text of every map, as loaded (the custom file if it is valid).
   uint64_t h = 1469598103934665603ull;
   auto mix = [&](const char* s, size_t n) {
     for (size_t k = 0; k < n; ++k) h = (h ^ (uint8_t)s[k]) * 1099511628211ull;

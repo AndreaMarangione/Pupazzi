@@ -1,7 +1,7 @@
-// Prove delle lingue (0.5.3): tr trova i testi; ogni testo della tabella, in ogni lingua, si disegna
-// senza caratteri che mancano e con le parole hindi gia' composte (nelle facce piccole e nelle facce
-// grandi in cui si usa); a capo e puntini non spezzano le parole hindi, in cinese e giapponese si va
-// a capo tra i caratteri, una parola piu' larga della riga si spezza senza perdere nulla.
+// Language tests (0.5.3): tr finds the texts; every text of the table, in every language, is drawn
+// with no missing glyphs and with the Hindi words already composed (in the small faces and in the
+// big faces where it is used); line wrapping and ellipses do not split Hindi words, in Chinese and
+// Japanese lines wrap between characters, a word wider than the line is split with nothing lost.
 //   make build/native/test_lang && ./build/native/test_lang
 #include "engine/lang.h"
 #include "engine/hud.h"
@@ -11,7 +11,7 @@
 #include <string.h>
 #include "test.h"
 
-// Il testo come lo scrive printf: %d e %u diventano 7, %s niente (sono altri testi), %% un %.
+// The text as printf writes it: %d and %u become 7, %s nothing (they are other texts), %% a %.
 static void expand(char* out, int n, const char* s) {
   int k = 0;
   for (const char* p = s; *p && k < n - 2;) {
@@ -30,13 +30,13 @@ static void expand(char* out, int n, const char* s) {
     } else if (*q == 's') {
       p = q + 1;
     } else {
-      out[k++] = *p++;                     // "il 40% più": testo
+      out[k++] = *p++;                     // "il 40% più": text
     }
   }
   out[k] = 0;
 }
 
-// Le parole hindi di line (separate da spazi e punteggiatura latina) sono tutte parole di whole.
+// The Hindi words of line (separated by spaces and Latin punctuation) are all words of whole.
 static bool whole_words(const char* line, const char* whole) {
   for (const char* p = line; *p;) {
     const char* q = p;
@@ -50,7 +50,7 @@ static bool whole_words(const char* line, const char* whole) {
       if (!hud_is_deva(hud_utf8_next(t))) break;
       e = t;
     }
-    // la stessa parola, intera, deve esserci nel testo intero
+    // the same word, whole, must be in the whole text
     bool found = false;
     const size_t n = (size_t)(e - p);
     for (const char* w = strstr(whole, ""); w && *w; ++w) {
@@ -123,7 +123,7 @@ TEST_CASE("2) ogni testo in ogni lingua si disegna") {
     EXPECT(bad == 0, what);
   }
   lang_set(LANG_IT);
-  // I nomi delle lingue, ognuno con i suoi caratteri (pagina delle lingue S16, prima schermata S13).
+  // The language names, each with its own glyphs (language page S16, first screen S13).
   hud_missing(true);
   for (int l = 0; l < NLANGS; ++l) {
     hud_cjk(l == LANG_JA ? HUD_CJK_JP : HUD_CJK_SC);
@@ -132,10 +132,10 @@ TEST_CASE("2) ogni testo in ogni lingua si disegna") {
   }
   hud_cjk(HUD_CJK_SC);
   EXPECT(hud_missing(true) == 0, "nomi delle lingue");
-  // Un carattere che nessuno ha: si conta (e si disegna '?').
+  // A character that no face has: it is counted (and '?' is drawn).
   hud_text_w(HF_S13, "\xE2\x99\xA5", 0.0f);
   EXPECT(hud_missing(true) == 1, "carattere sconosciuto: contato");
-  // Una parola hindi che non e' tra quelle composte (testi cambiati senza rigenerare i caratteri).
+  // A Hindi word not among the composed ones (texts changed without regenerating the glyphs).
   hud_text_w(HF_S13, "क्षत्रियों", 0.0f);
   EXPECT(hud_missing(true) >= 1, "parola hindi non composta: contata");
 }
@@ -163,7 +163,7 @@ TEST_CASE("3) larghezze e a capo") {
   for (int k = 0; k < nz; ++k) {
     ok &= hud_text_w(HF_S16, L[k], 0.5f) <= 120.0f && (k == nz - 1 || hud_text_w(HF_S16, L[k], 0.5f) > 90.0f);
     if (strlen(joined) + strlen(L[k]) < sizeof(joined)) strcat(joined, L[k]);
-    // niente riga che comincia con la punteggiatura di chiusura
+    // no line that starts with closing punctuation
     ok &= strncmp(L[k], "\xEF\xBC\x8C", 3) && strncmp(L[k], "\xE3\x80\x82", 3) && strncmp(L[k], "\xEF\xBC\x81", 3);
   }
   ok &= !strcmp(joined, s);
@@ -176,7 +176,7 @@ TEST_CASE("3) larghezze e a capo") {
   lang_set(LANG_IT);
   const int ni = ui::wrap("uno due tre quattro cinque sei", 60.0f, HF_S14, 0.5f, L, 6, &cut);
   EXPECT(ni >= 3 && !cut && !strchr(L[0], ' ') == false, "italiano: a capo sugli spazi come prima");
-  // Una parola piu' larga della riga: spezzata, nulla si perde, e cut lo dice.
+  // A word wider than the line: split, nothing is lost, and cut says so.
   const char* longw = "precipitevolissimevolmente e poi basta";
   const int nl = ui::wrap(longw, 60.0f, HF_S14, 0.5f, L, 12, &cut);
   char a[256], b[256];
@@ -192,7 +192,7 @@ TEST_CASE("3) larghezze e a capo") {
   }
   b[nb] = 0;
   EXPECT(ok && !strcmp(a, b), "parola piu' larga della riga: spezzata senza perdere nulla, cut");
-  // In hindi no: la parola resta intera (o i puntini), e cut.
+  // Not in Hindi: the word stays whole (or the ellipsis), and cut.
   lang_set(LANG_HI);
   s = tr("quando usi lo speciale i compagni vicini recuperano 25 vita");
   const int nh = ui::wrap(s, 24.0f, HF_S16, 0.5f, L, 12, &cut);

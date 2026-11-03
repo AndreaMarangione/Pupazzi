@@ -36,9 +36,9 @@ void info(Game& g, const char* s) {
   g.session.info_t = 120;
 }
 
-// Le schermate si preparano prima di andarci: gia' il primo fotogramma e' quello giusto (posti
-// aggiornati, cursore al suo posto, nessuna finestra aperta). All'avvio il titolo si prepara nel
-// suo primo aggiornamento (i salvataggi si aprono dopo).
+// Screens are prepared before going to them: already the first frame is the right one (slots
+// updated, cursor in its place, no window open). At startup the title is prepared in its first
+// update (the saves are opened later).
 void back_to_title(Game& g, int item) {
   go_screen(g, SC_TITLE);
   slots_refresh(g);
@@ -47,8 +47,8 @@ void back_to_title(Game& g, int item) {
 
 bool blinking(const Game& g, unsigned period) { return ((g.ui_tick / period) & 1u) == 0u; }
 
-// Avviso al posto del piede (in arrivo, mappa chiusa, errore di una mappa personalizzata): fino a
-// tre righe, larghe al massimo 440 pixel (a destra resta il posto per il numero della versione).
+// Notice in place of the footer (coming soon, locked map, error in a custom map): up to three
+// lines, at most 440 pixels wide (on the right there is still room for the version number).
 void toast(Hud* h, const char* s, uint32_t color) {
   char L[3][ui::WRAP_LEN];
   const int n = ui::wrap(s, 440.0f, HF_S14, 0.5f, L, 3);
@@ -69,7 +69,7 @@ void footer(const Game& g, Hud* h, const char* a_label, const char* b_label) {
   ui::version(h);
 }
 
-// "A si'   B no" centrati su cy (come le finestre per entrare).
+// "A si'   B no" centered on cy (as in the windows for entering).
 void yes_no(Hud* h, float cy) {
   const char* yes = tr("sì");
   const char* no = tr("no");

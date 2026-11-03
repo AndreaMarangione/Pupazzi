@@ -18,7 +18,7 @@ void lang_update(Game& g) {
   if (any_confirm(g, &who)) {
     ev_sound_ui(g, SND_UI_OK);
     if (g.lang_sel != lang_get()) {
-      g.session.info_t = 0;                                // un avviso ancora a schermo era nella lingua di prima
+      g.session.info_t = 0;                                // a notice still on screen was in the prior language
       lang_set(g.lang_sel);
       save_data()->lang = (uint8_t)g.lang_sel;
       save_write();
@@ -43,7 +43,7 @@ void lang_hud(const Game& g, Hud* h) {
     if (sel) ui::bar_sel(h, IX, y + 2.0f, IW, RH - 4.0f);
     if (cur) hud_ellipse(h, IX + 16.0f, cy, 4.0f, 4.0f, O(sel ? ui::ON : ui::L1));
     const int keep = hud_cjk_get();
-    hud_cjk(l == LANG_JA ? HUD_CJK_JP : HUD_CJK_SC);       // 中文 e 日本語 ognuno con i suoi caratteri
+    hud_cjk(l == LANG_JA ? HUD_CJK_JP : HUD_CJK_SC);       // 中文 and 日本語 each with its own glyphs
     ui::text(h, IX + 32.0f, cy, HF_S16, O(sel ? ui::ON : ui::TX), lang_name(l), 1.0f);
     hud_cjk(keep);
   }

@@ -1,5 +1,5 @@
-// Batteria e carico della CPU letti dal sistema (vedi sysinfo.h). Niente allocazioni; file piccoli
-// letti tutti in una volta.
+// Battery and CPU load read from the system (see sysinfo.h). No allocations; small files read
+// all at once.
 #include "platform/sysinfo.h"
 #include <dirent.h>
 #include <stdio.h>
@@ -12,10 +12,10 @@ char g_sys[200] = "/sys", g_proc[200] = "/proc";
 SysBattery g_bat;
 double g_bat_ms = -1e30;
 bool g_bat_env_read;
-int g_bat_env = -1;                 // PUPAZZI_BATTERIA: -1 non c'e'
+int g_bat_env = -1;                 // PUPAZZI_BATTERIA: -1 not set
 bool g_bat_env_charging;
 
-// Un file piccolo in buf (al massimo n-1 byte, chiuso da 0). false se non si legge.
+// A small file into buf (at most n-1 bytes, terminated by 0). false if it cannot be read.
 bool read_small(const char* path, char* buf, int n) {
   FILE* f = fopen(path, "rb");
   if (!f) return false;
@@ -49,7 +49,7 @@ void read_battery(SysBattery* b) {
   closedir(d);
 }
 
-// /proc/stat: per la riga "cpu" (tutta la CPU) e "cpuN" i tempi occupati e totali.
+// /proc/stat: for the "cpu" line (whole CPU) and "cpuN", the busy and total times.
 struct Ticks { unsigned long long busy, total; };
 Ticks g_prev_all, g_prev_core[SYS_MAX_CORES];
 unsigned long long g_prev_game;
@@ -62,16 +62,16 @@ bool parse_cpu_line(const char* s, Ticks* t) {
   unsigned long long total = 0;
   for (int i = 0; i < 8; ++i) total += v[i];
   t->total = total;
-  t->busy = total - v[3] - v[4];      // meno idle e iowait
+  t->busy = total - v[3] - v[4];      // minus idle and iowait
   return true;
 }
 
-// a - b, ma 0 se b e' piu' grande (iowait sui kernel SMP a volte torna indietro).
+// a - b, but 0 if b is bigger (iowait on SMP kernels sometimes goes backwards).
 unsigned long long sub0(unsigned long long a, unsigned long long b) { return a > b ? a - b : 0ull; }
 
-// Le differenze tra due letture (circa un secondo) sono piccole: si divide a 32 bit. A 64 bit, su ARM a
-// 32 bit la divisione chiama una routine del compilatore che con zig si porta dietro una memset lenta
-// al posto di quella di glibc (la regola arm32 del Makefile lo controlla).
+// The differences between two readings (about one second) are small: the division is done in 32 bits.
+// In 64 bits, on 32-bit ARM the division calls a compiler routine that, with zig, drags in a slow
+// memset instead of the glibc one (the arm32 rule of the Makefile checks this).
 int pct(unsigned long long part, unsigned long long whole) {
   if (whole == 0) return 0;
   if (part >= whole) return 100;
@@ -139,8 +139,8 @@ SysCpu sys_cpu_sample(void) {
     line = next;
   }
   if (!have_all) return out;
-  // /proc/self/stat: utime e stime sono il 14esimo e il 15esimo campo; il nome (2) e' tra parentesi
-  // e puo' avere spazi: si conta dopo l'ultima ')'.
+  // /proc/self/stat: utime and stime are the 14th and 15th fields; the name (2) is in parentheses
+  // and can contain spaces: counting starts after the last ')'.
   unsigned long long game = 0;
   snprintf(path, sizeof(path), "%s/self/stat", g_proc);
   char sb[1024];

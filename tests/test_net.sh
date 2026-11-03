@@ -1,17 +1,17 @@
 #!/bin/sh
-# Prove del gioco in rete (0.5.4): piu' copie del gioco su questa macchina, che si parlano con
-# messaggi UDP (porte da 56410 in su, per non toccare quelle vere). Ogni copia guida il suo
-# giocatore con il computer (PUPAZZI_BOT=1) e scrive nel registro l'impronta della partita a ogni
-# fotogramma (PUPAZZI_TRACE=1): su tutte le copie devono essere uguali, fotogramma per fotogramma.
+# Tests of the LAN game (0.5.4): several copies of the game on this machine, talking to each other
+# with UDP messages (ports from 56410 up, so as not to touch the real ones). Each copy drives its
+# player with the computer (PUPAZZI_BOT=1) and writes the game hash to the log at every frame
+# (PUPAZZI_TRACE=1): they must be equal on all copies, frame by frame.
 #
-#   sh tests/test_net.sh            tutte le prove (qualche minuto)
-#   sh tests/test_net.sh perdite    solo quella (tre_console perdite scollegamento caduta
+#   sh tests/test_net.sh            all the tests (a few minutes)
+#   sh tests/test_net.sh perdite    only that one (tre_console perdite scollegamento caduta
 #                                   chi_crea_esce rifiuto fine_al_titolo quattro_console progressi
 #                                   mappa_intera menu storia_prima)
-#   TEMPO=60 sh tests/test_net.sh   fotogrammi al secondo di ogni copia (120: il doppio del vero)
+#   TEMPO=60 sh tests/test_net.sh   frames per second of each copy (120: twice the real rate)
 set -u
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
-HOST=${HOST:-$ROOT/build/native/host}                   # altri binari (sanitizer): HOST=... CORE=...
+HOST=${HOST:-$ROOT/build/native/host}                   # other binaries (sanitizer): HOST=... CORE=...
 CORE=${CORE:-$ROOT/build/native/pupazzi_libretro.so}
 OUT=${OUT:-$ROOT/build/rete}
 TEMPO=${TEMPO:-120}
@@ -25,7 +25,7 @@ say() { printf '%s\n' "$*"; }
 ok() { say "  ok     $*"; }
 bad() { say "  ERRORE $*"; FAILS=$((FAILS + 1)); }
 
-# avvia DIR FOTOGRAMMI [VAR=valore ...] [-- opzioni dell'host]: una copia in sottofondo.
+# start DIR FRAMES [VAR=value ...] [-- host options]: one copy in the background.
 start() {
   dir=$1; frames=$2; shift 2
   rm -rf "$dir"; mkdir -p "$dir"
@@ -48,7 +48,7 @@ wait_all() {
 
 log() { cat "$1/pupazzi_log.txt" 2>/dev/null; }
 
-# Impronte di due copie: fotogrammi in comune e quanti diversi; almeno MIN in comune.
+# Hashes of two copies: frames in common and how many differ; at least MIN in common.
 same() {
   a=$1; b=$2; min=$3
   log "$a" | sed -n 's/.*rete traccia \([0-9]*\) \([0-9a-f]*\).*/\1 \2/p' | sort -k1,1 > "$a/tr.txt"
@@ -60,7 +60,7 @@ same() {
   else ok "$(basename "$a") e $(basename "$b"): $n fotogrammi in comune, tutti uguali"; fi
 }
 
-has() {   # has DIR "testo" "spiegazione"
+has() {   # has DIR "text" "explanation"
   if log "$1" | grep -q -- "$2"; then ok "$3"; else bad "$3 (nel registro di $(basename "$1") manca \"$2\")"; fi
 }
 
@@ -72,7 +72,7 @@ want() { [ -z "$ONLY" ] || [ "$ONLY" = "$1" ]; }
 
 BOT="PUPAZZI_BOT=1"
 
-# 1) Tre console con i giocatori automatici; il giocatore 2 mette in pausa con START ogni tanto.
+# 1) Three consoles with bots; player 2 pauses with START every now and then.
 if want tre_console; then
   say "1) tre console, il giocatore 2 mette in pausa ogni tanto"
   D=$OUT/tre_console; P=PUPAZZI_RETE_PORTA=56410
@@ -91,7 +91,7 @@ if want tre_console; then
   for x in a b c; do hasnt "$D/$x" "ERRORE" "nessun errore ($x)"; done
 fi
 
-# 2) Messaggi persi (20%) e in ritardo (da 10 a 50 ms) in tutti e due i sensi.
+# 2) Lost messages (20%) and delayed ones (10 to 50 ms) in both directions.
 if want perdite; then
   say "2) due console, un messaggio su cinque perso e gli altri in ritardo da 10 a 50 ms"
   D=$OUT/perdite; P=PUPAZZI_RETE_PORTA=56420; L="PUPAZZI_RETE_PERDITA=20 PUPAZZI_RETE_RITARDO=10+40"
@@ -104,7 +104,7 @@ if want perdite; then
   for x in a b; do hasnt "$D/$x" "ERRORE" "nessun errore ($x)"; done
 fi
 
-# 3) Una console esce (si chiude il gioco): il suo eroe lascia la partita, le altre continuano.
+# 3) A console leaves (the game is closed): its hero leaves the game, the others carry on.
 if want scollegamento; then
   say "3) tre console, la terza esce a meta'"
   D=$OUT/scollegamento; P=PUPAZZI_RETE_PORTA=56430
@@ -121,7 +121,7 @@ if want scollegamento; then
   hasnt "$D/a" "si continua da soli" "chi ha creato la partita non resta solo (la seconda console c'e' ancora)"
 fi
 
-# 4) Una console si spegne di colpo: dopo 2 secondi senza messaggi esce.
+# 4) A console switches off suddenly: after 2 seconds without messages it leaves.
 if want caduta; then
   say "4) tre console, la terza si spegne di colpo"
   D=$OUT/caduta; P=PUPAZZI_RETE_PORTA=56440; W=PUPAZZI_RETE_ATTESA=2000
@@ -139,7 +139,7 @@ if want caduta; then
   same "$D/a" "$D/b" 3000
 fi
 
-# 5) Esce chi ha creato la partita: le altre tornano al titolo.
+# 5) The host leaves: the others go back to the title screen.
 if want chi_crea_esce; then
   say "5) esce chi ha creato la partita"
   D=$OUT/chi_crea_esce; P=PUPAZZI_RETE_PORTA=56450
@@ -151,7 +151,7 @@ if want chi_crea_esce; then
   same "$D/a" "$D/b" 1200
 fi
 
-# 6) Versione diversa: chi ha creato la partita non fa entrare.
+# 6) Different version: the host does not let it in.
 if want rifiuto; then
   say "6) versione diversa"
   D=$OUT/rifiuto; P=PUPAZZI_RETE_PORTA=56460
@@ -164,7 +164,7 @@ if want rifiuto; then
   hasnt "$D/a" "si comincia" "e la partita non comincia"
 fi
 
-# 7) Finire la partita in rete da COME SI GIOCA? (B, poi A): tutte al titolo allo stesso fotogramma.
+# 7) Ending the LAN game from COME SI GIOCA? (B, then A): all at the title screen on the same frame.
 if want fine_al_titolo; then
   say "7) fine da COME SI GIOCA? (B e poi A su chi ha creato la partita)"
   D=$OUT/fine_al_titolo; P=PUPAZZI_RETE_PORTA=56470
@@ -181,7 +181,7 @@ if want fine_al_titolo; then
   same "$D/a" "$D/b" 50
 fi
 
-# 8) Quattro console.
+# 8) Four consoles.
 if want quattro_console; then
   say "8) quattro console"
   D=$OUT/quattro_console; P=PUPAZZI_RETE_PORTA=56480
@@ -192,8 +192,7 @@ if want quattro_console; then
   for x in b c d; do same "$D/a" "$D/$x" 2200; done
 fi
 
-# 9) I progressi sono quelli di chi crea la partita (qui il giro 2 della Terra): le altre console
-# giocano con quelli.
+# 9) The progress is the host's (here round 2 of Earth): the other consoles play with it.
 if want progressi; then
   say "9) i progressi di chi crea la partita"
   D=$OUT/progressi; P=PUPAZZI_RETE_PORTA=56490
@@ -207,7 +206,7 @@ if want progressi; then
   same "$D/a" "$D/b" 1100
 fi
 
-# 10) Una mappa intera in tre: le stelle si salvano solo su chi ha creato la partita.
+# 10) A whole map with three consoles: the stars are saved only on the host.
 if want mappa_intera; then
   say "10) una mappa intera in tre, poi le stelle"
   D=$OUT/mappa_intera; P=PUPAZZI_RETE_PORTA=56500
@@ -232,12 +231,12 @@ if want mappa_intera; then
   done
 fi
 
-# 11) Dai menu, con i tasti: chi crea (titolo, GIOCO IN RETE, CREA, posto libero, nome, A per
-# cominciare) e chi si unisce (titolo, GIOCO IN RETE, UNISCITI, A sulla partita trovata).
+# 11) From the menus, with the buttons: the host (title, GIOCO IN RETE, CREA, free slot, name, A to
+# start) and the joining console (title, GIOCO IN RETE, UNISCITI, A on the game found).
 if want menu; then
   say "11) dai menu, con i tasti"
   D=$OUT/menu; P=PUPAZZI_RETE_PORTA=56510
-  # A per cominciare tenuta 6 fotogrammi: dopo non deve contare anche in COME SI GIOCA?
+  # A to start held for 6 frames: afterwards it must not count in COME SI GIOCA? as well.
   start "$D/a" 700 $P -- --in "0:DOWN@30-31,0:DOWN@40-41,0:A@50-51,0:A@70-71,0:A@90-91,0:START@110-111,0:A@420-425"
   sleep 0.3
   start "$D/b" 700 $P -- --in "0:DOWN@30-31,0:DOWN@40-41,0:A@50-51,0:DOWN@70-71,0:A@80-81,0:A@220-221"
@@ -252,8 +251,8 @@ if want menu; then
   same "$D/a" "$D/b" 150
 fi
 
-# 12) Prima ognuno gioca da solo una mappa diversa (mostri, colpi, carte, numeri a caso...), poi
-# la partita in rete: deve cominciare uguale lo stesso.
+# 12) First each one plays a different map alone (monsters, shots, cards, random numbers...), then
+# the LAN game: it must still start the same.
 if want storia_prima; then
   say "12) prima da soli, poi in rete"
   D=$OUT/storia_prima; P=PUPAZZI_RETE_PORTA=56520

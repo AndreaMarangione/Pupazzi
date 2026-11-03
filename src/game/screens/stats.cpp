@@ -5,8 +5,8 @@
 
 namespace screens {
 
-// Fine mappa: le stelle compaiono una alla volta (con il loro suono), poi il giro; A vale dopo
-// l'ultima stella.
+// End of the map: the stars appear one at a time (with their sound), then the round; A works
+// after the last star.
 const int STAR_T0 = 40, STAR_STEP = 26, STATS_READY = STAR_T0 + 2 * STAR_STEP + 12;
 
 void stats_update(Game& g) {
@@ -17,9 +17,9 @@ void stats_update(Game& g) {
   int who;
   if (any_confirm(g, &who)) {
     ev_sound_ui(g, SND_UI_OK);
-    // Avanti nella campagna: la mappa dopo dello stesso pianeta (finita questa, e' aperta). Dopo
-    // il boss di un pianeta si va al pianeta dopo, se c'e' gia', altrimenti si torna alla prima
-    // mappa di questo.
+    // Forward in the campaign: the next map of the same planet (with this one finished, it is
+    // open). After the boss of a planet it goes to the next planet, if it already exists, otherwise
+    // back to the first map of this one.
     const int w = maps_world(g.map_idx);
     int next = -1;
     for (int i = g.map_idx + 1; i < maps_count() && next < 0; ++i)
@@ -51,7 +51,7 @@ void stats_hud(const Game& g, Hud* h) {
   ui::fit(name, sizeof(name), buf, HF_S15, 2.0f, 576.0f);
   ui::text(h, 321, 75, HF_S15, A(ui::SCRIM, 0.9f), name, 2.0f, 0);
   ui::text(h, 320, 74, HF_S15, O(ui::FTX), name, 2.0f, 0);
-  // Tabella: tutti quelli che hanno giocato (anche chi e' rimasto senza vite).
+  // Table: everyone who played (also whoever ended up out of lives).
   int rows = 0;
   for (int i = 0; i < MAX_PLAYERS; ++i) rows += g.pl[i].active;
   const float TX0 = 88.0f, TW = 464.0f, TY = 92.0f, TH = 34.0f + 28.0f * (float)rows + 6.0f;
@@ -80,7 +80,7 @@ void stats_hud(const Game& g, Hud* h) {
     }
     y += 28.0f;
   }
-  // Stelle della mappa, una alla volta: quelle prese ora "saltano"; NUOVA! se nel giro non c'era.
+  // Map stars, one at a time: those taken now "pop"; NUOVA! if it was not there in the round.
   static const char* const STAR_TXT[3] = { N_("mappa finita"), N_("esploratore salvato"), N_("senza ricominciare la mappa") };
   const float SY = TY + TH + 12.0f;
   ui::panel(h, TX0, SY, TW, 106.0f);
@@ -95,7 +95,7 @@ void stats_hud(const Game& g, Hud* h) {
     ui::text(h, TX0 + 60.0f, cy, HF_S15, O(got ? ui::TX : ui::MU), tr(STAR_TXT[k]), 0.5f);
     if (got && ((g.stars_new >> k) & 1)) ui::tag(h, TX0 + TW - 16.0f, cy, tr("NUOVA!"), ui::A2, HF_B11, 1.5f, 6.0f, 21.0f, 1);
   }
-  // Il giro del pianeta: dopo il boss com'e' andata, altrimenti le stelle del giro.
+  // The round of the planet: after the boss, how it went; otherwise the stars of the round.
   if (g.screen_t >= STATS_READY) {
     const float GY = SY + 106.0f + 12.0f;
     const float pop = clampf((float)(g.screen_t - STATS_READY) / 10.0f, 0.0f, 1.0f);

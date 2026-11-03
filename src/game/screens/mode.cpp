@@ -5,8 +5,8 @@
 
 namespace screens {
 
-// Le due schede stanno affiancate: si cambia con destra/sinistra (e anche su/giu'). In rete B apre
-// la finestra "finire la partita in rete?" (si' porta tutte le console al titolo).
+// The two cards sit side by side: switch with right/left (and also up/down). In a LAN game B opens
+// the window "finire la partita in rete?" (yes takes all the consoles back to the title).
 void mode_update(Game& g) {
   int who;
   if (g.net_pop) {
@@ -38,7 +38,7 @@ void mode_update(Game& g) {
   }
 }
 
-// Scheda di Come si gioca: Insieme (i 4 eroi) o Contro (2 contro 2, in arrivo).
+// Card of Come si gioca: Insieme (the 4 heroes) or Contro (2 against 2, coming soon).
 void mode_card(Hud* h, float x, float y, bool insieme, bool sel) {
   const float W = 262.0f, H = 112.0f, cx0 = x + 20.0f;
   if (sel) ui::card_sel(h, x, y, W, H);
@@ -71,7 +71,7 @@ void mode_hud(const Game& g, Hud* h) {
     footer(g, h, tr("conferma"), g.net ? tr("esci dalla rete") : tr("indietro"));
     return;
   }
-  // In rete: B chiede se finire la partita per tutti.
+  // In a LAN game: B asks whether to end the game for everyone.
   ui::overlay(h, 0.5f);
   const float W = 380.0f, X = 130.0f, Y = 162.0f, H = 146.0f;
   ui::panel(h, X, Y, W, H, 16.0f, ui::SOLID, true);

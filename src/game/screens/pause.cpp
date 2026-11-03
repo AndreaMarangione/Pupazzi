@@ -6,8 +6,8 @@
 
 using namespace screens;
 
-// Dopo la pausa o l'ingresso in partita il tasto con cui si e' confermato e' ancora premuto:
-// per il gioco non deve contare come una pressione nuova (A lascerebbe una bomba, B salterebbe).
+// After the pause or after joining the game, the button used to confirm is still pressed: for
+// the game it must not count as a new press (A would drop a bomb, B would jump).
 static void swallow_held(Game& g, int i) { g.pl[i].prev_btn = g.in[i].btn; }
 
 static void unpause(Game& g) {
@@ -17,7 +17,7 @@ static void unpause(Game& g) {
 }
 
 void play_menus_update(Game& g) {
-  // START breve: pausa (chi la apre la comanda), oppure la chiude.
+  // Short START: pause (whoever opens it controls it), or closes it.
   for (int i = 0; i < MAX_PLAYERS; ++i) {
     if (!g.start_tap[i] || g.pl[i].joining) continue;
     if (!g.paused) {
@@ -40,20 +40,21 @@ void play_menus_update(Game& g) {
       for (int i = 0; i < MAX_PLAYERS; ++i)
         if (g.pl[i].active) { o = i; break; }
     g.pause_owner = o;
-    // Riquadro dei comandi aperto: A o B lo chiudono (START chiude anche la pausa, vedi sopra).
+    // Controls panel open: A or B closes it (START also closes the pause, see above).
     if (g.pause_help) {
       if (back(g, o) || pad_pressed(g, o, PAD_A)) {
         g.pause_help = false;
         ev_sound_ui(g, SND_UI_BACK);
       }
     } else {
-      // Voci: riprendi, comandi, mira, antialias, musica, effetti, lascia la partita, torna al menu.
+      // Items: resume, controls, aim, antialiasing, music, sound effects, leave game, back to menu.
       if (g.in[o].nav == NAV_UP) { g.pause_sel = (g.pause_sel + PAUSE_ITEMS - 1) % PAUSE_ITEMS; ev_sound_ui(g, SND_UI_MOVE); }
       if (g.in[o].nav == NAV_DOWN) { g.pause_sel = (g.pause_sel + 1) % PAUSE_ITEMS; ev_sound_ui(g, SND_UI_MOVE); }
       const bool left = g.in[o].nav == NAV_LEFT, right = g.in[o].nav == NAV_RIGHT || pad_pressed(g, o, PAD_A);
-      // In rete antialias e volumi sono di chi comanda la pausa: si cambiano solo sulla sua console.
+      // In a LAN game antialiasing and volumes belong to whoever controls the pause: they are
+      // changed only on that player's console.
       const bool here = !g.net || o == net_local(g);
-      // Mira: con sinistra/destra (o A) si sceglie quanto e' pronta la levetta destra di chi comanda.
+      // Aim: left/right (or A) choose how responsive the right stick of the player in control is.
       if (g.pause_sel == PS_AIM) {
         int lvl = aim_level_of(g, o);
         if (left) lvl = (lvl + NAIMLEVELS - 1) % NAIMLEVELS;
@@ -61,14 +62,14 @@ void play_menus_update(Game& g) {
         if (lvl != g.aim_level[o]) {
           g.aim_level[o] = (uint8_t)lvl;
           if (!g.net && o < SAVE_PLAYERS) save_data()->aim[o] = (uint8_t)lvl;
-          else if (g.net && o == net_local(g)) save_data()->aim[0] = (uint8_t)lvl;   // in rete: la mira di questa console
+          else if (g.net && o == net_local(g)) save_data()->aim[0] = (uint8_t)lvl;   // LAN game: the aim of this console
           ev_sound_ui(g, SND_UI_MOVE);
           settings_changed(g);
           plat_log("giocatore %d: mira %s", o + 1, AIM_TUNE[lvl].name);
         }
       }
-      // Antialias (bordi lisci, per tutti): sinistra/destra o A lo accendono e lo spengono.
-      // Antialias (per tutti, dalla 0.5.4): NO, 4X, 8X fin dove arriva la GPU; sinistra/destra o A.
+      // Antialiasing (smooth edges, for all): left/right or A turn it on and off.
+      // Antialiasing (for all, since 0.5.4): NO, 4X, 8X as far as the GPU goes; left/right or A.
       if (g.pause_sel == PS_AA && g.aa_max > 0 && (left || right) && here) {
         int vals[3], nv = 0;
         vals[nv++] = 0;
@@ -85,7 +86,7 @@ void play_menus_update(Game& g) {
         if (vals[k] > 0) plat_log("antialias %dx (giocatore %d)", vals[k], o + 1);
         else plat_log("antialias spento (giocatore %d)", o + 1);
       }
-      // Volumi (per tutti, da 0 a 10): sinistra/destra; A fa il giro.
+      // Volumes (for all, from 0 to 10): left/right; A wraps around.
       if ((g.pause_sel == PS_MUSIC || g.pause_sel == PS_SFX) && (left || right) && here) {
         SaveData* sd = save_data();
         uint8_t& v = g.pause_sel == PS_MUSIC ? sd->music_vol : sd->sfx_vol;
@@ -124,7 +125,7 @@ void play_menus_update(Game& g) {
       }
     }
   }
-  // Finestre per entrare a partita iniziata: gli altri continuano a giocare.
+  // Windows to join a game already started: the others keep playing.
   for (int i = 0; i < MAX_PLAYERS; ++i) {
     Player& p = g.pl[i];
     if (p.active) continue;
@@ -150,7 +151,7 @@ void play_menus_update(Game& g) {
   }
 }
 
-// Finestre di chi entra a partita iniziata (anche in pausa: allora sopra la pausa).
+// Windows of whoever joins a game already started (also during the pause: then over the pause).
 static bool join_panels(const Game& g, Hud* h) {
   bool any = false;
   for (int i = 0; i < MAX_PLAYERS; ++i) {
@@ -178,7 +179,7 @@ static bool join_panels(const Game& g, Hud* h) {
 
 namespace {
 
-// Riquadro dei comandi (voce COMANDI della pausa).
+// Controls panel (COMANDI item of the pause).
 void pause_help_hud(Hud* h) {
   ui::overlay(h, 0.5f);
   const float x = 60.0f, y = 96.0f, W = 520.0f, H = 236.0f;
@@ -189,7 +190,7 @@ void pause_help_hud(Hud* h) {
   ui::key(h, x + W - 22.0f - cw - 29.0f, y + 31.0f, "B");
   ui::text(h, x + W - 22.0f, y + 31.0f, HF_S13, O(ui::MU), close, 1.0f, 1);
   ui::sep(h, x + 22.0f, y + 59.0f, W - 44.0f);
-  const float c0 = x + 24.0f, c1 = x + 24.0f + 216.0f;   // la colonna di destra e' quella lunga
+  const float c0 = x + 24.0f, c1 = x + 24.0f + 216.0f;   // the right column is the long one
   struct Row { const char* k1; const char* k2; bool stick; const char* label; bool hold; };
   static const Row ROWS[8] = {
     { "L", 0, true, N_("muoversi"), false }, { "R", 0, true, N_("mirare"), false },
@@ -209,7 +210,7 @@ void pause_help_hud(Hud* h) {
       px += hud_text_w(HF_S12, "+", 0.8f) + 10.0f;
       px += ui::keycap(h, px, cy, r.k2, true) + 10.0f;
     }
-    // Il nome e (tasti da tenere) TIENI fino al bordo del riquadro.
+    // The name and (buttons to hold) TIENI up to the edge of the panel.
     const char* hold = tr("TIENI");
     const float hw = r.hold ? hud_text_w(HF_S12, hold, 0.8f) + 10.0f : 0.0f;
     char label[256];
@@ -238,8 +239,8 @@ void play_menus_hud(const Game& g, Hud* h) {
   const float ta = g.pause_help ? 0.3f : 1.0f;
   ui::title(h, 320, 22, HF_T44, tr("PAUSA"), 8.0f, true, ta);
   if (!g.pause_help) {
-    // Mentre qualcuno entra le sue finestre stanno in basso (da 348): le voci si stringono e salgono
-    // al posto di "COMANDA", cosi' si vedono tutte.
+    // While someone is joining, their windows sit at the bottom (from 348): the items shrink and
+    // move up into the place of "COMANDA", so that they are all visible.
     const float RH = joining ? 26.0f : 32.0f, SEP = joining ? 7.0f : 11.0f;
     if (!joining) {
       const char* boss = tr("COMANDA");
@@ -247,7 +248,7 @@ void play_menus_hud(const Game& g, Hud* h) {
       ui::gp(h, x0, 85.0f, g.pause_owner);
       ui::text(h, x0 + gw + 8.0f, 85.0f, HF_S13, O(ui::FTX), boss, 2.0f);
     }
-    // Le voci.
+    // The items.
     const float PX = 152.0f, PY = joining ? 80.0f : 104.0f, PW = 336.0f, IX = PX + 12.0f, IW = PW - 24.0f;
     const float PH = joining ? 24.0f + RH * (float)PAUSE_ITEMS + 2.0f * SEP : 312.0f;
     ui::panel(h, PX, PY, PW, PH);
@@ -263,7 +264,7 @@ void play_menus_hud(const Game& g, Hud* h) {
       const uint32_t lc = O(sel ? ui::ON : (k >= PS_LEAVE ? ui::A2 : ui::TX)), vc = O(sel ? ui::ON : ui::MU);
       static const char* const LABEL[PAUSE_ITEMS] = { N_("RIPRENDI"), N_("COMANDI"), N_("MIRA"), N_("ANTIALIAS"), N_("MUSICA"),
                                                       N_("EFFETTI"), N_("LASCIA LA PARTITA"), N_("TORNA AL MENU") };
-      // Il nome della voce fino al valore a destra (mira: le freccette e il nome; volumi: le tacche).
+      // Item name up to the value on the right (aim: the arrows and the name; volumes: the notches).
       static const float VALUE_W[PAUSE_ITEMS] = { 0.0f, 20.0f, 150.0f, 80.0f, 100.0f, 100.0f, 0.0f, 0.0f };
       char lab[256];
       ui::text(h, IX + 14.0f, cy, HF_S16, lc, ui::fit(lab, sizeof(lab), tr(LABEL[k]), HF_S16, 1.0f, IW - 26.0f - VALUE_W[k]), 1.0f);
@@ -313,7 +314,7 @@ void play_menus_hud(const Game& g, Hud* h) {
   } else {
     pause_help_hud(h);
   }
-  // Chi non gioca puo' entrare (anche con il riquadro dei comandi aperto, che finisce sopra).
+  // Whoever is not playing can join (also with the controls panel open, which ends up on top).
   if (joining) {
     join_panels(g, h);
   } else if (waiting) {

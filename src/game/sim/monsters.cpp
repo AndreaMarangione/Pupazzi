@@ -1,12 +1,12 @@
-// Mostri della Terra (scorpione, arciere di terracotta, scarabei, guerriero di terracotta) e il boss,
-// il Gladiatore gigante del Colosseo. Comportamenti della 0.4: corridore, tiratore, sciame, grosso;
-// il gladiatore dalla 0.5.1 cammina, insegue e combatte (fendente, carica, crepa, giavellotti).
+// Earth monsters (scorpion, terracotta archer, scarabs, terracotta warrior) and the boss, the
+// giant Gladiator of the Colosseum. Behaviors from 0.4: runner, shooter, swarm, big one; since
+// 0.5.1 the gladiator walks, chases and fights (sweep, charge, crack, javelins).
 #include "game/sim/game_int.h"
 #include "platform/plat.h"
 #include <string.h>
 
 const MonDef MONS[MO_NTYPES] = {
-  // nome, vita, velocita', danno, raggio, altezza, vola
+  // name, health, speed, damage, radius, height, flies
   { "scorpione", 70.0f, 3.4f, 18.0f, 0.42f, 1.0f, false },
   { "arciere di terracotta", 50.0f, 2.3f, 14.0f, 0.42f, 0.8f, false },
   { "scarabeo", 18.0f, 4.4f, 6.0f, 0.26f, 0.5f, true },
@@ -32,7 +32,7 @@ void boss_push_monster(Game& g, Monster& m) {
   m.pos.z = g.boss.pos.z + dz / d * r;
 }
 
-// Bersaglio: il giocatore in piedi piu' vicino che il mostro riesce a vedere.
+// Target: the nearest standing player that the monster can see.
 void pick_target(Game& g, Monster& m, int k) {
   if (m.target >= 0 && g.pl[m.target].alive && (g.tick + (unsigned)k) % 20u != 0u && player_visible_from(g, m.target, m.pos)) return;
   m.target = -1;
@@ -45,7 +45,7 @@ void pick_target(Game& g, Monster& m, int k) {
   }
 }
 
-// Velocita' voluta verso (tx, tz): in linea retta se si puo', altrimenti lungo il campo dei percorsi.
+// Wanted velocity toward (tx, tz): in a straight line if possible, otherwise along the path field.
 void steer(Game& g, Monster& m, Vec3 to, float spd, float* dvx, float* dvz) {
   const bool fl = MONS[m.type].flying;
   const float ex = to.x - m.pos.x, ez = to.z - m.pos.z, d = sqrtf(ex * ex + ez * ez);
@@ -60,18 +60,18 @@ void steer(Game& g, Monster& m, Vec3 to, float spd, float* dvx, float* dvz) {
   *dvz = dz * spd;
 }
 
-// Corpo per le collisioni (0.5.1): chi cammina evita il cenote come un muro, a meno che una spinta
-// forte (bombe, schianto di Mochi, colpi ravvicinati) non ce lo butti dentro.
+// Body for collisions (0.5.1): walkers avoid the cenote like a wall, unless a strong push (bombs,
+// Mochi's slam, close-range shots) throws them in.
 int monster_body(const Monster& m) {
   if (MONS[m.type].flying) return BODY_FLY;
   return fabsf(m.kx) + fabsf(m.kz) > 2.0f ? BODY_WALK : BODY_WALK | BODY_PIT;
 }
 
-// Applica velocita' e spinte, rispettando ostacoli e boss; restituisce quanto si e' mosso.
+// Applies velocity and pushes, respecting obstacles and the boss; returns how far it moved.
 float move(Game& g, Monster& m, float dvx, float dvz, float accel, bool face) {
   m.vx += (dvx - m.vx) * accel;
   m.vz += (dvz - m.vz) * accel;
-  // Mai piu' di 0,2 m per fotogramma, spinte comprese: niente salti attraverso gli ostacoli.
+  // Never more than 0.2 m per frame, pushes included: no jumping through obstacles.
   float mvx = (m.vx + m.kx) * DT, mvz = (m.vz + m.kz) * DT;
   const float mv = sqrtf(mvx * mvx + mvz * mvz);
   if (mv > 0.2f) { mvx *= 0.2f / mv; mvz *= 0.2f / mv; }
@@ -80,7 +80,7 @@ float move(Game& g, Monster& m, float dvx, float dvz, float accel, bool face) {
   m.kz *= 0.85f;
   float nx = m.pos.x + mvx, nz = m.pos.z + mvz;
   level_push_out(&g.L, &nx, &nz, 0.0f, monster_r(m), PL_STEP, body);
-  level_body_guard(&g.L, m.pos.x, m.pos.z, &nx, &nz, 0.0f, monster_r(m), PL_STEP, body);   // mai dentro un ostacolo
+  level_body_guard(&g.L, m.pos.x, m.pos.z, &nx, &nz, 0.0f, monster_r(m), PL_STEP, body);   // never inside an obstacle
   const float moved = sqrtf((nx - m.pos.x) * (nx - m.pos.x) + (nz - m.pos.z) * (nz - m.pos.z));
   if (face && moved > 1e-3f) {
     const float diff = d_wrap_pi(yaw_of(nx - m.pos.x, nz - m.pos.z) - m.yaw);
@@ -162,7 +162,7 @@ void update_scorpion(Game& g, Monster& m, int k) {
         hurt_player(g, j, m.dmg, m.pos - v3(m.cdx, 0, m.cdz), 7.0f);
         add_shake(g, 0.12f);
       }
-      if (moved < want * DT * 0.4f) {          // contro un ostacolo: resta stordito
+      if (moved < want * DT * 0.4f) {          // against an obstacle: stays stunned
         m.state = S_RECOVER;
         m.state_t = 50;
         m.vx = m.vz = 0.0f;
@@ -184,17 +184,17 @@ void update_scorpion(Game& g, Monster& m, int k) {
   }
 }
 
-// Arciere di terracotta (tiratore, dalla 0.5.1 al posto del lama): tiene le distanze camminando di
-// lato; con il bersaglio a tiro (lo vede anche sopra muretti, casse e massi) si inginocchia e tende
-// l'arco per ARCHER_DRAW_FRAMES seguendolo con la mira (m.cdx, m.cdz: l'ultimo punto visto), poi
-// scocca frecce lente a parabola verso dove il bersaglio sta andando: la sua posizione piu' la
-// velocita' per ARCHER_LEAD volte il tempo di volo, entro il tiro. Un cerchio rosso segna dove
-// cadra' ogni freccia. Un tiro su due (m.hitmask, bit 0) e' una raffica di 3 frecce: le altre due a
-// ARCHER_SPREAD metri di lato, di traverso alla linea arciere-bersaglio. Dopo il tiro resta in
-// ginocchio per ARCHER_REST_FRAMES.
+// Terracotta archer (shooter, since 0.5.1 in place of the llama): keeps its distance walking
+// sideways; with the target in range (it sees it even over low walls, crates and boulders) it
+// kneels and draws the bow for ARCHER_DRAW_FRAMES following it with the aim (m.cdx, m.cdz: the last
+// point seen), then looses slow lobbed arrows toward where the target is going: its position plus
+// the velocity times ARCHER_LEAD times the flight time, within range. A red circle marks where each
+// arrow will land. One shot out of two (m.hitmask, bit 0) is a burst of 3 arrows: the other two
+// ARCHER_SPREAD meters to the side, across the archer-target line. After the shot it stays
+// kneeling for ARCHER_REST_FRAMES.
 const float ARCHER_RANGE = 9.5f, ARCHER_NEAR = 4.5f, ARROW_R = 0.8f, ARCHER_LEAD = 0.7f, ARCHER_SPREAD = 1.5f;
 
-float arrow_time(float d) { return clampf(0.85f + 0.025f * d, 0.9f, 1.1f); }   // in volo da 0,9 a 1,1 s
+float arrow_time(float d) { return clampf(0.85f + 0.025f * d, 0.9f, 1.1f); }   // in flight 0.9 to 1.1 s
 
 void launch_arrow(Game& g, const Monster& m, Vec3 from, Vec3 dest) {
   dest.y = level_ground(&g.L, dest.x, dest.z, 9.0f, 0.0f);
@@ -211,7 +211,7 @@ void launch_arrow(Game& g, const Monster& m, Vec3 from, Vec3 dest) {
 void shoot_arrow(Game& g, Monster& m) {
   const Vec3 from = m.pos + dir_yaw(m.yaw) * ARCHER_NOCK_Z + v3(0, ARCHER_NOCK_Y, 0);
   Vec3 aim = v3(m.cdx, 0.0f, m.cdz), side = dir_yaw(m.yaw);
-  if (m.target >= 0 && g.pl[m.target].alive) {           // in anticipo su dove va
+  if (m.target >= 0 && g.pl[m.target].alive) {           // leading to where it is going
     const Player& t = g.pl[m.target];
     const float lead = arrow_time(dist2d(t.pos, from)) * ARCHER_LEAD;
     aim = v3(t.pos.x + t.vx * lead, 0.0f, t.pos.z + t.vz * lead);
@@ -221,7 +221,7 @@ void shoot_arrow(Game& g, Monster& m) {
   const float ax = aim.x - m.pos.x, az = aim.z - m.pos.z, da = sqrtf(ax * ax + az * az);
   if (da > ARCHER_RANGE) aim = v3(m.pos.x + ax * (ARCHER_RANGE / da), 0.0f, m.pos.z + az * (ARCHER_RANGE / da));
   launch_arrow(g, m, from, aim);
-  if (m.hitmask & 1u) {                                  // raffica: altre due frecce ai lati
+  if (m.hitmask & 1u) {                                  // burst: two more arrows at the sides
     side = v3(-side.z * ARCHER_SPREAD, 0.0f, side.x * ARCHER_SPREAD);
     launch_arrow(g, m, from, aim + side);
     launch_arrow(g, m, from, aim - side);
@@ -248,7 +248,7 @@ void update_archer(Game& g, Monster& m, int k) {
     }
     los = m.los;
   }
-  if (m.windup > 0) {                  // in ginocchio, tende l'arco seguendo il bersaglio
+  if (m.windup > 0) {                  // kneeling, draws the bow following the target
     move(g, m, 0.0f, 0.0f, 0.3f, false);
     if (m.target >= 0) {
       m.cdx = g.pl[m.target].pos.x;
@@ -258,7 +258,7 @@ void update_archer(Game& g, Monster& m, int k) {
     if (--m.windup == 0) shoot_arrow(g, m);
     return;
   }
-  if (m.state == S_RECOVER) {          // si rialza
+  if (m.state == S_RECOVER) {          // gets back up
     move(g, m, 0.0f, 0.0f, 0.3f, false);
     if (--m.state_t <= 0) m.state = S_APPROACH;
     return;
@@ -269,10 +269,10 @@ void update_archer(Game& g, Monster& m, int k) {
     const Player& t = g.pl[m.target];
     const float ux = (t.pos.x - m.pos.x) / fmaxf(d, 1e-3f), uz = (t.pos.z - m.pos.z) / fmaxf(d, 1e-3f);
     if (--m.strafe_t <= 0) { m.strafe = -m.strafe; m.strafe_t = 50 + (int)(rng_next(g) % 60u); }
-    if (d < ARCHER_NEAR) {             // troppo vicino: indietro
+    if (d < ARCHER_NEAR) {             // too close: back off
       dvx = -ux * spd * 0.85f;
       dvz = -uz * spd * 0.85f;
-    } else {                           // di lato, e se e' al limite del tiro un po' avanti
+    } else {                           // sideways, and a bit forward if at the edge of range
       const float in = d > ARCHER_RANGE - 1.5f ? 0.4f : 0.0f;
       dvx = (-uz * m.strafe * 0.7f + ux * in) * spd;
       dvz = (ux * m.strafe * 0.7f + uz * in) * spd;
@@ -283,7 +283,7 @@ void update_archer(Game& g, Monster& m, int k) {
       m.windup = ARCHER_DRAW_FRAMES;
       m.cdx = t.pos.x;
       m.cdz = t.pos.z;
-      m.reveal = ARCHER_DRAW_FRAMES + 40;      // nell'erba alta si fa vedere mentre mira
+      m.reveal = ARCHER_DRAW_FRAMES + 40;      // in tall grass it shows itself while aiming
     }
   } else {
     steer(g, m, goal_of(g, m), spd * 0.85f, &dvx, &dvz);
@@ -298,7 +298,7 @@ void update_wasp(Game& g, Monster& m, int k) {
   float dvx = 0.0f, dvz = 0.0f;
   const Vec3 to = goal_of(g, m);
   steer(g, m, to, m.speed * slow, &dvx, &dvz);
-  // Zigzag laterale.
+  // Sideways zigzag.
   const float z = 0.6f * d_sin((float)g.tick * 0.15f + (float)k * 1.3f);
   const float l = sqrtf(dvx * dvx + dvz * dvz);
   if (l > 1e-3f) {
@@ -352,7 +352,7 @@ void update_bear(Game& g, Monster& m, int k) {
           const Vec3 d = v3(p.pos.x - m.pos.x, 0.0f, p.pos.z - m.pos.z);
           const float dl = length(d);
           if (dl > 2.3f + PL_R) continue;
-          if (dl > 0.3f && dot(d * (1.0f / dl), f) < 0.34f) continue;     // circa 140 gradi davanti
+          if (dl > 0.3f && dot(d * (1.0f / dl), f) < 0.34f) continue;     // about 140 degrees ahead
           hurt_player(g, j, m.dmg, m.pos, 9.0f);
         }
         burst(g, m.pos + f * 1.2f + v3(0, 0.6f, 0), 6, PC_STONE, 3.0f);
@@ -370,8 +370,8 @@ void update_bear(Game& g, Monster& m, int k) {
   }
 }
 
-// Mostro che cammina buttato nel cenote da una spinta: schizzi e sconfitto; la vittoria va a chi
-// l'ha spinto (push_by), se lo si sa.
+// Walking monster thrown into the cenote by a push: splashes and defeated; the kill goes to whoever
+// pushed it (push_by), if known.
 void monster_fall(Game& g, int k) {
   Monster& m = g.mo[k];
   for (int j = 0; j < 8; ++j) {
@@ -385,7 +385,7 @@ void monster_fall(Game& g, int k) {
   damage_monster(g, k, 0.0f, m.push_by - 1, v3(0, 0, 0), 0.0f, false);
 }
 
-// Mostri che non si compenetrano tra loro e non entrano nei giocatori.
+// Monsters that don't overlap each other and don't walk into the players.
 void separate(Game& g) {
   Vec3 was[MAX_MONSTERS];
   for (int a = 0; a < MAX_MONSTERS; ++a) was[a] = g.mo[a].pos;
@@ -393,7 +393,7 @@ void separate(Game& g) {
     Monster& ma = g.mo[a];
     if (!ma.alive || ma.rise > 0) continue;
     const bool fa = MONS[ma.type].flying;
-    if (!fa && level_pit_at(&g.L, ma.pos.x, ma.pos.z)) {   // buttato nel cenote da una spinta
+    if (!fa && level_pit_at(&g.L, ma.pos.x, ma.pos.z)) {   // thrown into the cenote by a push
       monster_fall(g, a);
       continue;
     }
@@ -403,7 +403,7 @@ void separate(Game& g) {
       const float dx = mb.pos.x - ma.pos.x, dz = mb.pos.z - ma.pos.z, d2 = dx * dx + dz * dz;
       const float mind = monster_r(ma) + monster_r(mb);
       if (d2 >= mind * mind || d2 < 1e-8f) continue;
-      const float d = sqrtf(d2), k = 0.5f * fminf(mind - d, 0.08f) / d;    // a poco a poco: niente salti
+      const float d = sqrtf(d2), k = 0.5f * fminf(mind - d, 0.08f) / d;    // little by little: no jumps
       ma.pos.x -= dx * k; ma.pos.z -= dz * k;
       mb.pos.x += dx * k; mb.pos.z += dz * k;
     }
@@ -424,8 +424,8 @@ void separate(Game& g) {
   }
 }
 
-// Un mostro finito fuori dalla zona mentre il cancello di uscita e' chiuso non potrebbe piu'
-// essere raggiunto (e la zona non finirebbe mai): torna a un punto di comparsa.
+// A monster that ended up outside the zone while the exit gate is closed could no longer be
+// reached (and the zone would never end): it goes back to a spawn point.
 void rescue(Game& g) {
   const ZoneDef& z = g.L.zones[g.zone];
   for (int k = 0; k < MAX_MONSTERS; ++k) {
@@ -525,7 +525,7 @@ void monsters_clear(Game& g) {
 }
 
 void monsters_update(Game& g) {
-  // Dove i mostri cercano i giocatori: dove li vedono, oppure dove li hanno visti l'ultima volta.
+  // Where the monsters look for the players: where they see them, or where they last saw them.
   for (int j = 0; j < MAX_PLAYERS; ++j)
     if (g.pl[j].active && g.pl[j].alive && !g.pl[j].hidden) g.last_vis[j] = g.pl[j].pos;
   if (++g.session.mon_flow_t >= 12 || !g.session.mon_flow_ok) {
@@ -543,7 +543,7 @@ void monsters_update(Game& g) {
     Monster& m = g.mo[k];
     if (!m.alive) continue;
     if (m.rise > 0) { m.rise--; continue; }
-    if (m.burn_t > 0) {                 // carte combo: brucia (puo' anche finire qui)
+    if (m.burn_t > 0) {                 // combo cards: burning (it may also die here)
       card_burn_tick(g, k);
       if (!m.alive) continue;
     }
@@ -568,45 +568,45 @@ void monsters_update(Game& g) {
   if (g.phase == PH_FIGHT) rescue(g);
 }
 
-// --- boss: il Gladiatore gigante ----------------------------------------------------------------
+// --- boss: the giant Gladiator ------------------------------------------------------------------
 //
-// Dalla 0.5.1 cammina e combatte. Insegue il giocatore in gioco piu' vicino (lo tiene almeno 3
-// secondi, a meno che un altro sia molto piu' vicino o lo stia picchiando forte), piu' piano degli
-// eroi; gira attorno a colonne, casse e statue con un campo dei percorsi tutto suo (celle da mezzo
-// metro in cui ci sta con il suo raggio) e se resta fermo contro qualcosa fa un passo di lato. Tra
-// un attacco e l'altro una pausa in cui cammina; l'attacco si sceglie dalla distanza, a turno (mai
-// tre volte di fila lo stesso):
-//  - fendente, fino a 3,6 m: il settore rosso davanti a lui si riempie, poi la spadata;
-//  - spaccaterra, da 3,6 a 9 m: la crepa dai suoi piedi verso il bersaglio;
-//  - carica con lo scudo, da 5 a 14 m con la strada libera: la corsia rossa, poi la corsa; contro
-//    un ostacolo resta stordito e i colpi fanno di piu' (BOSS_STUN_DMG, in damage_boss);
-//  - giavellotti a parabola da lontano (e da 3,6 a 5 m, a turno con lo spaccaterra) e subito dopo
-//    una carica: 1, 2 o 3 secondo la fase.
-// A 2/3 e a 1/3 della vita ruggisce (intanto prende poco) e chiama i rinforzi dalle botole; a ogni
-// fase cammina piu' svelto e prepara gli attacchi piu' in fretta.
+// Since 0.5.1 he walks and fights. He chases the nearest player in play (keeping them for at least
+// 3 seconds, unless another one is much closer or is hitting him hard), slower than the heroes; he
+// goes around columns, crates and statues with a path field all of his own (half-meter cells where
+// he fits with his radius) and if he stays stuck against something he takes a step sideways.
+// Between one attack and the next there is a pause in which he walks; the attack is chosen from the
+// distance, in turn (never the same one three times in a row):
+//  - sweep, up to 3.6 m: the red sector in front of him fills up, then the sword blow;
+//  - ground slam, from 3.6 to 9 m: the crack from his feet toward the target;
+//  - shield charge, from 5 to 14 m with a clear path: the red lane, then the run; against an
+//    obstacle he stays stunned and hits deal more (BOSS_STUN_DMG, in damage_boss);
+//  - lobbed javelins from afar (and from 3.6 to 5 m, in turn with the ground slam) and right after
+//    a charge: 1, 2 or 3 depending on the phase.
+// At 2/3 and at 1/3 of his health he roars (meanwhile he takes little damage) and calls the
+// reinforcements from the trapdoors; at every phase he walks faster and prepares attacks quicker.
 
 namespace {
 
-// Vita: BOSS_HP da solo al giro 1, per (0,5 + 0,5 a giocatore) e per il giro (diff_hp). Nella 0.5 era
-// 2600 per (0,6 + 0,4 a giocatore): fermo, finiva in meno di un minuto.
+// Health: BOSS_HP alone in round 1, times (0.5 + 0.5 per player) and times the round (diff_hp). In
+// 0.5 it was 2600 times (0.6 + 0.4 per player): standing still, it was over in less than a minute.
 const float BOSS_HP = 4200.0f;
-const float SPEED[3] = { 2.4f, 2.7f, 3.0f };      // camminata (gli eroi vanno a 4,7-5)
-const float WIND_K[3] = { 1.0f, 0.85f, 0.72f };   // preparazioni piu' corte a ogni fase
-const int PAUSE[3] = { 58, 46, 34 };              // pausa tra gli attacchi (piu' fino a 17 fotogrammi)
-const int SWEEP_WIND = 33, SWEEP_HIT = 8, SWEEP_REST = 30;   // fendente: preparazione, colpo, ripresa
-const int RUSH_WIND = 48, RUSH_REST = 30;         // carica: preparazione; ripresa se non sbatte
-const int THROW_WIND = 30, THROW_REST = 14;       // giavellotti: lancio, ripresa
-const int SLAM_WIND = 14, SLAM_REST = 46;         // spaccaterra: la spada a terra, ripresa
+const float SPEED[3] = { 2.4f, 2.7f, 3.0f };      // walking (the heroes go at 4.7-5)
+const float WIND_K[3] = { 1.0f, 0.85f, 0.72f };   // shorter windups at every phase
+const int PAUSE[3] = { 58, 46, 34 };              // pause between attacks (plus up to 17 frames)
+const int SWEEP_WIND = 33, SWEEP_HIT = 8, SWEEP_REST = 30;   // sweep: windup, hit, recovery
+const int RUSH_WIND = 48, RUSH_REST = 30;         // charge: windup; recovery if he doesn't crash
+const int THROW_WIND = 30, THROW_REST = 14;       // javelins: throw, recovery
+const int SLAM_WIND = 14, SLAM_REST = 46;         // ground slam: the sword on the ground, recovery
 const int SUMMON_AT = 24, SUMMON_FRAMES = 40, ROAR_FRAMES = 70;
-const float SWEEP_REACH = 3.6f;                   // bersaglio piu' vicino di cosi': fendente
+const float SWEEP_REACH = 3.6f;                   // target closer than this: sweep
 const float SLAM_MAX = 9.0f;
-const float RUSH_MIN = 5.0f, RUSH_MAX = 14.0f;    // bersaglio a questa distanza con la strada libera: carica
+const float RUSH_MIN = 5.0f, RUSH_MAX = 14.0f;    // target at this distance with a clear path: charge
 const float RUSH_SPEED = 11.0f;
-const float RUSH_OVER = 3.0f, RUSH_LEN = 15.0f;   // la corsa va 3 m oltre il bersaglio, al massimo 15 m...
-const float RUSH_WALL = 1.0f;                     // ...e con un ostacolo subito dopo arriva fino a sbatterci
-const float STOP_D = 2.4f;                        // piu' vicino di cosi' al bersaglio non si avvicina
-const int TARGET_KEEP = 180;                      // tiene il bersaglio almeno 3 secondi
-const int MONSTER_CAP = 10;                       // rinforzi: mai piu' di cosi' mostri in campo
+const float RUSH_OVER = 3.0f, RUSH_LEN = 15.0f;   // the run goes 3 m past the target, at most 15 m...
+const float RUSH_WALL = 1.0f;                     // ...and with an obstacle right after, it runs into it
+const float STOP_D = 2.4f;                        // doesn't get any closer than this to the target
+const int TARGET_KEEP = 180;                      // keeps the target for at least 3 seconds
+const int MONSTER_CAP = 10;                       // reinforcements: at most this many monsters on the field
 const float BCELL = 0.5f;
 
 
@@ -620,10 +620,10 @@ void face_toward(Game& g, float yaw, float rate) {
   b.face = d_wrap_pi(b.face + clampf(d_wrap_pi(yaw - b.face), -rate * DT, rate * DT));
 }
 
-// --- dove ci sta e per dove passa ---
+// --- where he fits and where he passes ---
 
-// Il cerchio di raggio r in (x, z) non tocca nessuna casella che ferma chi cammina, con il centro
-// nella zona del boss (nelle mappe fatte a mano con piu' zone non esce dal cancello ancora aperto)?
+// Does the circle of radius r at (x, z) touch no cell that stops walkers, with its center in the
+// boss's zone (in hand-made maps with several zones he doesn't leave through the still-open gate)?
 bool fits(Game& g, float x, float z, float r) {
   if (level_zone_at(&g.L, x, z) != g.zone) return false;
   const float fx = x + (float)g.L.W * 0.5f, fz = z + (float)g.L.H;
@@ -638,7 +638,7 @@ bool fits(Game& g, float x, float z, float r) {
   return true;
 }
 
-// Da a a b in linea retta senza toccare nulla.
+// From a to b in a straight line without touching anything.
 bool line_ok(Game& g, Vec3 a, Vec3 b) {
   const float dx = b.x - a.x, dz = b.z - a.z, l = sqrtf(dx * dx + dz * dz);
   const int n = (int)(l / 0.3f) + 1;
@@ -649,8 +649,8 @@ bool line_ok(Game& g, Vec3 a, Vec3 b) {
   return true;
 }
 
-// Corsia libera della carica da from verso yaw, al massimo RUSH_LEN metri; *wall: finisce contro
-// un ostacolo (non solo perche' e' arrivata alla lunghezza massima).
+// Free lane of the charge starting at from toward yaw, at most RUSH_LEN meters; *wall: it ends
+// against an obstacle (not only because it reached the maximum length).
 float lane_free(Game& g, Vec3 from, float yaw, bool* wall) {
   const Vec3 d = dir_yaw(yaw);
   float s = 0.0f;
@@ -677,7 +677,7 @@ Vec3 bcenter(Game& g, int c) {
   return v3(-(float)g.L.W * 0.5f + ((float)(c % g.session.boss_bw) + 0.5f) * BCELL, 0.0f, -(float)g.L.H + ((float)(c / g.session.boss_bw) + 0.5f) * BCELL);
 }
 
-// Casse e anfore ancora intere (quando se ne rompe una le celle libere si rifanno).
+// Crates and amphorae still whole (when one breaks, the free cells are rebuilt).
 int crates_whole(Game& g) {
   int n = 0;
   for (int i = 0; i < g.L.ndyn; ++i) n += g.L.dyn[i].type == C_BREAK && g.L.dyn[i].hp > 0.0f;
@@ -694,8 +694,8 @@ void bfree_build(Game& g) {
   }
 }
 
-// Campo dei percorsi (Dijkstra con un mucchio): partono le celle libere entro 2,5 m dal bersaglio
-// (5 m se non ce ne sono), ognuna con la sua distanza; si passa solo dalle celle in cui ci sta.
+// Path field (Dijkstra with a heap): it starts from the free cells within 2.5 m of the target
+// (5 m if there are none), each with its own distance; it passes only through cells where he fits.
 bool hless(Game& g, int a, int b) { return g.session.boss_field[a] < g.session.boss_field[b] || (g.session.boss_field[a] == g.session.boss_field[b] && a < b); }
 void hswap(Game& g, int i, int j) {
   const uint16_t t = g.session.boss_heap[i];
@@ -723,7 +723,7 @@ void hdown(Game& g, int i) {
     i = m;
   }
 }
-void hset(Game& g, int c, int d) {        // la cella c scende alla distanza d
+void hset(Game& g, int c, int d) {        // cell c goes down to distance d
   g.session.boss_field[c] = (uint16_t)d;
   if (g.session.boss_hpos[c] == -1) {
     g.session.boss_heap[g.session.boss_hn] = (uint16_t)c;
@@ -746,7 +746,7 @@ int hpop(Game& g) {
 
 const int DX8[8] = { 1, -1, 0, 0, 1, 1, -1, -1 }, DZ8[8] = { 0, 0, 1, -1, 1, -1, 1, -1 };
 
-// Vicina j della cella c percorribile (dentro, libera, senza tagliare gli angoli)? -1 se no.
+// Is neighbor j of cell c walkable (inside, free, without cutting corners)? -1 if not.
 int bstep(Game& g, int c, int j) {
   const int cx = c % g.session.boss_bw, cz = c / g.session.boss_bw, x = cx + DX8[j], z = cz + DZ8[j];
   if (x < 0 || z < 0 || x >= g.session.boss_bw || z >= g.session.boss_bh) return -1;
@@ -792,16 +792,16 @@ void bfield_build(Game& g, Vec3 goal) {
   g.session.boss_field_ok = true;
 }
 
-// Dove andare lungo il campo: la cella piu' avanti sul percorso in discesa (fino a 6 passi) che si
-// raggiunge in linea retta. WAY_NONE se il campo non arriva fin qui, WAY_THERE se e' gia' nella
-// cella piu' vicina al bersaglio che riesce a raggiungere (il bersaglio sta dove lui non passa).
+// Where to go along the field: the farthest cell on the downhill path (up to 6 steps) that can be
+// reached in a straight line. WAY_NONE if the field doesn't reach this far, WAY_THERE if he is
+// already in the cell nearest to the target that he can reach (the target is where he can't pass).
 enum { WAY_NONE = 0, WAY_GO, WAY_THERE };
 int bfield_way(Game& g, Vec3 p, Vec3* way) {
   if (!g.session.boss_field_ok) return WAY_NONE;
   const int c = bcell(g, p.x, p.z);
   if (c < 0) return WAY_NONE;
   if (!g.session.boss_free[c] || g.session.boss_field[c] == FLOW_FAR) {
-    // Spinto vicino a un ostacolo, fuori dalle celle buone: la cella buona vicina che conviene di piu'.
+    // Pushed near an obstacle, outside the good cells: the most convenient good cell nearby.
     const int cx = c % g.session.boss_bw, cz = c / g.session.boss_bw;
     int best = -1, bv = 1 << 30;
     for (int dz = -4; dz <= 4; ++dz)
@@ -832,8 +832,8 @@ int bfield_way(Game& g, Vec3 p, Vec3* way) {
   return WAY_GO;
 }
 
-// Dove comincia: la casella B, spostata quanto basta se li' non ci sta o se e' a meno di 4 m dalle
-// partenze dei giocatori (mappe fatte a mano).
+// Where he starts: cell B, moved as much as needed if he doesn't fit there or if it is less than
+// 4 m from the players' starting points (hand-made maps).
 Vec3 spawn_spot(Game& g) {
   const ZoneDef& z = g.L.zones[g.zone];
   auto ok = [&](Vec3 p) {
@@ -856,14 +856,14 @@ Vec3 spawn_spot(Game& g) {
   return best;
 }
 
-// --- bersaglio ---
+// --- target ---
 
 void update_target(Game& g) {
   Boss& b = g.boss;
-  for (int j = 0; j < MAX_PLAYERS; ++j) b.aggro[j] *= 0.985f;     // circa 60% in meno ogni secondo
+  for (int j = 0; j < MAX_PLAYERS; ++j) b.aggro[j] *= 0.985f;     // about 60% less every second
   int near = -1;
   float nd = 1e30f;
-  for (int pass = 0; pass < 2 && near < 0; ++pass)                 // prima chi si vede (non nascosto)
+  for (int pass = 0; pass < 2 && near < 0; ++pass)                 // first the visible ones (not hidden)
     for (int j = 0; j < MAX_PLAYERS; ++j) {
       if (!in_play(g, j) || (pass == 0 && !player_visible_from(g, j, b.pos))) continue;
       const float d = dist2d(g.pl[j].pos, b.pos);
@@ -875,7 +875,7 @@ void update_target(Game& g) {
     b.target_t = 0;
     return;
   }
-  // Chi lo picchia forte (almeno 120 di recente e due volte e mezza il bersaglio) se lo tira dietro.
+  // Whoever hits him hard (at least 120 recently and two and a half times the target) gets chased.
   int to = -1;
   float ha = 120.0f;
   for (int j = 0; j < MAX_PLAYERS; ++j)
@@ -887,9 +887,9 @@ void update_target(Game& g) {
     to = -1;
     if (near < 0 || near == b.target) return;
     const float td = dist2d(g.pl[b.target].pos, b.pos);
-    const bool lost = !player_visible_from(g, b.target, b.pos) && b.target_t >= 30;   // si e' nascosto
-    const bool much = b.target_t >= 60 && nd < td * 0.5f && td - nd > 3.0f;       // un altro molto piu' vicino (dopo 1 s)
-    const bool kept = b.target_t >= TARGET_KEEP && nd < td - 1.5f;                 // dopo 3 secondi: piu' vicino
+    const bool lost = !player_visible_from(g, b.target, b.pos) && b.target_t >= 30;   // they have hidden
+    const bool much = b.target_t >= 60 && nd < td * 0.5f && td - nd > 3.0f;       // another one much closer (after 1 s)
+    const bool kept = b.target_t >= TARGET_KEEP && nd < td - 1.5f;                 // after 3 seconds: closer
     if (lost || much || kept) to = near;
   }
   if (to >= 0 && to != b.target) {
@@ -898,7 +898,7 @@ void update_target(Game& g) {
   }
 }
 
-// --- attacchi ---
+// --- attacks ---
 
 void act_begin(Game& g, int act);
 
@@ -907,15 +907,15 @@ void act_end(Game& g) {
   b.act = BA_NONE;
   b.act_t = 0;
   b.cd = PAUSE[stage_of(g)] + (int)(rng_next(g) % 18u);
-  if (b.queued != BA_NONE) {             // giavellotti subito dopo una carica
+  if (b.queued != BA_NONE) {             // javelins right after a charge
     const int q = b.queued;
     b.queued = BA_NONE;
     if (has_target(g)) act_begin(g, q);
   }
 }
 
-// Giavellotti a parabola: il primo al bersaglio, gli altri agli altri eroi (o ai suoi lati), dove
-// saranno tra poco; un cerchio rosso dove cadono.
+// Lobbed javelins: the first at the target, the others at the other heroes (or at its sides),
+// where they will be shortly; a red circle where they land.
 void launch_javelins(Game& g) {
   Boss& b = g.boss;
   const int n = 1 + stage_of(g);
@@ -948,8 +948,8 @@ void launch_javelins(Game& g) {
   b.sq_v -= 1.5f;
 }
 
-// Spaccaterra: la spada a terra e la crepa (una, tre nell'ultima fase) dai suoi piedi verso il
-// bersaglio; le pietre a punta spuntano prima vicino a lui e poi via via piu' lontano.
+// Ground slam: the sword on the ground and the crack (one, three in the last phase) from his feet
+// toward the target; the pointed stones sprout first near him and then gradually farther away.
 void start_slam(Game& g) {
   Boss& b = g.boss;
   const int lines = b.stage >= 2 ? 3 : 1;
@@ -973,7 +973,7 @@ void start_slam(Game& g) {
   ev_sound(g, SND_SLASH, b.pos);
 }
 
-// Fendente: chi sta nel settore davanti a lui (anche solo con un pezzo) prende la spadata e vola via.
+// Sweep: anyone in the sector in front of him (even only partly) takes the sword blow and flies off.
 void sweep_strike(Game& g) {
   Boss& b = g.boss;
   b.face = b.act_yaw;
@@ -983,11 +983,11 @@ void sweep_strike(Game& g) {
     const float dx = p.pos.x - b.pos.x, dz = p.pos.z - b.pos.z, dl = sqrtf(dx * dx + dz * dz);
     if (dl > BOSS_SWEEP_R + PL_R) continue;
     if (dl > 0.5f && fabsf(d_wrap_pi(yaw_of(dx, dz) - b.act_yaw)) > BOSS_SWEEP_HALF + PL_R / dl) continue;
-    if (level_blocked(&g.L, b.pos + v3(0, 1.2f, 0), player_chest(p))) continue;   // dietro un muro o una statua
+    if (level_blocked(&g.L, b.pos + v3(0, 1.2f, 0), player_chest(p))) continue;   // behind a wall or a statue
     b.hitmask |= (uint8_t)(1u << j);
     hurt_player(g, j, 28.0f * diff_dmg(g), b.pos, 10.0f);
   }
-  for (int k = 0; k < 7; ++k) {                 // sabbia lungo l'arco della spada
+  for (int k = 0; k < 7; ++k) {                 // sand along the arc of the sword
     const float a = b.act_yaw + BOSS_SWEEP_HALF * ((float)k / 3.0f - 1.0f);
     const Vec3 d = dir_yaw(a);
     puff(g, b.pos + d * 3.3f + v3(0, 0.3f, 0), PK_PUFF, PC_SAND, d * 2.5f + v3(0, 0.6f, 0), 1.0f, 22);
@@ -997,7 +997,7 @@ void sweep_strike(Game& g) {
   b.sq_v -= 1.5f;
 }
 
-// Anfore e casse davanti a lui quando sbatte: si rompono (la capsula dell'esploratore no).
+// Amphorae and crates in front of him when he crashes: they break (the explorer's capsule doesn't).
 void smash(Game& g, Vec3 at) {
   int cx, cz;
   if (!level_cell(&g.L, at.x, at.z, &cx, &cz)) return;
@@ -1011,7 +1011,7 @@ void smash(Game& g, Vec3 at) {
     }
 }
 
-// La carica finisce contro un ostacolo: botta, polvere, stelle; resta stordito.
+// The charge ends against an obstacle: impact, dust, stars; he stays stunned.
 void rush_crash(Game& g) {
   Boss& b = g.boss;
   const Vec3 d = dir_yaw(b.act_yaw);
@@ -1036,7 +1036,7 @@ void lane_marker_off(Game& g) {
 void rush_update(Game& g) {
   Boss& b = g.boss;
   const Vec3 d = dir_yaw(b.act_yaw);
-  if (b.act_t < b.wind) {                        // si abbassa dietro lo scudo e punta la corsia, raspando
+  if (b.act_t < b.wind) {                        // crouches behind the shield and aims at the lane, pawing
     face_toward(g, b.act_yaw, 9.0f);
     if (b.act_t % 8 == 4) puff(g, b.pos + d * 0.5f + v3(0, 0.1f, 0), PK_PUFF, PC_SAND, v3(-d.x * 1.5f, 0.5f, -d.z * 1.5f), 0.8f, 18);
     return;
@@ -1058,7 +1058,7 @@ void rush_update(Game& g) {
       if (!in_play(g, j) || ((b.hitmask >> j) & 1u) || p.pos.y > 2.0f) continue;
       if (dist2d(p.pos, b.pos) > boss_r() + PL_R + 0.1f) continue;
       b.hitmask |= (uint8_t)(1u << j);
-      // Spinto forte di lato, fuori dalla corsia, dalla parte in cui stava (e un po' in avanti).
+      // Pushed hard sideways, out of the lane, toward the side they were on (and a bit forward).
       const float side = (p.pos.x - b.pos.x) * d.z - (p.pos.z - b.pos.z) * d.x;
       const Vec3 n = side >= 0.0f ? v3(d.z, 0.0f, -d.x) : v3(-d.z, 0.0f, d.x);
       hurt_player(g, j, 25.0f * diff_dmg(g), p.pos - n - d * 0.3f, 16.0f);
@@ -1066,7 +1066,7 @@ void rush_update(Game& g) {
     }
     if ((b.act_t & 3) == 0) puff(g, b.pos - d * 0.9f + v3(0, 0.15f, 0), PK_PUFF, PC_SAND, v3(-d.x * 2.0f, 0.8f, -d.z * 2.0f), 1.1f, 20);
     if (b.act_t % 9 == 0) ev_sound(g, SND_BOSS_STEP, b.pos);
-    const bool blocked = moved < step * 0.5f;     // qualcosa che la corsia non aveva (non dovrebbe succedere)
+    const bool blocked = moved < step * 0.5f;     // something the lane didn't have (should not happen)
     if (b.run >= b.lane - 1e-4f || blocked) {
       b.run = b.lane;
       b.end_t = b.act_t;
@@ -1076,7 +1076,7 @@ void rush_update(Game& g) {
     }
     return;
   }
-  if (b.act_t >= b.end_t + RUSH_REST) {          // si e' fermato senza sbattere: giavellotti subito
+  if (b.act_t >= b.end_t + RUSH_REST) {          // stopped without crashing: javelins right away
     b.queued = BA_JAVELIN;
     act_end(g);
   }
@@ -1099,7 +1099,7 @@ void act_begin(Game& g, int act) {
   b.act = act;
   b.act_t = 0;
   b.hitmask = 0;
-  b.vx = b.vz = 0.0f;                    // per prepararsi si ferma
+  b.vx = b.vz = 0.0f;                    // stops to get ready
   b.idle_t = 0;
   b.side_t = 0;
   b.check = b.pos;
@@ -1183,7 +1183,7 @@ void act_update(Game& g) {
       b.sway = 0.1f * d_sin((float)b.act_t * 0.21f);
       if (b.act_t >= b.wind) act_end(g);
       break;
-    default:                                    // rinforzi
+    default:                                    // reinforcements
       if (b.act_t == 1) b.sq_v += 2.0f;
       if (b.act_t == b.wind) summon(g);
       if (b.act_t >= SUMMON_FRAMES) act_end(g);
@@ -1191,23 +1191,23 @@ void act_update(Game& g) {
   }
 }
 
-// Attacco adatto alla distanza d dal bersaglio in tp (BA_NONE: per ora nessuno, si cammina).
+// Attack suited to the distance d from the target at tp (BA_NONE: none for now, keep walking).
 int choose_attack(Game& g, float d, Vec3 tp) {
   Boss& b = g.boss;
   const float yaw = yaw_of(tp.x - b.pos.x, tp.z - b.pos.z);
   int a = BA_NONE, alt = BA_NONE;
   if (d <= SWEEP_REACH) {
-    if (fabsf(d_wrap_pi(yaw - b.face)) < 2.0f) {     // non proprio alle spalle: prima si gira
+    if (fabsf(d_wrap_pi(yaw - b.face)) < 2.0f) {     // not right behind him: first he turns
       a = BA_SWEEP;
       alt = BA_SLAM;
     }
   } else if (d < RUSH_MIN) {
-    a = (b.alt++ & 1) == 0 ? BA_SLAM : BA_JAVELIN;   // troppo vicino per caricare, troppo lontano per la spada
+    a = (b.alt++ & 1) == 0 ? BA_SLAM : BA_JAVELIN;   // too close to charge, too far for the sword
     alt = a == BA_SLAM ? BA_JAVELIN : BA_SLAM;
   } else {
     bool wall;
     const bool lane = d <= RUSH_MAX && lane_free(g, b.pos, yaw, &wall) >= d - (boss_r() + PL_R + 0.3f);
-    const bool turn = (b.alt & 1) == 0;              // a turno: la carica e l'altro attacco della distanza
+    const bool turn = (b.alt & 1) == 0;              // in turn: the charge and the other attack at this range
     const int other = d <= SLAM_MAX ? BA_SLAM : BA_JAVELIN;
     b.alt++;
     a = lane && turn ? BA_RUSH : other;
@@ -1217,8 +1217,8 @@ int choose_attack(Game& g, float d, Vec3 tp) {
   return a;
 }
 
-// Un passo della camminata verso (dvx, dvz): gli ostacoli lo spingono fuori e non entra negli eroi
-// (li schiaccerebbe contro i muri): si ferma davanti. A ogni piede a terra un tonfo e un po' di sabbia.
+// One walking step toward (dvx, dvz): obstacles push him out and he doesn't walk into the heroes
+// (he would crush them against the walls): he stops in front. At every footfall a thud and some sand.
 void boss_move(Game& g, float dvx, float dvz, float accel) {
   Boss& b = g.boss;
   b.vx += (dvx - b.vx) * accel;
@@ -1245,15 +1245,15 @@ void boss_move(Game& g, float dvx, float dvz, float accel) {
   b.amp += ((speed > 0.3f ? clampf(speed / SPEED[0], 0.0f, 1.0f) : 0.0f) - b.amp) * 0.15f;
   const float s1 = d_sin(b.phase);
   if ((s0 < 0.0f) != (s1 < 0.0f) && b.amp > 0.4f) {
-    const float side = s1 < 0.0f ? 1.0f : -1.0f;       // il piede che va giu'
+    const float side = s1 < 0.0f ? 1.0f : -1.0f;       // the foot going down
     const Vec3 foot = b.pos + v3(d_cos(b.face) * BOSS_HIP_X * side, 0.1f, -d_sin(b.face) * BOSS_HIP_X * side);
     puff(g, foot, PK_PUFF, PC_SAND, v3(0, 0.4f, 0), 0.8f, 16);
     ev_sound(g, SND_BOSS_STEP, b.pos);
   }
 }
 
-// Tra un attacco e l'altro: cammina verso il bersaglio (dritto se si puo', altrimenti lungo il suo
-// campo dei percorsi), si gira verso di lui e, finita la pausa, sceglie l'attacco.
+// Between one attack and the next: walks toward the target (straight if possible, otherwise along
+// his path field), turns toward it and, when the pause is over, chooses the attack.
 void walk_update(Game& g) {
   Boss& b = g.boss;
   const bool have = has_target(g);
@@ -1272,8 +1272,8 @@ void walk_update(Game& g) {
           bfield_build(g, tp);
         }
         const int w = bfield_way(g, b.pos, &b.way);
-        if (w == WAY_NONE) b.direct = level_zone_at(&g.L, tp.x, tp.z) == g.zone;   // fuori dalla sua zona non lo segue
-        if (w == WAY_THERE || (w == WAY_NONE && !b.direct)) b.way = b.pos;   // piu' vicino di cosi' non arriva: resta li'
+        if (w == WAY_NONE) b.direct = level_zone_at(&g.L, tp.x, tp.z) == g.zone;   // doesn't follow it outside his zone
+        if (w == WAY_THERE || (w == WAY_NONE && !b.direct)) b.way = b.pos;   // can't get closer than this: stays there
       }
     }
     const float ex = b.direct ? tp.x - b.pos.x : b.way.x - b.pos.x, ez = b.direct ? tp.z - b.pos.z : b.way.z - b.pos.z;
@@ -1282,10 +1282,10 @@ void walk_update(Game& g) {
       mx = ex / el;
       mz = ez / el;
     }
-    if (b.side_t > 0) {                           // passo di lato per uscire da dove si era bloccato
+    if (b.side_t > 0) {                           // sidestep to get out of where he got stuck
       b.side_t--;
       const float sx = -mz * b.side + mx * 0.25f, sz = mx * b.side + mz * 0.25f, sl = sqrtf(sx * sx + sz * sz);
-      if (b.stuck_n >= 3) {                       // bloccato piu' volte di fila: indietro
+      if (b.stuck_n >= 3) {                       // stuck several times in a row: back off
         mx = -mx;
         mz = -mz;
       } else if (sl > 1e-3f) {
@@ -1295,11 +1295,11 @@ void walk_update(Game& g) {
     }
   }
   boss_move(g, mx * spd, mz * spd, 0.1f);
-  // Dove guarda: il bersaglio da vicino (o se e' fermo), altrimenti dove va.
+  // Where he looks: at the target when close (or if he is standing still), otherwise where he goes.
   const float turn = 2.6f + 0.3f * (float)stage_of(g);
   if (have && (d < 10.0f || b.amp < 0.3f)) face_toward(g, yaw_of(tp.x - b.pos.x, tp.z - b.pos.z), turn);
   else if (b.vx * b.vx + b.vz * b.vz > 0.25f) face_toward(g, yaw_of(b.vx, b.vz), turn);
-  // Bloccato? Fermo da mezzo secondo mentre vuole camminare, senza un eroe davanti che lo ferma.
+  // Stuck? Still for half a second while he wants to walk, with no hero in front stopping him.
   if (++b.check_t >= 30) {
     bool hero = false;
     for (int j = 0; j < MAX_PLAYERS; ++j) hero |= in_play(g, j) && dist2d(g.pl[j].pos, b.pos) < boss_r() + PL_R + 0.5f;
@@ -1327,7 +1327,7 @@ void walk_update(Game& g) {
   if (!have) return;
   const int a = choose_attack(g, d, tp);
   if (a != BA_NONE) act_begin(g, a);
-  else if (++b.idle_t > 100) act_begin(g, BA_JAVELIN);   // niente di adatto da un po': giavellotti
+  else if (++b.idle_t > 100) act_begin(g, BA_JAVELIN);   // nothing suitable for a while: javelins
 }
 
 }  // namespace
@@ -1363,7 +1363,7 @@ void boss_start(Game& g) {
   b.last[0] = b.last[1] = BA_NONE;
   b.target = -1;
   b.check = b.pos;
-  // Guarda verso le partenze dei giocatori.
+  // Looks toward the players' starting points.
   Vec3 c = v3(0, 0, 0);
   for (int i = 0; i < MAX_PLAYERS; ++i) c = c + g.L.zones[g.zone].start[i] * 0.25f;
   b.face = yaw_of(c.x - b.pos.x, c.z - b.pos.z);
@@ -1373,8 +1373,9 @@ void boss_start(Game& g) {
 
 void boss_update(Game& g) {
   Boss& b = g.boss;
-  // Crepe gia' segnate: le pietre spuntano al loro momento anche se intanto lui fa altro. Chi sta
-  // tra due segni (o dove le tre crepe dell'ultima fase partono insieme) le prende una volta sola.
+  // Cracks already marked: the stones sprout at their time even if meanwhile he does something
+  // else. Whoever stands between two marks (or where the three cracks of the last phase start
+  // together) gets hit only once.
   for (int i = 0; i < MAX_MARKERS; ++i) {
     Marker& m = g.mk[i];
     if (!m.alive || m.kind != MK_ROOT || m.done || m.t < m.fire_at) continue;
@@ -1392,7 +1393,7 @@ void boss_update(Game& g) {
     add_shake(g, 0.03f);
   }
   if (!b.alive) {
-    if (b.dead_t > 0 && b.dead_t < 1000) b.dead_t++;     // disegno: la caduta dopo la sconfitta
+    if (b.dead_t > 0 && b.dead_t < 1000) b.dead_t++;     // drawing: the fall after the defeat
     return;
   }
   if (b.hurt > 0) b.hurt--;
@@ -1402,7 +1403,7 @@ void boss_update(Game& g) {
   b.sq = clampf(b.sq, -0.25f, 0.25f);
   b.sway = 0.04f * d_sin((float)g.tick * 0.035f);
   update_target(g);
-  if (++g.session.boss_free_t >= 30) {                 // casse rotte: si passa di piu'
+  if (++g.session.boss_free_t >= 30) {                 // broken crates: more room to pass
     g.session.boss_free_t = 0;
     if (crates_whole(g) != g.session.boss_crates) {
       bfree_build(g);
@@ -1416,11 +1417,11 @@ void boss_update(Game& g) {
     b.dead_t = 1;
     b.act = BA_NONE;
     for (int k = 0; k < MAX_MONSTERS; ++k)
-      if (g.mo[k].alive) {                 // i rinforzi scappano con lui
+      if (g.mo[k].alive) {                 // the reinforcements flee with him
         burst(g, monster_center(g.mo[k]), 8, PC_WHITE, 3.0f);
         g.mo[k].alive = false;
       }
-    // Spariscono anche i suoi attacchi ancora in arrivo: giavellotti in volo, segni a terra.
+    // His attacks still on their way disappear too: javelins in flight, marks on the ground.
     for (int i = 0; i < MAX_SHOTS; ++i)
       if (g.sh[i].alive && g.sh[i].owner == -2) {
         g.sh[i].alive = false;
@@ -1435,15 +1436,16 @@ void boss_update(Game& g) {
     {
       const Vec3 at = b.pos + rng_vec(g, 1.6f, 3.0f, 2.5f, 1.6f);
       const Vec3 vel = rng_vec(g, 5.0f, 1.0f, 3.0f, 5.0f);
-      puff(g, at, PK_PUFF, (k & 1) ? PC_SAND : PC_STONE, vel, 1.6f, 70 + (int)(rng_next(g) % 40u));   // polvere
+      puff(g, at, PK_PUFF, (k & 1) ? PC_SAND : PC_STONE, vel, 1.6f, 70 + (int)(rng_next(g) % 40u));   // dust
     }
-    burst(g, b.pos + v3(0, 1.5f, 0), 30, PC_BRONZE, 6.0f);      // pezzi dell'armatura
+    burst(g, b.pos + v3(0, 1.5f, 0), 30, PC_BRONZE, 6.0f);      // pieces of the armor
     add_shake(g, 0.6f);
     show_msg(g, tr("GLADIATORE SCONFITTO!"), tr("il Colosseo è libero"), 0x7CF29A, 2, 180);
     plat_log("boss sconfitto: gladiatore (fotogramma %u)", g.tick);
     return;
   }
-  // Fase: a 2/3 e a 1/3 della vita, appena finito l'attacco in corso, ruggisce e chiama i rinforzi.
+  // Phase: at 2/3 and at 1/3 of his health, as soon as the current attack is over, he roars and
+  // calls the reinforcements.
   const int stage = b.hp < b.hp_max / 3.0f ? 2 : (b.hp < b.hp_max * 2.0f / 3.0f ? 1 : 0);
   if (stage > b.stage && b.act == BA_NONE && b.roar == 0) {
     b.stage = stage;
@@ -1453,7 +1455,7 @@ void boss_update(Game& g) {
     for (int k = 0; k < 24; ++k)
     {
       const Vec3 at = b.pos + rng_vec(g, 1.8f, 3.5f, 2.0f, 1.8f);
-      puff(g, at, PK_LEAF, (k % 3) ? PC_RED : PC_GOLD, rng_vec(g, 3.0f, 0.5f, 0.0f, 3.0f), 1.0f, 80);   // piume della cresta
+      puff(g, at, PK_LEAF, (k % 3) ? PC_RED : PC_GOLD, rng_vec(g, 3.0f, 0.5f, 0.0f, 3.0f), 1.0f, 80);   // crest feathers
     }
     show_msg(g, stage == 1 ? tr("SI ARRABBIA!") : tr("È FURIOSO!"), tr("il gladiatore va più veloce"), 0xFF8A5C, 2, 120);
     ev_sound(g, SND_BOSS_ROAR, b.pos);

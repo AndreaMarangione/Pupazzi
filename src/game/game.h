@@ -1,8 +1,8 @@
-// Gioco: cooperativa da 1 a 4 giocatori, mappe fatte di zone da ripulire dai mostri.
+// Game: co-op for 1 to 4 players, maps made of zones to clear of monsters.
 #pragma once
 #include "engine/render.h"
 
-#define PUPAZZI_VERSION "0.5.4"   // unico posto: core, menu e Makefile la leggono da qui
+#define PUPAZZI_VERSION "0.5.4"   // the only place: core, menus and Makefile read it from here
 #define MAX_PLAYERS 4
 
 // The whole state of a game (defined in game/sim/game_int.h). The frontend creates one with
@@ -23,111 +23,111 @@ struct GameEvents {
 };
 void game_set_events(Game& g, const GameEvents& ev);
 
-// Personaggi disponibili (i 4 iniziali, uno per mondo).
+// Available characters (the 4 starting ones, one per world).
 enum { CH_ASTRO = 0, CH_MOCHI, CH_MARZIO, CH_ZOLFO, NCHARS };
 
-// Stesso ordine degli identificatori RetroPad di libretro.
+// Same order as libretro's RetroPad identifiers.
 enum {
   PAD_B = 0, PAD_Y, PAD_SELECT, PAD_START, PAD_UP, PAD_DOWN, PAD_LEFT, PAD_RIGHT,
   PAD_A, PAD_X, PAD_L, PAD_R, PAD_L2, PAD_R2, PAD_L3, PAD_R3
 };
 
 struct Pad {
-  uint16_t btn;          // maschera di bit dei tasti
-  float lx, ly, rx, ry;  // levette in [-1, 1]; y positivo = verso il basso
+  uint16_t btn;          // bit mask of the buttons
+  float lx, ly, rx, ry;  // sticks in [-1, 1]; positive y = down
 };
 
 struct GameInfo {
-  int screen, map, loop, zone, nzones, enemies, players, alive, phase;   // loop: giro del pianeta (da 1)
-  int kills, deaths, wipes, maps_done;     // wipes: zone rifatte (da soli, caduti con vite rimaste)
-  int restarts;                            // mappe ricominciate da capo
-  int lives[MAX_PLAYERS];                  // vite rimaste di ogni giocatore (-1 se non gioca)
+  int screen, map, loop, zone, nzones, enemies, players, alive, phase;   // loop: round of the planet (from 1)
+  int kills, deaths, wipes, maps_done;     // wipes: zones replayed (alone, fallen with lives left)
+  int restarts;                            // maps restarted from the start
+  int lives[MAX_PLAYERS];                  // lives left of each player (-1 if not playing)
   char map_name[40];
 };
 
 void game_init(Game& g);
 void game_shutdown(Game& g);
-void game_reset(Game& g);                              // di nuovo dal titolo
-// Prove: subito in partita sulla mappa map (0 = la prima), senza menu; chars sceglie i
-// personaggi (per esempio "0213"), NULL o vuoto: uno diverso per giocatore.
+void game_reset(Game& g);                              // back to the title
+// Tests: straight into a game on map map (0 = the first), without menus; chars chooses the
+// characters (for example "0213"), NULL or empty: a different one per player.
 void game_quick_start(Game& g, int map, int players, const char* chars);
-void game_update(Game& g, const Pad pads[MAX_PLAYERS]);      // un passo di 1/60 di secondo
-void game_start_tap(Game& g, int player);                    // START premuto e lasciato subito
+void game_update(Game& g, const Pad pads[MAX_PLAYERS]);      // one step of 1/60 of a second
+void game_start_tap(Game& g, int player);                    // START pressed and released at once
 bool game_paused(Game& g);
-bool game_playing(Game& g);                            // (0.5.4) in partita (non nei menu, non in pausa, niente carte)
-bool game_wants_quit(Game& g);                         // scelto "Esci" dal titolo
+bool game_playing(Game& g);                            // (0.5.4) in a game (not in the menus, not paused, no cards)
+bool game_wants_quit(Game& g);                         // "Esci" chosen from the title
 bool game_player_active(Game& g, int i);
 uint32_t game_player_rgb(int i);
-// Quanto e' pronta la mira del giocatore (0 extra morbida, 1 morbida, 2 media, 3 rapida; si sceglie nella pausa).
+// How responsive the player's aim is (0 extra soft, 1 soft, 2 medium, 3 quick; chosen in the pause).
 void game_set_aim_level(Game& g, int player, int level);
 const char* game_aim_name(Game& g, int player);
-// Antialias: il renderer dice se lo sa fare, il gioco se e' scelto (voce della pausa).
-void game_set_aa_available(Game& g, int max_samples);        // 0: il renderer non lo sa fare; altrimenti fino a quanti campioni
-void game_set_aa_level(Game& g, int level);                  // come la voce della pausa: 0 spento, 1 il migliore, 4, 8
+// Antialiasing: the renderer says whether it can do it, the game whether it is chosen (pause item).
+void game_set_aa_available(Game& g, int max_samples);        // 0: the renderer cannot do it; otherwise up to how many samples
+void game_set_aa_level(Game& g, int level);                  // like the pause item: 0 off, 1 the best, 4, 8
 int game_aa_level(Game& g);
-void game_aa_cap(Game& g, int samples);                      // (0.5.4) in questa sessione al massimo tanti campioni (8x troppo pesante)
-int game_aa_wanted(const Game& g);                           // campioni da usare adesso: 0, 4 o 8
-// Chiamata dal core subito dopo save_open (retro_load_game): il gioco prende le impostazioni dal salvataggio (save.h).
+void game_aa_cap(Game& g, int samples);                      // (0.5.4) at most this many samples in this session (8x too heavy)
+int game_aa_wanted(const Game& g);                           // samples to use now: 0, 4 or 8
+// Called by the core right after save_open (retro_load_game): the game takes the settings from the save (save.h).
 void game_save_loaded(Game& g);
-// Carte (dalla 0.4): all'avvio attive; spente il gioco va esattamente come prima (prove).
+// Cards (since 0.4): enabled at start-up; when off, the game runs exactly as before (tests).
 void game_set_cards_enabled(Game& g, bool on);
 void game_info(Game& g, GameInfo* gi);
-uint64_t game_state_hash(Game& g);                     // per confrontare partite tra processori diversi
+uint64_t game_state_hash(Game& g);                     // to compare games across different processors
 void game_trace_monsters(Game& g, void (*out)(const char* line));
-// Solo per le prove automatiche: i primi n giocatori li guida il computer.
+// Only for the automatic tests: the first n players are driven by the computer.
 void game_bot_pads(Game& g, Pad pads[MAX_PLAYERS], int n);
-// ... oppure un giocatore solo (in rete: quello di questa console), senza toccare gli altri.
+// ... or a single player (on the network: the one of this console), without touching the others.
 void game_bot_pad(Game& g, int player, Pad* out);
 
-// --- gioco in rete (0.5.4, vedi net.h) -------------------------------------------------------------
-// Il core passa al gioco cosa c'e' in rete (pagine GIOCO IN RETE e sala d'attesa) e il gioco gli
-// chiede di creare, cercare, unirsi, uscire e cominciare. In partita la stessa partita gira su ogni
-// console: game_net_begin la fa partire uguale dappertutto, game_net_frame prima di ogni
-// game_update porta chi si e' scollegato e gli START brevi di tutti.
+// --- LAN play (0.5.4, see net.h) -------------------------------------------------------------------
+// The core passes the game what is on the network (GIOCO IN RETE pages and waiting room) and the
+// game asks it to create, search, join, leave and start. During play the same game runs on every
+// console: game_net_begin starts it identically everywhere, game_net_frame before every
+// game_update brings who has disconnected and everyone's short STARTs.
 #define NET_MAX_GAMES 6
-#define NET_NAME_LEN 13                             // come SAVE_NAME_LEN
-enum { NG_OPEN = 0, NG_FULL, NG_STARTED, NG_VERSION, NG_MAPS };   // stato di una partita trovata
-enum { NV_OFF = 0, NV_HOST, NV_SEARCH, NV_JOINING, NV_JOINED };   // la console nella sala d'attesa
-// Errori e fine della partita in rete (cosa dire).
+#define NET_NAME_LEN 13                             // same as SAVE_NAME_LEN
+enum { NG_OPEN = 0, NG_FULL, NG_STARTED, NG_VERSION, NG_MAPS };   // state of a game found
+enum { NV_OFF = 0, NV_HOST, NV_SEARCH, NV_JOINING, NV_JOINED };   // the console in the waiting room
+// Errors and end of the LAN game (what to say).
 enum { NE_NONE = 0, NE_VERSION, NE_MAPS, NE_FULL, NE_STARTED, NE_NO_ANSWER, NE_HOST_LEFT, NE_LOST, NE_KICKED, NE_DESYNC,
        NE_SLOW, NE_SOCKET, NE_ALONE, NE_OVER, NE_CLOSED };
 struct NetGame {
-  char name[NET_NAME_LEN];       // nome della partita ("" = PARTITA slot+1)
-  int slot;                      // salvataggio di chi l'ha creata (0..3)
-  int world, giro;               // pianeta piu' lontano raggiunto e suo giro
-  int players;                   // console nella sala d'attesa, chi l'ha creata compreso
+  char name[NET_NAME_LEN];       // name of the game ("" = PARTITA slot+1)
+  int slot;                      // the host's save (0..3)
+  int world, giro;               // farthest planet reached and its round
+  int players;                   // consoles in the waiting room, the host included
   int state;                     // NG_*
-  char version[16];              // versione del gioco su quella console
+  char version[16];              // version of the game on that console
 };
 struct NetView {
   int mode;                      // NV_*
-  char ip[16];                   // indirizzo di questa console nella rete ("" nessuna rete)
-  int ngames;                    // NV_SEARCH: partite trovate
+  char ip[16];                   // address of this console on the network ("" no network)
+  int ngames;                    // NV_SEARCH: games found
   NetGame games[NET_MAX_GAMES];
-  NetGame game;                  // NV_HOST: la propria; NV_JOINING, NV_JOINED: quella scelta
-  uint8_t present;               // sala d'attesa: posti con una console (bit)
-  int local;                     // sala d'attesa: posto di questa console
-  int error, error_seq;          // ultimo errore (NE_*) e quanti finora (per accorgersi di uno nuovo)
+  NetGame game;                  // NV_HOST: its own; NV_JOINING, NV_JOINED: the chosen one
+  uint8_t present;               // waiting room: slots with a console (bits)
+  int local;                     // waiting room: slot of this console
+  int error, error_seq;          // last error (NE_*) and how many so far (to notice a new one)
 };
 void game_net_view(Game& g, const NetView* v);
 enum { NR_NONE = 0, NR_HOST, NR_SEARCH, NR_JOIN, NR_LEAVE, NR_START };
-int game_net_request(Game& g, int* arg);                     // dopo game_update: cosa chiedono i menu (NR_*, una alla volta)
-void game_net_summary(NetGame* out);                // la partita attiva: nome, posto, pianeta e giro
-void game_net_lobby(Game& g);                          // i menu nella sala d'attesa (prove: PUPAZZI_RETE)
+int game_net_request(Game& g, int* arg);                     // after game_update: what the menus ask for (NR_*, one at a time)
+void game_net_summary(NetGame* out);                // the active game: name, slot, planet and round
+void game_net_lobby(Game& g);                          // the menus in the waiting room (tests: PUPAZZI_RETE)
 struct NetStart;
-void game_net_prepare(Game& g, NetStart* s);                 // numero per mescolare, mappa col cursore, mire di questa console
+void game_net_prepare(Game& g, NetStart* s);                 // number for shuffling, map under the cursor, aims of this console
 struct NetStart {
   uint32_t seed;
-  int local;                     // giocatore di questa console
-  uint8_t consoles;              // posti con una console (bit)
-  uint8_t aim[MAX_PLAYERS];      // mira di ogni giocatore (quella salvata sulla sua console)
-  int map_sel;                   // mappa col cursore (quella di chi ha creato la partita)
+  int local;                     // player of this console
+  uint8_t consoles;              // slots with a console (bits)
+  uint8_t aim[MAX_PLAYERS];      // aim of each player (the one saved on their console)
+  int map_sel;                   // map under the cursor (the host's)
 };
-void game_net_begin(Game& g, const NetStart* s);             // su tutte: partita in rete da capo, a COME SI GIOCA?
+void game_net_begin(Game& g, const NetStart* s);             // on all of them: LAN game from the start, at COME SI GIOCA?
 void game_net_frame(Game& g, uint8_t consoles, uint8_t silent, const bool taps[MAX_PLAYERS]);
-bool game_net_over(Game& g);                           // la partita in rete e' tornata al titolo: finita per tutti
-// Fine su questa console (NE_*: cosa dire). Chi ha creato la partita, rimasto solo, continua da solo;
-// le altre tornano al titolo con i loro salvataggi.
+bool game_net_over(Game& g);                           // the LAN game went back to the title: over for everyone
+// End on this console (NE_*: what to say). The host, left alone, carries on alone; the others go
+// back to the title with their saves.
 void game_net_end(Game& g, int reason, bool host);
-int game_net_local(Game& g);                           // giocatore di questa console in rete (-1: non in rete)
-void game_net_wait(Game& g, int frames);                     // solo per l'HUD: da quanti fotogrammi si aspetta la rete
+int game_net_local(Game& g);                           // player of this console on the network (-1: not on the network)
+void game_net_wait(Game& g, int frames);                     // only for the HUD: how many frames we have been waiting for the network

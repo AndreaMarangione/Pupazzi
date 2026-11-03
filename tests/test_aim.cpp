@@ -1,5 +1,5 @@
-// Prove della mira (0.3.1): levetta destra con zona morta circolare, filtro, rilascio e rimbalzo,
-// colpi a ventaglio di Astro e Marzio, voce "Mira" nella pausa. Usa il gioco senza frontend.
+// Aim tests (0.3.1): right stick with circular dead zone, filter, release and bounce, fan shots of
+// Astro and Marzio, "Mira" item in the pause menu. Uses the game without a frontend.
 //   make build/native/test_aim && ./build/native/test_aim
 #include "game/sim/game_int.h"
 #include "platform/plat.h"
@@ -19,7 +19,7 @@ static void step(float rx, float ry, uint16_t btn = 0) {
   pads[0].ry = ry;
   pads[0].btn = btn;
   game_update(g, pads);
-  g.pl[0].invuln = 1000;              // nessun mostro deve interrompere le prove
+  g.pl[0].invuln = 1000;              // no monster must interrupt the tests
   g.pl[0].hp = g.pl[0].hp_max;
 }
 
@@ -28,7 +28,7 @@ static void stick_deg(float a_deg, float mag, uint16_t btn = 0) {
   step(d_cos(a) * mag, d_sin(a) * mag, btn);
 }
 
-// Direzione nel mondo per la levetta inclinata di a_deg gradi (come la calcola il gioco).
+// World direction for the stick tilted by a_deg degrees (as the game computes it).
 static float want_yaw(float a_deg) {
   const float a = a_deg / DEG;
   return yaw_of(d_cos(a), d_sin(a) / AIM_FORESHORTEN);
@@ -43,7 +43,7 @@ static void fresh(int level, const char* ch) {
   for (int k = 0; k < 30; ++k) step(0, 0);
 }
 
-// La mira di prima (0.3.0): zona morta per asse da 0,2 e soglia 0,35, senza filtro.
+// The old aim (0.3.0): per-axis dead zone of 0.2 and threshold 0.35, no filter.
 static bool old_aim(float x, float y, float* yaw) {
   auto ax = [](float v) {
     if (v > -0.2f && v < 0.2f) return 0.0f;
@@ -61,7 +61,7 @@ static float noise(void) {   // [-1, 1)
   return (float)(lcg >> 8) * (2.0f / 16777216.0f) - 1.0f;
 }
 
-// --- carte (0.4) ---------------------------------------------------------------------
+// --- cards (0.4) ---------------------------------------------------------------------
 
 static void pads_step(const Pad* p) {
   Pad pads[MAX_PLAYERS];
@@ -70,7 +70,7 @@ static void pads_step(const Pad* p) {
   game_update(g, pads);
 }
 
-// 0.5.4: sul banner delle carte si aspetta quanto serve e ognuno preme A per vedere le sue carte.
+// 0.5.4: on the cards banner, wait as long as needed and everyone presses A to see their cards.
 static void cards_reveal(void) {
   Pad pads[MAX_PLAYERS];
   memset(pads, 0, sizeof(pads));
@@ -82,7 +82,7 @@ static void cards_reveal(void) {
   pads_step(pads);
 }
 
-// Mostro fermo (gia' spuntato) in pos; restituisce il suo indice.
+// Still monster (already risen) at pos; returns its index.
 static int test_monster(Vec3 pos) {
   if (!monster_spawn(g, MO_SCORPIONE, false, &pos)) return -1;
   for (int k = MAX_MONSTERS - 1; k >= 0; --k)
@@ -96,7 +96,7 @@ static int test_monster(Vec3 pos) {
 
 static void test_cards(void) {
   game_set_cards_enabled(g, true);
-  for (int l = 0; l < NLANGS; ++l) {                // in ogni lingua (0.5.3)
+  for (int l = 0; l < NLANGS; ++l) {                // in every language (0.5.3)
     lang_set(l);
     char why[160], what[200];
     const bool ok = cards_layout_ok(g, why, sizeof(why), getenv("PUPAZZI_CARTE_TUTTE") != NULL);
@@ -127,11 +127,11 @@ static void test_cards(void) {
     EXPECT(ok, "A sul banner: ognuno vede le sue carte, nessuna presa; tutto fermo");
     Pad pads[MAX_PLAYERS];
     memset(pads, 0, sizeof(pads));
-    game_start_tap(g, 0);                      // G1: START breve prende la prima carta, non apre la pausa
+    game_start_tap(g, 0);                      // G1: short START takes the first card, does not pause
     pads_step(pads);
     ok = !g.paused && g.offer[0].done && has_card(g.pl[0], g.offer[0].card[0]);
-    pads[1].btn = 1u << PAD_DOWN;           // G2: giu' e A, prende la seconda
-    pads[3].btn = 1u << PAD_R2;             // G4 tiene premuto il salto mentre sceglie
+    pads[1].btn = 1u << PAD_DOWN;           // G2: down and A, takes the second
+    pads[3].btn = 1u << PAD_R2;             // G4 keeps jump pressed while choosing
     pads_step(pads);
     pads[1].btn = 0;
     pads_step(pads);
@@ -155,8 +155,8 @@ static void test_cards(void) {
     EXPECT(!g.cards_open && frames + 1 == CARDS_CLOSE_FRAMES && g.tick == t0 + 11u && g.pl[3].pos.y - y0 < 0.01f, buf);
   }
   {
-    // Un pad che non risponde: dopo un minuto prende la carta col cursore e si riparte. G1 preme
-    // A a fotogrammi alterni (vede le carte e prende la prima).
+    // A pad that does not respond: after a minute it takes the card under the cursor and play
+    // resumes. G1 presses A on alternate frames (sees the cards and takes the first).
     game_init(g);
     game_quick_start(g, 0, 2, "01");
     Pad pads[MAX_PLAYERS];
@@ -174,14 +174,14 @@ static void test_cards(void) {
            buf);
   }
   {
-    // 0.5.4: il banner. Una A tenuta da prima o premuta appena compare non conta; poi A fa vedere le
-    // carte (senza prenderne una), START breve pure; l'A dopo prende.
+    // 0.5.4: the banner. An A held from before or pressed as soon as it appears does not count; then
+    // A shows the cards (without taking one), and so does a short START; the next A takes.
     game_init(g);
     game_quick_start(g, 0, 2, "01");
     Pad pads[MAX_PLAYERS];
     memset(pads, 0, sizeof(pads));
     bool ok = g.cards_open && !g.offer[0].shown && !g.offer[1].shown;
-    pads[0].btn = 1u << PAD_A;                     // G1: A tenuta dall'inizio
+    pads[0].btn = 1u << PAD_A;                     // G1: A held from the start
     for (int k = 0; k < CARDS_BANNER_MIN + 10; ++k) pads_step(pads);
     ok &= !g.offer[0].shown;
     pads[0].btn = 0;
@@ -190,7 +190,7 @@ static void test_cards(void) {
     game_quick_start(g, 0, 2, "01");
     memset(pads, 0, sizeof(pads));
     pads_step(pads);
-    pads[1].btn = 1u << PAD_A;                     // G2: A appena compare il banner
+    pads[1].btn = 1u << PAD_A;                     // G2: A as soon as the banner appears
     pads_step(pads);
     pads[1].btn = 0;
     pads_step(pads);
@@ -201,7 +201,7 @@ static void test_cards(void) {
     ok &= g.offer[1].shown && !g.offer[1].done && !g.offer[0].shown;
     pads[1].btn = 0;
     pads_step(pads);
-    game_start_tap(g, 0);                             // G1: START breve, vede le carte
+    game_start_tap(g, 0);                             // G1: short START, sees the cards
     pads_step(pads);
     ok &= g.offer[0].shown && !g.offer[0].done;
     pads[0].btn = pads[1].btn = 1u << PAD_A;
@@ -228,7 +228,7 @@ static void test_cards(void) {
     p.invuln = 0;
     hurt_player(g, 0, 30.0f, p.pos + v3(1, 0, 0), 3.0f);
     EXPECT(stopped && p.hp == hp - 30.0f, "SCUDO: il primo colpo si ferma, il secondo no");
-    // VITA EXTRA (dalla 0.5, al posto di SECONDA VITA): subito una vita in piu' per questa mappa.
+    // VITA EXTRA (since 0.5, instead of SECONDA VITA): one extra life right away for this map.
     const int lives = p.lives;
     cards_offer(g);
     CardOffer& o = g.offer[0];
@@ -248,7 +248,7 @@ static void test_cards(void) {
            "VITA EXTRA: subito una vita in piu' (4); cadendo se ne perde una, senza rialzarsi");
   }
   {
-    // PERFORANTE e RIMBALZO con colpi messi a mano e mostri fermi (solo i colpi avanzano).
+    // PERFORANTE and RIMBALZO with hand-placed shots and still monsters (only the shots move).
     game_init(g);
     game_quick_start(g, 0, 1, "0");
     Pad pads[MAX_PLAYERS];
@@ -271,7 +271,7 @@ static void test_cards(void) {
       hits[pierce] = (a >= 0 && g.mo[a].hp < 1000.0f) + (b >= 0 && g.mo[b].hp < 1000.0f);
     }
     EXPECT(hits[0] == 1 && hits[1] == 2, "PERFORANTE: il seme passa il primo mostro e prende anche il secondo");
-    // Una siepe con prato a sud: il colpo che va verso nord deve tornare indietro una volta sola.
+    // A hedge with lawn to the south: the shot going north must come back only once.
     int wx = -1, wz = -1;
     for (int cz = 1; cz + 3 < g.L.H && wx < 0; ++cz)
       for (int cx = 0; cx < g.L.W && wx < 0; ++cx) {
@@ -291,7 +291,7 @@ static void test_cards(void) {
       int n = 0;
       while (s->alive && s->vel.z < 0.0f && n++ < 60) shots_update(g);
       ok = s->alive && s->vel.z > 0.0f && s->bounce == 0 && s->pos.z > (float)wz + 1.0f - (float)g.L.H;
-      // Di nuovo contro la siepe (girato a mano): questa volta si spegne.
+      // Against the hedge again (turned by hand): this time it goes out.
       s->vel.z = -17.0f;
       n = 0;
       while (s->alive && n++ < 60) shots_update(g);
@@ -300,14 +300,14 @@ static void test_cards(void) {
     EXPECT(ok, "RIMBALZO: il colpo sulla siepe torna indietro (una volta)");
   }
   {
-    // Bruciatura: 4 al secondo per 3 secondi; VAPORE: 30 intorno al mostro rallentato, poi una pausa.
+    // Burn: 4 per second for 3 seconds; VAPORE: 30 around the slowed monster, then a pause.
     game_init(g);
     game_quick_start(g, 0, 2, "23");
     Pad pads[MAX_PLAYERS];
     memset(pads, 0, sizeof(pads));
     pads[0].btn = pads[1].btn = 1u << PAD_A;
     pads_step(pads);
-    g.pl[0].cards = g.pl[1].cards = 0;     // le prime carte prese non contano qui
+    g.pl[0].cards = g.pl[1].cards = 0;     // the first cards taken do not count here
     monsters_clear(g);
     const int k = test_monster(g.pl[0].pos + v3(0, 0, -4.0f)), k2 = test_monster(g.pl[0].pos + v3(0.9f, 0, -4.0f));
     Monster& m = g.mo[k];
@@ -323,7 +323,7 @@ static void test_cards(void) {
     m.slow_t = 60;
     m.slow_k = 0.6f;
     card_elem_hit(g, k, 1, EL_FIRE);
-    const bool none = m.hp == 1000.0f;     // nessuno ha VAPORE
+    const bool none = m.hp == 1000.0f;     // nobody has VAPORE
     g.pl[0].cards |= 1u << CA_VAPORE;
     card_elem_hit(g, k, 1, EL_FIRE);
     const float d1 = 1000.0f - m.hp, d2 = 1000.0f - g.mo[k2].hp;
@@ -333,7 +333,7 @@ static void test_cards(void) {
     EXPECT(none && d1 == 30.0f && d2 == 30.0f && 1000.0f - m.hp == 30.0f && m.vapor_t == 90 && g.pl[0].dmg_done >= 60.0f, buf);
   }
   {
-    // Partita con 4 giocatori automatici: prendono le carte da soli e la partita si ripete uguale.
+    // Game with 4 bots: they take the cards on their own and the game repeats identically.
     uint64_t h[2] = { 0, 0 };
     int picks[2] = { 0, 0 };
     unsigned offers[2] = { 0, 0 };
@@ -439,7 +439,7 @@ TEST_CASE("4) scatto di 90 gradi: quanti fotogrammi per arrivare a meno di 5 gra
     for (int k = 0; k < 60; ++k) {
       stick_deg(90.0f, 1.0f);
       const float e = d_wrap_pi(g.pl[0].aim_yaw - want);
-      if (span * e > 0.0f) over = fmaxf(over, fabsf(e) * DEG);   // oltre il bersaglio
+      if (span * e > 0.0f) over = fmaxf(over, fabsf(e) * DEG);   // past the target
       if (n == 0 && fabsf(e) * DEG < 5.0f) n = k + 1;
     }
     static const int MAXN[NAIMLEVELS] = { 10, 8, 6, 4 };
@@ -454,7 +454,7 @@ TEST_CASE("5) levetta lasciata: la mira resta dov'era") {
     fresh(lv, "0");
     for (int k = 0; k < 60; ++k) stick_deg(40.0f, 1.0f);
     const float before = g.pl[0].aim_yaw;
-    // Ritorno della molla: la levetta scivola di lato mentre torna al centro e lo supera.
+    // Spring return: the stick slides sideways while it goes back to the center and overshoots it.
     static const float PATH[6][2] = { { 48, 0.92f }, { 70, 0.7f }, { 120, 0.45f }, { 200, 0.2f }, { 0, 0.0f }, { 0, 0.0f } };
     float worst = 0.0f;
     for (auto& s : PATH) {
@@ -462,7 +462,7 @@ TEST_CASE("5) levetta lasciata: la mira resta dov'era") {
       worst = fmaxf(worst, err_deg(g.pl[0].yaw, before));
     }
     const float after = err_deg(g.pl[0].yaw, before);
-    // Rimbalzo oltre il centro, dalla parte opposta, per un solo fotogramma.
+    // Bounce past the center, to the opposite side, for a single frame.
     stick_deg(220.0f, 0.65f);
     const bool bounced = g.pl[0].aiming;
     stick_deg(0.0f, 0.0f);
@@ -471,7 +471,7 @@ TEST_CASE("5) levetta lasciata: la mira resta dov'era") {
     snprintf(buf, sizeof(buf), "%s: durante il rilascio al massimo %.2f gradi, dopo %.2f; rimbalzo %s (%.2f gradi)", NAME[lv], (double)worst,
              (double)after, bounced ? "PRESO" : "ignorato", (double)after_bounce);
     EXPECT(worst < 3.0f && after < 0.01f && !bounced && after_bounce < 0.01f, buf);
-    // Subito dopo si mira di nuovo dalla parte opposta: deve partire al secondo fotogramma.
+    // Right after, aim again to the opposite side: it must start on the second frame.
     stick_deg(220.0f, 1.0f);
     const bool first = g.pl[0].aiming;
     stick_deg(220.0f, 1.0f);
@@ -479,7 +479,7 @@ TEST_CASE("5) levetta lasciata: la mira resta dov'era") {
     EXPECT(!first && g.pl[0].aiming && err_deg(g.pl[0].aim_yaw, want_yaw(220.0f)) < 0.01f, buf);
   }
   for (int lv = 0; lv < NAIMLEVELS; ++lv) {
-    // Rilascio rapido: in due letture la levetta scivola di lato e arriva quasi al centro.
+    // Quick release: in two reads the stick slides sideways and gets almost to the center.
     fresh(lv, "0");
     for (int k = 0; k < 60; ++k) stick_deg(40.0f, 1.0f);
     const float before = g.pl[0].aim_yaw;
@@ -491,10 +491,10 @@ TEST_CASE("5) levetta lasciata: la mira resta dov'era") {
     EXPECT(!g.pl[0].aiming && err_deg(g.pl[0].yaw, before) < 0.01f, buf);
   }
   for (int lv = 0; lv < NAIMLEVELS; ++lv) {
-    // Caso ambiguo: la prima lettura del rilascio e' ancora quasi tutta inclinata (0,97) ma gia'
-    // scivolata di 30 gradi, come girare la levetta lungo il bordo e lasciarla subito dopo. Non
-    // si torna indietro (si perderebbero i giri veri lungo il bordo): resta al massimo lo
-    // spostamento di quel fotogramma, gia' filtrato.
+    // Ambiguous case: the first read of the release is still almost fully tilted (0.97) but has
+    // already slid by 30 degrees, like turning the stick along the rim and letting go right after.
+    // It does not go back (real turns along the rim would be lost): at most the movement of that
+    // frame remains, already filtered.
     fresh(lv, "0");
     for (int k = 0; k < 60; ++k) stick_deg(40.0f, 1.0f);
     const float before = g.pl[0].aim_yaw;
@@ -507,8 +507,8 @@ TEST_CASE("5) levetta lasciata: la mira resta dov'era") {
     EXPECT(!g.pl[0].aiming && e < 0.5f * slide, buf);
   }
   for (int lv = 0; lv < NAIMLEVELS; ++lv) {
-    // Si cambia mira con la levetta un po' meno inclinata, la si tiene e poi la si lascia: deve
-    // restare la mira nuova, non tornare alla vecchia.
+    // Change the aim with the stick a bit less tilted, hold it and then let go: the new aim must
+    // stay, not go back to the old one.
     fresh(lv, "0");
     for (int k = 0; k < 60; ++k) stick_deg(0.0f, 1.0f);
     for (int k = 0; k < 40; ++k) stick_deg(80.0f, 0.85f);
@@ -520,7 +520,7 @@ TEST_CASE("5) levetta lasciata: la mira resta dov'era") {
     EXPECT(!g.pl[0].aiming && err_deg(g.pl[0].yaw, now) < 0.01f && err_deg(now, want_yaw(80.0f)) < 1.0f, buf);
   }
   {
-    // Lo stesso rilascio con la mira di prima.
+    // The same release with the old aim.
     float y = 0.0f, last = want_yaw(40.0f);
     static const float PATH[4][2] = { { 48, 0.92f }, { 70, 0.7f }, { 120, 0.45f }, { 200, 0.2f } };
     for (auto& s : PATH)
@@ -534,7 +534,7 @@ TEST_CASE("6) colpi a ventaglio") {
     const int ch = c == 0 ? CH_ASTRO : CH_MARZIO;
     const int kind = c == 0 ? SK_BULLET : SK_FROST;
     fresh(AIM_MEDIUM, c == 0 ? "0" : "2");
-    for (int k = 0; k < 40; ++k) stick_deg(-90.0f, 1.0f);    // levetta in alto: verso nord
+    for (int k = 0; k < 40; ++k) stick_deg(-90.0f, 1.0f);    // stick up: towards the north
     const float aim = g.pl[0].aim_yaw, w = CHARS[ch].aim_w;
     bool was[MAX_SHOTS];
     for (int s = 0; s < MAX_SHOTS; ++s) was[s] = g.sh[s].alive;
@@ -553,7 +553,7 @@ TEST_CASE("6) colpi a ventaglio") {
     }
     bool ok = n == 3;
     if (ok) {
-      // Astro: sinistra, centro, destra uno dopo l'altro; Marzio: tutti e tre insieme.
+      // Astro: left, center, right one after the other; Marzio: all three together.
       const float want[3] = { aim + 0.5f * w, aim, aim - 0.5f * w };
       if (c == 0) {
         for (int k = 0; k < 3; ++k) ok &= err_deg(got[k], want[k]) < 0.05f;
@@ -585,11 +585,11 @@ TEST_CASE("7) voce Mira nella pausa") {
   press(PAD_DOWN);
   ok &= g.pause_sel == PS_CONTROLS;
   press(PAD_A);
-  ok &= g.paused && g.pause_help;                     // A su Comandi apre il riquadro dei tasti
+  ok &= g.paused && g.pause_help;                     // A on Comandi opens the buttons box
   press(PAD_DOWN);
-  ok &= g.pause_help && g.pause_sel == PS_CONTROLS;   // intanto le frecce non spostano la scelta
+  ok &= g.pause_help && g.pause_sel == PS_CONTROLS;   // meanwhile arrows do not move the selection
   press(PAD_B);
-  ok &= g.paused && !g.pause_help;                    // B chiude il riquadro, la pausa resta
+  ok &= g.paused && !g.pause_help;                    // B closes the box, the pause stays
   press(PAD_DOWN);
   ok &= g.pause_sel == PS_AIM;
   press(PAD_RIGHT);
@@ -599,7 +599,7 @@ TEST_CASE("7) voce Mira nella pausa") {
   press(PAD_LEFT);
   ok &= g.aim_level[0] == AIM_QUICK;
   press(PAD_A);
-  ok &= g.aim_level[0] == AIM_XSOFT && g.paused;     // A sulla voce Mira cambia, non chiude la pausa
+  ok &= g.aim_level[0] == AIM_XSOFT && g.paused;     // A on Mira changes it, doesn't close the pause
   press(PAD_UP);
   ok &= g.pause_sel == PS_CONTROLS;
   press(PAD_UP);
@@ -628,7 +628,7 @@ TEST_CASE("8) inclinazione a meta' che trema (+-0,04) mentre si gira a 90 gradi 
         const float y = g.pl[0].aim_yaw;
         if (k >= 60) {
           lag[run] = fmaxf(lag[run], err_deg(y, want_yaw(a)));
-          if (run && d_wrap_pi(y - prev) * DEG > 0.5f) back++;   // la mira torna indietro
+          if (run && d_wrap_pi(y - prev) * DEG > 0.5f) back++;   // the aim goes back
         }
         prev = y;
       }
@@ -686,7 +686,7 @@ TEST_CASE("10) carte") { test_cards(); }
 
 int main(int argc, char** argv) {
   plat_log_open("/dev/null");
-  // Le prove della mira guidano il personaggio da subito: senza la scelta delle carte (come prima della 0.4).
+  // The aim tests drive the character right away: without the card choice (as before 0.4).
   game_set_cards_enabled(g, false);
   const int failed = run_tests(argc, argv);
   game_shutdown(g);

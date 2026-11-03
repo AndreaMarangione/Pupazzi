@@ -1,6 +1,6 @@
-// Salvataggi: lettura tollerante e scrittura atomica di pupazzi.sav (impostazioni) e partitaN.sav
-// (partite); formato e uso in save.h. Niente allocazioni: tutto in memoria statica, il file piu'
-// grande possibile sta in OUT_LEN.
+// Saves: tolerant reading and atomic writing of pupazzi.sav (settings) and partitaN.sav (games);
+// format and usage in save.h. No allocations: everything in static memory, the biggest possible
+// file fits in OUT_LEN.
 #include "game/save.h"
 #include "platform/plat.h"
 #include <errno.h>
@@ -21,46 +21,46 @@ const char* const GAME_HEADER =
     "# Pupazzi: una partita. Cancella il file (o eliminala dal gioco) per liberare il posto.\n"
     "# giro.PIANETA: giro del pianeta; mappe.PIANETA: sue mappe aperte, in ordine; tempo: secondi di gioco\n"
     "# stelle.MAPPA: stelle del giro in corso, somma di 1 (finita), 2 (esploratore salvato), 4 (senza ricominciare la mappa)\n";
-const int LINE_LEN = 256;           // righe piu' lunghe (a capo compreso): non valide
-const int MAX_EXTRA = 64;           // chiavi sconosciute conservate
-const int MAX_READ = 256 * 1024;    // di un file piu' grande (non e' un salvataggio) si legge solo l'inizio
-const int OUT_LEN = 24 * 1024;      // intestazione, voci, pianeti, 64 mappe e 64 righe sconosciute stanno in 19 KB
+const int LINE_LEN = 256;           // longer lines (newline included): invalid
+const int MAX_EXTRA = 64;           // unknown keys kept
+const int MAX_READ = 256 * 1024;    // of a bigger file (not a save) only the beginning is read
+const int OUT_LEN = 24 * 1024;      // header, entries, planets, 64 maps and 64 unknown lines fit in 19 KB
 const uint32_t MAX_SECONDS = 999999999u;
-// Pianeti nell'ordine del viaggio (WORLD_* in level.h) e lingue nell'ordine di LANG_* (lang.h).
+// Planets in travel order (WORLD_* in level.h) and languages in the order of LANG_* (lang.h).
 const char* const WORLD_ID[SAVE_WORLDS] = { "terra", "luna", "marte", "venere", "mercurio", "giove", "saturno", "urano", "nettuno" };
 const char* const LANG_ID[SAVE_LANGS] = { "it", "en", "es", "pt", "zh", "ja", "hi" };
 
 enum Kind { K_SETTINGS, K_GAME };
 
-// Un file con le sue righe sconosciute e cio' che c'e' gia' sul disco.
+// A file with its unknown lines and what is already on disk.
 struct File {
   Kind kind;
   char path[300], tmp[310], bad[320];
-  char extra[MAX_EXTRA][LINE_LEN];  // "chiave=valore" che questa versione non conosce, nell'ordine del file
+  char extra[MAX_EXTRA][LINE_LEN];  // "key=value" that this version does not know, in file order
   int nextra;
-  bool backup;                      // file illeggibile: alla prima scrittura diventa NOME.illeggibile
-  bool failed;                      // l'ultima scrittura non e' riuscita (gia' scritto nel registro)
-  char last[OUT_LEN];               // contenuto gia' sul disco (scritto o letto): se non cambia non si riscrive
+  bool backup;                      // unreadable file: on the first write it becomes NAME.illeggibile
+  bool failed;                      // the last write failed (already written to the log)
+  char last[OUT_LEN];               // content already on disk (written or read): not rewritten if unchanged
   int last_n;
-  bool progress;                    // (impostazioni) c'erano chiavi della partita: file della 0.5.2
+  bool progress;                    // (settings) there were game keys: a 0.5.2 file
 };
 
-bool g_init;                        // g_data ha i valori predefiniti anche prima di save_open
+bool g_init;                        // g_data has the default values even before save_open
 SaveData g_data;
 char g_dir[256];
 char g_status[200], g_slot_status[200];
-File g_set, g_game;                 // impostazioni e partita attiva
-File g_scratch;                     // letture di prova (save_slot_peek) e copie
+File g_set, g_game;                 // settings and active game
+File g_scratch;                     // trial reads (save_slot_peek) and copies
 int g_active = -1;
-bool g_marker;                      // salvataggi=1: niente (piu') da prendere dal file della 0.5.2; 0 se non ci si e' riusciti
-bool g_full_logged;                 // troppe mappe: scritto una volta sola
+bool g_marker;                      // salvataggi=1: nothing (more) to take from the 0.5.2 file; 0 if that failed
+bool g_full_logged;                 // too many maps: logged only once
 char g_out[OUT_LEN];
 char g_slot_paths[SAVE_SLOTS][300];
 
 void defaults_settings(SaveData* d) {
   for (int i = 0; i < SAVE_PLAYERS; ++i) d->aim[i] = 1;
   d->antialias = 1;
-  d->music_vol = 6;   // 0.5: musiche nuove piu' leggere, sotto gli effetti
+  d->music_vol = 6;   // 0.5: new, lighter music, below the sound effects
   d->sfx_vol = 8;
   d->lang = 0;
 }
@@ -71,7 +71,7 @@ void defaults_game(SaveData* d) {
     d->giro[w] = 1;
   }
   d->name[0] = 0;
-  d->maps_open[0] = 1;                       // la prima mappa della Terra
+  d->maps_open[0] = 1;                       // the first map of Earth
   d->nmaps = 0;
   memset(d->maps, 0, sizeof(d->maps));
   d->seconds = 0;
@@ -93,7 +93,7 @@ SaveData& data(void) {
 
 int clampi(int v, int lo, int hi) { return v < lo ? lo : (v > hi ? hi : v); }
 
-// Intero con il segno facoltativo e nient'altro attorno; i valori enormi si fermano a +-1000000000.
+// Integer with an optional sign and nothing else around it; huge values stop at +-1000000000.
 bool parse_int(const char* s, long* out) {
   long sign = 1, v = 0;
   int n = 0;
@@ -115,7 +115,7 @@ bool valid_id(const char* s) {
   return true;
 }
 
-// Pianeta della chiave "prefisso.pianeta" (-1 se non e' uno dei pianeti).
+// Planet of the key "prefix.planet" (-1 if it is not one of the planets).
 int world_key(const char* k, const char* prefix) {
   const size_t n = strlen(prefix);
   if (strncmp(k, prefix, n)) return -1;
@@ -131,8 +131,8 @@ bool valid_key(const char* s) {
   return true;
 }
 
-// Nome di una partita in dst (SAVE_NAME_LEN byte): spazi attorno tolti, minuscole in maiuscole. false
-// (dst vuoto) se e' troppo lungo o ha caratteri che non vanno.
+// Name of a game into dst (SAVE_NAME_LEN bytes): surrounding spaces removed, lowercase to uppercase.
+// false (dst empty) if it is too long or has characters that are not allowed.
 bool clean_name(char* dst, const char* src) {
   char out[SAVE_NAME_LEN];
   while (*src == ' ') src++;
@@ -155,25 +155,25 @@ bool clean_name(char* dst, const char* src) {
   return true;
 }
 
-// Chiavi delle impostazioni (in un file di partita si ignorano).
+// Settings keys (ignored in a game file).
 bool settings_key(const char* k) {
   return !strcmp(k, "antialias") || !strcmp(k, "volume_musica") || !strcmp(k, "volume_effetti") || !strcmp(k, "lingua") ||
          !strcmp(k, "salvataggi") || (!strncmp(k, "mira.", 5) && k[5] >= '1' && k[5] < '1' + SAVE_PLAYERS && !k[6]);
 }
 
-// Chiavi di una partita (nel file delle impostazioni: quello della 0.5.2).
+// Keys of a game (in the settings file: the 0.5.2 one).
 bool game_key(const char* k) {
   return !strcmp(k, "storia_pianeti") || !strncmp(k, "mappe.", 6) || !strncmp(k, "giro.", 5) || !strncmp(k, "stelle.", 7);
 }
 
 SaveMap* find_map_in(SaveData& d, const char* id) {
-  d.nmaps = clampi(d.nmaps, 0, SAVE_MAX_MAPS);    // il gioco puo' cambiare i dati a mano
+  d.nmaps = clampi(d.nmaps, 0, SAVE_MAX_MAPS);    // the game can change the data by hand
   for (int i = 0; i < d.nmaps; ++i)
     if (!strncmp(d.maps[i].id, id, SAVE_ID_LEN)) return &d.maps[i];
   return 0;
 }
 
-// La mappa (id gia' controllato), aggiunta se manca; NULL se non c'e' piu' posto.
+// The map (id already checked), added if missing; NULL if there is no room left.
 SaveMap* add_map_in(SaveData& d, const char* id) {
   SaveMap* m = find_map_in(d, id);
   if (m || d.nmaps >= SAVE_MAX_MAPS) return m;
@@ -216,14 +216,14 @@ void reset_file(File* f, Kind kind) {
   f->last_n = -1;
 }
 
-// --- lettura ---------------------------------------------------------------------------
+// --- reading ---------------------------------------------------------------------------
 
 struct Reader {
   File* f;
   SaveData* d;
-  int ok, bad, dropped;      // righe usate, righe non valide, chiavi sconosciute senza posto
-  bool binary;               // caratteri di controllo: forse non e' un file di testo
-  bool first;                // la prima riga puo' cominciare con il BOM dei programmi di Windows
+  int ok, bad, dropped;      // lines used, invalid lines, unknown keys with no room
+  bool binary;               // control characters: maybe not a text file
+  bool first;                // the first line can start with the BOM of Windows programs
 };
 
 void keep_extra(Reader* r, const char* k, const char* v) {
@@ -236,7 +236,7 @@ void keep_extra(Reader* r, const char* k, const char* v) {
   r->ok++;
 }
 
-// Una riga del file, senza il ritorno a capo. broken: troppo lunga o con caratteri di controllo.
+// One line of the file, without the newline. broken: too long or with control characters.
 void read_line(Reader* r, char* s, bool broken) {
   if (r->first && (unsigned char)s[0] == 0xEF && (unsigned char)s[1] == 0xBB && (unsigned char)s[2] == 0xBF) s += 3;
   r->first = false;
@@ -296,7 +296,7 @@ void read_line(Reader* r, char* s, bool broken) {
       r->bad++;
       return;
     } else {
-      // Chiave di un'altra versione (anche i progressi della 0.5.2): si riscrive uguale.
+      // Key of another version (including the 0.5.2 progress): written back unchanged.
       if (game_key(k)) r->f->progress = true;
       keep_extra(r, k, v);
       return;
@@ -316,14 +316,14 @@ void read_line(Reader* r, char* s, bool broken) {
         r->bad++;
         return;
       }
-      add_map_in(d, k + 7)->stars |= (uint8_t)clampi((int)n, 0, 7);   // la stessa mappa due volte: si sommano
+      add_map_in(d, k + 7)->stars |= (uint8_t)clampi((int)n, 0, 7);   // the same map twice: they add up
       r->ok++;
       return;
     } else if (settings_key(k)) {
-      r->ok++;               // impostazioni in una partita (presa dal file della 0.5.2): non contano qui
+      r->ok++;               // settings in a game (taken from the 0.5.2 file): they do not count here
       return;
     } else {
-      keep_extra(r, k, v);   // chiave di un'altra versione (o stelle senza posto)
+      keep_extra(r, k, v);   // key of another version (or stars with no room)
       return;
     }
   }
@@ -339,7 +339,7 @@ void read_line(Reader* r, char* s, bool broken) {
   r->ok++;
 }
 
-// --- scrittura ---------------------------------------------------------------------------
+// --- writing -----------------------------------------------------------------------------
 
 struct Out { char* p; int n, cap; };
 
@@ -353,8 +353,8 @@ void put(Out* o, const char* fmt, ...) {
   if (k > 0) o->n = k < o->cap - o->n ? o->n + k : o->cap;
 }
 
-// Riporta nei limiti i dati (il gioco li cambia a mano) e prepara il contenuto del file.
-// -1 se non sta in cap (non succede: OUT_LEN basta per tutto quello che si puo' tenere).
+// Brings the data into range (the game edits it by hand) and prepares the file content.
+// -1 if it does not fit in cap (does not happen: OUT_LEN fits all that can be kept).
 int serialize(const File* f, SaveData& d, char* buf, int cap) {
   Out o = { buf, 0, cap };
   if (f->kind == K_SETTINGS) {
@@ -381,9 +381,9 @@ int serialize(const File* f, SaveData& d, char* buf, int cap) {
     put(&o, "%s", GAME_HEADER);
     put(&o, "versione=%d\n", SAVE_VERSION);
     d.name[SAVE_NAME_LEN - 1] = 0;
-    if (!clean_name(d.name, d.name)) d.name[0] = 0;      // il gioco lo scrive a mano: solo un nome valido
+    if (!clean_name(d.name, d.name)) d.name[0] = 0;      // the game writes it by hand: only a valid name
     if (d.name[0]) put(&o, "nome=%s\n", d.name);
-    // La Terra sempre, gli altri pianeti quando sono stati raggiunti.
+    // Earth always, the other planets once they have been reached.
     for (int w = 0; w < SAVE_WORLDS; ++w) {
       if (w > 0 && d.maps_open[w] == 0 && d.giro[w] <= 1) continue;
       put(&o, "mappe.%s=%d\n", WORLD_ID[w], d.maps_open[w]);
@@ -407,8 +407,8 @@ bool failed(File* f, const char* what, const char* path, int e) {
   return false;
 }
 
-// Anche la cartella sul disco, per il nome nuovo (sulla FAT e' la voce del file nella cartella).
-// Se il file system non lo permette pazienza: il file e' gia' intero.
+// The directory on disk too, for the new name (on FAT it is the file's entry in the directory).
+// If the file system does not allow it, never mind: the file is already whole.
 void sync_dir(void) {
   const int fd = open(g_dir, O_RDONLY | O_DIRECTORY);
   if (fd < 0) return;
@@ -416,13 +416,13 @@ void sync_dir(void) {
   close(fd);
 }
 
-// Scrive buf (n byte) come contenuto del file, in modo atomico.
+// Writes buf (n bytes) as the content of the file, atomically.
 bool write_bytes(File* f, const char* buf, int n) {
-  if (n == f->last_n && !memcmp(buf, f->last, (size_t)n)) return true;   // sul disco c'e' gia' questo
+  if (n == f->last_n && !memcmp(buf, f->last, (size_t)n)) return true;   // this is already on disk
   errno = 0;
   FILE* fp = fopen(f->tmp, "wb");
   int e = errno;
-  // RetroArch puo' dare la cartella del core non ancora creata: si crea (solo l'ultimo livello).
+  // RetroArch can give a core directory not created yet: it is created (only the last level).
   if (!fp && e == ENOENT && mkdir(g_dir, 0777) == 0) {
     fp = fopen(f->tmp, "wb");
     e = errno;
@@ -433,8 +433,8 @@ bool write_bytes(File* f, const char* buf, int n) {
     ok = false;
     e = errno;
   } else if (fsync(fileno(fp)) != 0 && errno != EINVAL) {
-    // I dati devono essere sulla scheda prima di rinominare: dopo uno spegnimento il file nuovo
-    // potrebbe esserci ma vuoto. EINVAL: file system senza fsync, si va avanti lo stesso.
+    // The data must be on the card before renaming: after a power-off the new file could be
+    // there but empty. EINVAL: file system without fsync, carry on anyway.
     ok = false;
     e = errno;
   }
@@ -447,7 +447,7 @@ bool write_bytes(File* f, const char* buf, int n) {
     return failed(f, "non riesco a scrivere", f->tmp, e);
   }
   if (f->backup) {
-    // Il file illeggibile non si perde: se non lo si riesce a mettere da parte non lo si sostituisce.
+    // The unreadable file is not lost: if it cannot be set aside it is not replaced.
     if (rename(f->path, f->bad) == 0) {
       plat_log("salvataggio: il file illeggibile resta come %s", f->bad);
     } else if (errno != ENOENT) {
@@ -481,9 +481,9 @@ bool write_file(File* f, SaveData& d) {
   return write_bytes(f, g_out, n);
 }
 
-// Il file c'e' ma non si e' potuto leggere tutto (errore della scheda, permessi): si riparte da capo,
-// senza nulla di quello che si e' letto fin li', e se e' un file vero e proprio alla prima scrittura
-// resta come NOME.illeggibile invece di sparire (una cartella con quel nome non si tocca).
+// The file exists but could not be read entirely (card error, permissions): start from scratch,
+// with nothing of what was read up to there, and if it is an actual file, on the first write it is
+// kept as NAME.illeggibile instead of disappearing (a directory with that name is not touched).
 int unreadable(File* f, int e, char* status, size_t slen) {
   struct stat st;
   f->nextra = 0;
@@ -498,7 +498,7 @@ int unreadable(File* f, int e, char* status, size_t slen) {
   return SAVE_ILLEGGIBILE;
 }
 
-// Legge il file f in d (solo le chiavi del suo tipo). status: com'e' andata. Restituisce SAVE_*.
+// Reads file f into d (only the keys of its kind). status: how it went. Returns SAVE_*.
 int read_file(File* f, SaveData* d, char* status, size_t slen, bool remember) {
   errno = 0;
   FILE* fp = fopen(f->path, "rb");
@@ -510,7 +510,7 @@ int read_file(File* f, SaveData* d, char* status, size_t slen, bool remember) {
     }
     return unreadable(f, e, status, slen);
   }
-  // A pezzi, una riga alla volta: un file troncato, binario o enorme non rompe nulla.
+  // In chunks, one line at a time: a truncated, binary or huge file breaks nothing.
   static char chunk[4096];
   char line[LINE_LEN];
   int len_l = 0, total = 0;
@@ -539,8 +539,8 @@ int read_file(File* f, SaveData* d, char* status, size_t slen, bool remember) {
   const int read_errno = ferror(fp) ? (errno ? errno : EIO) : 0;
   const bool more = !read_errno && total >= MAX_READ && fgetc(fp) != EOF;
   fclose(fp);
-  if (read_errno) return unreadable(f, read_errno, status, slen);   // anche a meta' del file
-  if (len_l > 0 || broken) {               // ultima riga senza a capo (o tagliata qui sopra)
+  if (read_errno) return unreadable(f, read_errno, status, slen);   // even halfway through the file
+  if (len_l > 0 || broken) {               // last line without a newline (or cut off above)
     line[len_l] = 0;
     read_line(&r, line, broken || more);
   }
@@ -561,12 +561,12 @@ int read_file(File* f, SaveData* d, char* status, size_t slen, bool remember) {
   if (r.bad > 0) n += snprintf(status + n, slen - (size_t)n, ", righe non valide ignorate: %d%s", r.bad, r.binary ? " (caratteri non di testo)" : "");
   if (r.dropped > 0 && n < (int)slen) n += snprintf(status + n, slen - (size_t)n, ", voci sconosciute di troppo perse: %d", r.dropped);
   if (more) {
-    f->backup = true;                      // il resto non si perde: alla prima scrittura il file intero resta da parte
+    f->backup = true;                      // the rest is not lost: on the first write the whole file is set aside
     if (n < (int)slen) n += snprintf(status + n, slen - (size_t)n, ", file troppo grande: letto solo l'inizio (resta come %.60s.illeggibile)", name);
   }
   if (d->version > SAVE_VERSION && n < (int)slen)
     snprintf(status + n, slen - (size_t)n, ", scritto da una versione piu' nuova del gioco (formato %d)", d->version);
-  if (remember) f->last_n = serialize(f, *d, f->last, OUT_LEN);   // i dati letti sono gia' sul disco
+  if (remember) f->last_n = serialize(f, *d, f->last, OUT_LEN);   // the data read are already on disk
   return SAVE_LETTO;
 }
 
@@ -577,35 +577,35 @@ bool file_exists(const char* path) {
   return stat(path, &st) == 0;
 }
 
-// Dalla 0.5.2: i progressi rimasti in pupazzi.sav diventano la partita 1, una volta sola e solo se
-// non c'e' ancora nessuna partita. g_marker resta false (salvataggi=0) solo se non ci si e' riusciti:
-// si riprova al prossimo avvio.
+// From 0.5.2: the progress left in pupazzi.sav becomes game 1, only once and only if there is no
+// game yet. g_marker stays false (salvataggi=0) only if that failed: it is retried at the next
+// startup.
 void migrate(void) {
   if (g_marker) return;
   g_marker = true;
-  if (!g_set.progress) return;                       // niente da prendere
+  if (!g_set.progress) return;                       // nothing to take
   for (int i = 0; i < SAVE_SLOTS; ++i)
-    if (file_exists(g_slot_paths[i])) return;        // ci sono gia' partite: i progressi vecchi restano dove sono
+    if (file_exists(g_slot_paths[i])) return;        // there are games already: the old progress stays where it is
   g_marker = false;
   static SaveData tmp;
   defaults(&tmp);
   reset_file(&g_scratch, K_GAME);
-  snprintf(g_scratch.path, sizeof(g_scratch.path), "%s", g_set.path);   // si legge pupazzi.sav come partita
+  snprintf(g_scratch.path, sizeof(g_scratch.path), "%s", g_set.path);   // pupazzi.sav is read as a game
   char st[200];
   if (read_file(&g_scratch, &tmp, st, sizeof(st), false) != SAVE_LETTO) {
     plat_log("salvataggio: non riesco a rileggere i progressi della versione di prima (%s), riprovo al prossimo avvio", st);
     return;
   }
-  // Le chiavi sconosciute lette (mappe_sbloccate della 0.4...) vanno nella partita con il resto.
+  // The unknown keys read (mappe_sbloccate from 0.4...) go into the game with the rest.
   snprintf(g_scratch.path, sizeof(g_scratch.path), "%s", g_slot_paths[0]);
   snprintf(g_scratch.tmp, sizeof(g_scratch.tmp), "%s.tmp", g_slot_paths[0]);
   snprintf(g_scratch.bad, sizeof(g_scratch.bad), "%s.illeggibile", g_slot_paths[0]);
-  g_scratch.backup = false;                          // riguardava pupazzi.sav, che resta com'e'
+  g_scratch.backup = false;                          // it was about pupazzi.sav, which stays as it is
   g_scratch.last_n = -1;
-  if (!write_file(&g_scratch, tmp)) return;          // gia' nel registro; salvataggi=0, si riprova
+  if (!write_file(&g_scratch, tmp)) return;          // already in the log; salvataggi=0, it is retried
   plat_log("salvataggio: i progressi della versione di prima sono la partita 1 (%s)", g_slot_paths[0]);
   g_marker = true;
-  // Si riscrive anche se in memoria nulla e' cambiato: sul disco manca ancora salvataggi=1.
+  // Rewritten even if nothing changed in memory: salvataggi=1 is still missing on disk.
   g_set.last_n = -1;
   write_file(&g_set, g_data);
 }
@@ -646,7 +646,7 @@ int save_open(const char* dir) {
   } else {
     defaults_settings(&g_data);
     g_data.version = 0;
-    g_marker = true;                       // nel file nuovo non ci sono progressi vecchi da prendere
+    g_marker = true;                       // in the new file there is no old progress to take
   }
   return st;
 }
@@ -687,7 +687,7 @@ void save_add_stars(const char* map_id, uint8_t bits) {
 void save_set_stars(const char* map_id, uint8_t bits) {
   if (!valid_id(map_id)) return;
   SaveMap* m = find_map_in(data(), map_id);
-  if (!m && bits == 0) return;            // 0 stelle: come se la mappa non ci fosse
+  if (!m && bits == 0) return;            // 0 stars: as if the map were not there
   if (!m) m = add_map_in(data(), map_id);
   if (m) m->stars = (uint8_t)(bits & 7u);
 }
@@ -719,7 +719,7 @@ int save_slot_peek(int i, SaveData* out) {
 
 bool save_slot_load(int i) {
   if (!slot_ok(i)) return false;
-  if (g_active >= 0) write_file(&g_game, data());   // quella di prima non perde nulla
+  if (g_active >= 0) write_file(&g_game, data());   // the previous one loses nothing
   SaveData& d = data();
   defaults_game(&d);
   reset_file(&g_game, K_GAME);
@@ -760,7 +760,7 @@ bool save_slot_rename(int i, const char* name) {
     memcpy(data().name, nm, sizeof(nm));
     ok = write_file(&g_game, data());
   } else {
-    // Un'altra partita: la si rilegge (chiavi sconosciute comprese) e la si riscrive col nome nuovo.
+    // Another game: it is read again (unknown keys included) and rewritten with the new name.
     static SaveData tmp;
     defaults(&tmp);
     reset_file(&g_scratch, K_GAME);
@@ -790,7 +790,7 @@ bool save_slot_copy(int from, int to) {
   const size_t n = fread(buf, 1, sizeof(buf), fp);
   const bool bad = ferror(fp) != 0, big = !bad && fgetc(fp) != EOF;
   fclose(fp);
-  if (n == 0 || bad || big) return false;         // mai una copia a meta'
+  if (n == 0 || bad || big) return false;         // never a half-done copy
   reset_file(&g_scratch, K_GAME);
   snprintf(g_scratch.path, sizeof(g_scratch.path), "%s", g_slot_paths[to]);
   snprintf(g_scratch.tmp, sizeof(g_scratch.tmp), "%s.tmp", g_slot_paths[to]);
@@ -798,8 +798,8 @@ bool save_slot_copy(int from, int to) {
   const bool ok = write_bytes(&g_scratch, buf, (int)n);
   if (ok) {
     plat_log("salvataggio: partita %d copiata nella %d", from + 1, to + 1);
-    if (to == g_active) {                      // non succede dal menu (si copia in un posto libero)
-      g_active = -1;                           // la copia vale piu' dei dati in memoria
+    if (to == g_active) {                      // does not happen from the menu (copies go to a free slot)
+      g_active = -1;                           // the copy wins over the data in memory
       save_slot_load(to);
     }
   }
@@ -827,7 +827,7 @@ bool save_slot_delete(int i) {
 
 void save_guest_begin(void) {
   if (g_active >= 0) {
-    write_file(&g_game, data());       // quella attiva non perde nulla
+    write_file(&g_game, data());       // the active one loses nothing
     plat_log("salvataggio: partita %d messa da parte (si gioca con i progressi di chi ha creato la partita in rete)", g_active + 1);
   }
   g_active = -1;

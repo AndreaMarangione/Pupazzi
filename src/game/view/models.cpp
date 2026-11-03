@@ -1,7 +1,7 @@
-// Modelli in stile cartone, costruiti con forme arrotondate (ellissoidi, cilindri, scatole
-// smussate) e un contorno scuro a "scafo rovesciato". Tutti guardano verso +Z, origine ai piedi.
-// Dalla 0.5: gli eroi del sistema solare, i mostri e il boss della Terra, la capsula con
-// l'esploratore, i colpi nuovi (fucilone, razzi, cristalli di luna, ghiaccio secco, giavellotti).
+// Cartoon-style models, built from rounded shapes (ellipsoids, cylinders, beveled boxes) and a
+// dark "inverted hull" outline. They all face +Z, origin at the feet.
+// Since 0.5: the heroes of the solar system, the monsters and the boss of the Earth, the capsule
+// with the explorer, the new shots (big rifle, rockets, moon crystals, dry ice, javelins).
 #include "game/view/models.h"
 #include <string.h>
 
@@ -24,11 +24,11 @@ uint32_t rgb_mix(uint32_t a, uint32_t b, float t) {
 
 namespace {
 
-const uint32_t INK = 0x1B1622;        // contorno di personaggi e mostri
-const float OL = 0.03f;               // spessore del contorno
+const uint32_t INK = 0x1B1622;        // outline of characters and monsters
+const float OL = 0.03f;               // outline thickness
 
-MeshBuilder B;                        // costruttore in uso
-int g_mark;                           // primo triangolo ancora senza contorno
+MeshBuilder B;                        // builder in use
+int g_mark;                           // first triangle still without outline
 
 void begin(void) { mb_init(&B); g_mark = 0; }
 Mesh end(void) { return mb_finish(&B); }
@@ -47,20 +47,20 @@ void bbox(float x0, float y0, float z0, float x1, float y1, float z1, float bev,
   if (bev > 0.0f) mb_bevel_box(&B, v3(x0, y0, z0), v3(x1, y1, z1), bev, c);
   else mb_box(&B, v3(x0, y0, z0), v3(x1, y1, z1), c);
 }
-// Cilindro o cono (r1 = 0) dalla base lungo la direzione dir.
+// Cylinder or cone (r1 = 0) from the base along direction dir.
 void cyl(Vec3 base, Vec3 dir, float r0, float r1, float len, uint32_t c, int seg = 6) {
   const int fv = B.nv, ft = B.nt;
   mb_cylinder(&B, v3(0, 0, 0), r0, r1, len, seg, c);
   mb_apply(&B, fv, ft, xf_mul(xf_translate(base), xf_align_y(normalize(dir))));
 }
 void cone(Vec3 base, Vec3 dir, float r, float len, uint32_t c, int seg = 5) { cyl(base, dir, r, 0.0f, len, c, seg); }
-// Ellissoide ruotato: semiassi r lungo gli assi locali, poi la rotazione rot.
+// Rotated ellipsoid: semi-axes r along the local axes, then the rotation rot.
 void ell_rot(Vec3 c, Vec3 r, const Xform& rot, uint32_t col, int su = 6, int sv = 4) {
   const int fv = B.nv, ft = B.nt;
   mb_ellipsoid(&B, v3(0, 0, 0), r, su, sv, col);
   mb_apply(&B, fv, ft, xf_mul(xf_translate(c), rot));
 }
-// Prisma aperto (senza basi) da a a b, per sbarre e fili: le estremita' finiscono dentro altri pezzi.
+// Open prism (no caps) from a to b, for bars and wires: the ends finish inside other pieces.
 void tube(Vec3 a, Vec3 b, float r, uint32_t c, int seg = 6) {
   const int fv = B.nv, ft = B.nt;
   const float len = length(b - a);
@@ -75,26 +75,26 @@ void tube(Vec3 a, Vec3 b, float r, uint32_t c, int seg = 6) {
   }
   mb_apply(&B, fv, ft, xf_mul(xf_translate(a), xf_align_y(normalize(b - a))));
 }
-// Parallelepipedo di semilati h centrato in c, ruotato da rot.
+// Box with half-sizes h centered at c, rotated by rot.
 void box_rot(Vec3 c, Vec3 h, const Xform& rot, uint32_t col, float bev = 0.0f) {
   const int fv = B.nv, ft = B.nt;
   bbox(-h.x, -h.y, -h.z, h.x, h.y, h.z, bev, col);
   mb_apply(&B, fv, ft, xf_mul(xf_translate(c), rot));
 }
-// Puntino di luce da cartone (occhi, vetri, metalli): bianco e senza luce.
+// Cartoon highlight dot (eyes, glass, metals): white and unlit.
 void shine(float x, float y, float z, float r, uint32_t c = 0xFFFFFF) {
   unlit(true);
   ell(x, y, z, r, r, r * 0.5f, c, 4, 2);
   unlit(false);
 }
-// Occhio da cartone: bianco con la pupilla e il puntino di luce, rivolto verso +Z.
+// Cartoon eye: white with the pupil and the highlight dot, facing +Z.
 void eye(float x, float y, float z, float r, float pupil, uint32_t white = 0xFFFFFF, uint32_t pup = 0x1A1520, bool hi = true) {
   ell(x, y, z, r, r * 1.15f, r * 0.6f, white, 6, 4);
   ell(x, y - r * 0.1f, z + r * 0.45f, pupil, pupil * 1.2f, pupil * 0.6f, pup, 5, 3);
   if (hi) shine(x - pupil * 0.35f, y + pupil * 0.3f, z + r * 0.45f + pupil * 0.62f, pupil * 0.36f);
 }
 
-// Triangolo rivolto lontano da ctr (verso ctr se in = true).
+// Triangle facing away from ctr (toward ctr if in = true).
 void tri_from(int i0, int i1, int i2, Vec3 ctr, uint32_t c, bool in = false) {
   const Vec3 n = cross(B.v[i1] - B.v[i0], B.v[i2] - B.v[i0]);
   const Vec3 mid = (B.v[i0] + B.v[i1] + B.v[i2]) * (1.0f / 3.0f);
@@ -103,8 +103,8 @@ void tri_from(int i0, int i1, int i2, Vec3 ctr, uint32_t c, bool in = false) {
   else mb_tri(&B, i0, i2, i1, c);
 }
 
-// Guscio di ellissoide con un'apertura rotonda attorno alla direzione hole (coseno dell'apertura
-// hc; hc > 1: nessuna apertura). in = true: la parete di dentro, che si vede dall'apertura.
+// Ellipsoid shell with a round opening around the direction hole (cosine of the opening hc;
+// hc > 1: no opening). in = true: the inner wall, which is seen through the opening.
 void shell(Vec3 c, Vec3 r, int su, int sv, Vec3 hole, float hc, uint32_t col, bool in) {
   const int first = B.nv;
   for (int k = 0; k <= sv; ++k) {
@@ -120,12 +120,12 @@ void shell(Vec3 c, Vec3 r, int su, int sv, Vec3 hole, float hc, uint32_t col, bo
       const int a = first + k * su + j, b = first + k * su + j1, cc = first + (k + 1) * su + j1, d = first + (k + 1) * su + j;
       const Vec3 mid = (B.v[a] + B.v[b] + B.v[cc] + B.v[d]) * 0.25f - c;
       if (dot(normalize(v3(mid.x / r.x, mid.y / r.y, mid.z / r.z)), hole) > hc) continue;
-      if (k > 0) tri_from(a, b, cc, c, col, in);            // al polo i primi due vertici coincidono
+      if (k > 0) tri_from(a, b, cc, c, col, in);            // at the pole the first two vertices coincide
       if (k < sv - 1) tri_from(a, cc, d, c, col, in);
     }
 }
 
-// Ciambella attorno all'asse Y locale (raggio R, spessore rt), portata da xf.
+// Torus around the local Y axis (radius R, thickness rt), placed by xf.
 void torus(const Xform& xf, float R, float rt, int su, int sv, uint32_t col) {
   const int fv = B.nv, ft = B.nt;
   for (int j = 0; j < su; ++j) {
@@ -148,7 +148,7 @@ void torus(const Xform& xf, float R, float rt, int su, int sv, uint32_t col) {
   mb_apply(&B, fv, ft, xf);
 }
 
-// Poligono convesso (x, y) estruso lungo Z da z0 a z1, portato da xf.
+// Convex polygon (x, y) extruded along Z from z0 to z1, placed by xf.
 void prism(const float (*p)[2], int n, float z0, float z1, const Xform& xf, uint32_t col) {
   const int fv = B.nv, ft = B.nt;
   float cx = 0.0f, cy = 0.0f;
@@ -172,8 +172,8 @@ void prism(const float (*p)[2], int n, float z0, float z1, const Xform& xf, uint
   mb_apply(&B, fv, ft, xf);
 }
 
-// Lama a sezione di rombo lungo +Z: dalla base (z0, mezza larghezza w0) alla punta in z2,
-// larghezza w1 in z1, spessore della costola h (lungo X). Due toni di luce: si legge come metallo.
+// Blade with a rhombus cross-section along +Z: from the base (z0, half width w0) to the tip at z2,
+// width w1 at z1, spine thickness h (along X). Two tones of light: it reads as metal.
 void blade(float z0, float w0, float z1, float w1, float z2, float h, const Xform& xf, uint32_t col) {
   const int fv = B.nv, ft = B.nt;
   const float zs[2] = { z0, z1 }, ws[2] = { w0, w1 };
@@ -197,10 +197,10 @@ void blade(float z0, float w0, float z1, float w1, float z2, float h, const Xfor
   mb_apply(&B, fv, ft, xf);
 }
 
-// Superficie di rotazione chiusa ai due capi (il primo e l'ultimo punto del profilo hanno raggio 0):
-// pr[k] = (y, raggio); l'asse si piega di (bx, bz) con il quadrato dell'altezza sopra y_bend (la punta
-// della fiamma che si arriccia); zk schiaccia le sezioni lungo Z. Portata da xf. cols (se c'e'): un
-// colore per ogni fascia tra due punti del profilo (n - 1), per le sfumature a gradini.
+// Surface of revolution closed at both ends (the first and the last point of the profile have
+// radius 0): pr[k] = (y, radius); the axis bends by (bx, bz) with the square of the height above
+// y_bend (the tip of the flame that curls); zk squashes the sections along Z. Placed by xf. cols (if
+// given): one color for each band between two points of the profile (n - 1), for stepped shading.
 void lathe(const float (*pr)[2], int n, int seg, float bx, float bz, float y_bend, float zk, const Xform& xf, uint32_t col,
            const uint32_t* cols = 0) {
   const int fv = B.nv, ft = B.nt;
@@ -247,34 +247,34 @@ Mesh flat_disc(float r, int seg, uint32_t c, float y = 0.02f) {
   return end();
 }
 
-// --- eroi -------------------------------------------------------------------------
+// --- heroes -----------------------------------------------------------------------
 
-// ASTRO, astronauta della Terra (equilibrato): tuta bianca imbottita con i dettagli arancio e blu,
-// casco tondo con la visiera dorata, zainetto con le bombole, stivali lunari; il fucilone fa
-// parte del braccio destro e punta avanti quando il braccio si alza. Colore del giocatore:
-// spalline, cintura e la striscia sul casco (si vede bene dall'alto).
+// ASTRO, astronaut from Earth (balanced): padded white suit with orange and blue details, round
+// helmet with the golden visor, small backpack with the tanks, moon boots; the big rifle is part
+// of the right arm and points forward when the arm is raised. Player color: shoulder pads, belt
+// and the stripe on the helmet (clearly visible from above).
 void build_astro(CharMesh& m) {
   const uint32_t suit = 0xF2F4F8, suit2 = 0xC9D2DE, orange = 0xFF8126, blue = 0x2E6BD6, visor = 0xF7B53A;
   const uint32_t boot = 0xD5DCE6, sole = 0x3B4250, gun = 0x4A5562, gun2 = 0x2C333C, cell = 0x7CF4FF;
   m.sh_x = 0.29f; m.sh_y = 0.80f; m.hip_x = 0.12f; m.hip_y = 0.36f; m.arm_len = 0.40f; m.top = 1.5f;
   m.rest_r = -1.05f; m.swing_r = 0.2f;
   begin();
-  ell(0, 0.62f, 0, 0.28f, 0.31f, 0.235f, suit, 8, 5);               // tuta: y 0.31..0.93
-  bbox(-0.19f, 0.47f, -0.35f, 0.19f, 0.9f, -0.13f, 0.06f, suit2);     // zainetto
-  cyl(v3(-0.1f, 0.5f, -0.37f), v3(0, 1, 0), 0.055f, 0.055f, 0.36f, orange, 6);   // bombole
+  ell(0, 0.62f, 0, 0.28f, 0.31f, 0.235f, suit, 8, 5);               // suit: y 0.31..0.93
+  bbox(-0.19f, 0.47f, -0.35f, 0.19f, 0.9f, -0.13f, 0.06f, suit2);     // backpack
+  cyl(v3(-0.1f, 0.5f, -0.37f), v3(0, 1, 0), 0.055f, 0.055f, 0.36f, orange, 6);   // tanks
   cyl(v3(0.1f, 0.5f, -0.37f), v3(0, 1, 0), 0.055f, 0.055f, 0.36f, orange, 6);
-  ell(0, 1.15f, 0, 0.32f, 0.30f, 0.31f, suit, 10, 5);               // casco: y 0.85..1.45
+  ell(0, 1.15f, 0, 0.32f, 0.30f, 0.31f, suit, 10, 5);               // helmet: y 0.85..1.45
   outline();
-  cyl(v3(0, 0.84f, 0), v3(0, 1, 0), 0.215f, 0.2f, 0.08f, orange, 8);   // anello del collo
-  cyl(v3(-0.3f, 1.15f, 0), v3(-1, 0, 0), 0.085f, 0.085f, 0.05f, blue, 6);   // dischi ai lati del casco
+  cyl(v3(0, 0.84f, 0), v3(0, 1, 0), 0.215f, 0.2f, 0.08f, orange, 8);   // neck ring
+  cyl(v3(-0.3f, 1.15f, 0), v3(-1, 0, 0), 0.085f, 0.085f, 0.05f, blue, 6);   // discs on the helmet sides
   cyl(v3(0.3f, 1.15f, 0), v3(1, 0, 0), 0.085f, 0.085f, 0.05f, blue, 6);
-  torus(xf_mul(xf_translate(v3(0, 1.13f, 0.222f)), xf_rot_x(D_HALF_PI)), 0.205f, 0.034f, 12, 4, blue);   // bordo della visiera
-  ell(0, 1.13f, 0.155f, 0.21f, 0.2f, 0.17f, visor, 10, 5);          // visiera dorata
+  torus(xf_mul(xf_translate(v3(0, 1.13f, 0.222f)), xf_rot_x(D_HALF_PI)), 0.205f, 0.034f, 12, 4, blue);   // visor rim
+  ell(0, 1.13f, 0.155f, 0.21f, 0.2f, 0.17f, visor, 10, 5);          // golden visor
   unlit(true);
-  ell_rot(v3(-0.085f, 1.215f, 0.292f), v3(0.07f, 0.02f, 0.02f), xf_rot_z(0.55f), 0xFFFFFF, 5, 2);   // riflessi
+  ell_rot(v3(-0.085f, 1.215f, 0.292f), v3(0.07f, 0.02f, 0.02f), xf_rot_z(0.55f), 0xFFFFFF, 5, 2);   // reflections
   ell(0.1f, 1.055f, 0.3f, 0.022f, 0.022f, 0.012f, 0xFFF6D8, 4, 2);
   unlit(false);
-  bbox(-0.11f, 0.53f, 0.17f, 0.11f, 0.73f, 0.25f, 0.0f, suit2);      // pannello sul petto
+  bbox(-0.11f, 0.53f, 0.17f, 0.11f, 0.73f, 0.25f, 0.0f, suit2);      // chest panel
   ball(-0.05f, 0.665f, 0.252f, 0.026f, 0xE8463C, 4, 3);
   ball(0.04f, 0.665f, 0.252f, 0.026f, blue, 4, 3);
   bbox(-0.07f, 0.565f, 0.245f, 0.07f, 0.595f, 0.258f, 0.0f, orange);
@@ -283,29 +283,29 @@ void build_astro(CharMesh& m) {
 
   for (int s = 0; s < 2; ++s) {
     begin();
-    ell(0, -0.14f, 0, 0.09f, 0.17f, 0.09f, suit, 6, 4);            // manica imbottita
-    cyl(v3(0, -0.29f, 0), v3(0, -1, 0), 0.088f, 0.088f, 0.05f, orange, 6);   // polsino
-    ell(0, -0.385f, 0.01f, 0.085f, 0.08f, 0.085f, blue, 5, 4);     // guanto
+    ell(0, -0.14f, 0, 0.09f, 0.17f, 0.09f, suit, 6, 4);            // padded sleeve
+    cyl(v3(0, -0.29f, 0), v3(0, -1, 0), 0.088f, 0.088f, 0.05f, orange, 6);   // cuff
+    ell(0, -0.385f, 0.01f, 0.085f, 0.08f, 0.085f, blue, 5, 4);     // glove
     outline();
     if (s == 1) {
-      // Fucilone: costruito con la canna verso +Z e il sopra verso +Y (impugnatura nell'origine),
-      // poi portato nel braccio: canna lungo il braccio (verso -Y), sopra verso +Z, un po' verso
-      // il corpo (i colpi partono dal centro).
+      // Big rifle: built with the barrel toward +Z and the top toward +Y (grip at the origin),
+      // then moved into the arm: barrel along the arm (toward -Y), top toward +Z, slightly toward
+      // the body (the shots start from the center).
       const Xform rf = xf_mul(xf_translate(v3(0, -0.385f, 0.0f)), xf_mul(xf_rot_z(-0.16f), xf_rot_x(D_HALF_PI)));
       int fv = B.nv, ft = B.nt;
-      bbox(-0.07f, 0.03f, -0.16f, 0.07f, 0.19f, 0.3f, 0.04f, gun);          // corpo
-      bbox(-0.05f, 0.03f, -0.38f, 0.05f, 0.16f, -0.14f, 0.0f, orange);      // calcio
-      cyl(v3(0, 0.11f, 0.28f), v3(0, 0, 1), 0.06f, 0.06f, 0.2f, gun2, 6);    // canna
-      cyl(v3(0, 0.11f, 0.46f), v3(0, 0, 1), 0.08f, 0.08f, 0.07f, orange, 6); // bocca
-      bbox(-0.035f, -0.12f, -0.07f, 0.035f, 0.05f, 0.03f, 0.0f, gun2);      // impugnatura
+      bbox(-0.07f, 0.03f, -0.16f, 0.07f, 0.19f, 0.3f, 0.04f, gun);          // body
+      bbox(-0.05f, 0.03f, -0.38f, 0.05f, 0.16f, -0.14f, 0.0f, orange);      // stock
+      cyl(v3(0, 0.11f, 0.28f), v3(0, 0, 1), 0.06f, 0.06f, 0.2f, gun2, 6);    // barrel
+      cyl(v3(0, 0.11f, 0.46f), v3(0, 0, 1), 0.08f, 0.08f, 0.07f, orange, 6); // muzzle
+      bbox(-0.035f, -0.12f, -0.07f, 0.035f, 0.05f, 0.03f, 0.0f, gun2);      // grip
       mb_apply(&B, fv, ft, rf);
       outline(0.025f);
       fv = B.nv; ft = B.nt;
       unlit(true);
-      cyl(v3(0, 0.19f, -0.1f), v3(0, 0, 1), 0.045f, 0.045f, 0.28f, cell, 6);   // cella di energia accesa
+      cyl(v3(0, 0.19f, -0.1f), v3(0, 0, 1), 0.045f, 0.045f, 0.28f, cell, 6);   // glowing energy cell
       unlit(false);
-      bbox(-0.075f, 0.085f, 0.06f, 0.075f, 0.125f, 0.24f, 0.0f, orange);    // strisce ai lati
-      bbox(-0.015f, 0.19f, 0.2f, 0.015f, 0.25f, 0.26f, 0.0f, gun2);         // mirino
+      bbox(-0.075f, 0.085f, 0.06f, 0.075f, 0.125f, 0.24f, 0.0f, orange);    // side stripes
+      bbox(-0.015f, 0.19f, 0.2f, 0.015f, 0.25f, 0.26f, 0.0f, gun2);         // sight
       mb_apply(&B, fv, ft, rf);
       skip_outline();
       m.tip = xf_point(rf, v3(0, 0.11f, 0.56f));
@@ -314,51 +314,51 @@ void build_astro(CharMesh& m) {
   }
   begin();
   cyl(v3(0, 0, 0), v3(0, -1, 0), 0.095f, 0.09f, 0.2f, suit, 6);
-  ell(0, -0.255f, 0.035f, 0.115f, 0.1f, 0.15f, boot, 6, 4);           // stivale lunare
+  ell(0, -0.255f, 0.035f, 0.115f, 0.1f, 0.15f, boot, 6, 4);           // moon boot
   bbox(-0.105f, -0.36f, -0.1f, 0.105f, -0.31f, 0.18f, 0.0f, sole);
   outline();
-  ell(0, -0.2f, 0.03f, 0.105f, 0.03f, 0.13f, orange, 6, 2);           // fascia arancio
+  ell(0, -0.2f, 0.03f, 0.105f, 0.03f, 0.13f, orange, 6, 2);           // orange band
   skip_outline();
   m.leg = end();
   for (int i = 0; i < 4; ++i) {
     const uint32_t c = PLAYER_RGB[i];
     begin();
-    ell(-0.28f, 0.84f, 0, 0.115f, 0.075f, 0.125f, c, 6, 3);          // spalline
+    ell(-0.28f, 0.84f, 0, 0.115f, 0.075f, 0.125f, c, 6, 3);          // shoulder pads
     ell(0.28f, 0.84f, 0, 0.115f, 0.075f, 0.125f, c, 6, 3);
-    ell(0, 0.43f, 0, 0.235f, 0.05f, 0.2f, c, 8, 2);                   // cintura
-    ell(0, 1.19f, -0.03f, 0.06f, 0.28f, 0.3f, c, 5, 6);               // striscia sul casco
+    ell(0, 0.43f, 0, 0.235f, 0.05f, 0.2f, c, 8, 2);                   // belt
+    ell(0, 1.19f, -0.03f, 0.06f, 0.28f, 0.3f, c, 5, 6);               // stripe on the helmet
     outline();
     m.accent[i] = end();
   }
 }
 
-// MOCHI, coniglio della Luna (resistente): tondo e morbido, lilla chiarissimo con la pancia
-// bianca, orecchie lunghe (quella piegata e' a parte e ballonzola), occhioni, naso rosa, borsetta
-// con un cristallo di luna. Colore del giocatore: sciarpa (con la coda dietro) e fiocco sull'orecchio.
+// MOCHI, rabbit from the Moon (tough): round and soft, very light lilac with a white belly, long
+// ears (the bent one is separate and bobs), big eyes, pink nose, small bag with a moon crystal.
+// Player color: scarf (with its tail at the back) and bow on the ear.
 void build_mochi(CharMesh& m) {
   const uint32_t fur = 0xE0D0FA, belly = 0xFFFFFF, pink = 0xF7A9CB, nose = 0xF0719F, pupil = 0x3B2257;
   const uint32_t bag = 0x6A57B8, strap = 0x8F74D8, crystal = 0xD6C8FF, cheek = 0xF6A0BE;
   m.sh_x = 0.27f; m.sh_y = 0.62f; m.hip_x = 0.15f; m.hip_y = 0.17f; m.arm_len = 0.27f; m.top = 1.6f;
   m.rest_r = 0.0f; m.swing_r = 0.9f;
   begin();
-  ell(0, 0.43f, 0, 0.34f, 0.36f, 0.31f, fur, 8, 5);                  // corpo: y 0.07..0.79
-  ell(0, 0.97f, 0.02f, 0.31f, 0.27f, 0.28f, fur, 9, 6);              // testa: y 0.70..1.24
-  ell_rot(v3(-0.12f, 1.42f, -0.03f), v3(0.075f, 0.24f, 0.055f), xf_rot_z(0.14f), fur, 6, 5);   // orecchio dritto
-  ell_rot(v3(0.115f, 1.32f, -0.03f), v3(0.072f, 0.14f, 0.053f), xf_rot_z(-0.18f), fur, 6, 4);   // base dell'orecchio piegato
-  ball(0, 0.33f, -0.31f, 0.1f, belly, 5, 3);                          // codino
-  bbox(0.24f, 0.24f, -0.07f, 0.38f, 0.44f, 0.11f, 0.0f, bag);         // borsetta
+  ell(0, 0.43f, 0, 0.34f, 0.36f, 0.31f, fur, 8, 5);                  // body: y 0.07..0.79
+  ell(0, 0.97f, 0.02f, 0.31f, 0.27f, 0.28f, fur, 9, 6);              // head: y 0.70..1.24
+  ell_rot(v3(-0.12f, 1.42f, -0.03f), v3(0.075f, 0.24f, 0.055f), xf_rot_z(0.14f), fur, 6, 5);   // upright ear
+  ell_rot(v3(0.115f, 1.32f, -0.03f), v3(0.072f, 0.14f, 0.053f), xf_rot_z(-0.18f), fur, 6, 4);   // base of the bent ear
+  ball(0, 0.33f, -0.31f, 0.1f, belly, 5, 3);                          // little tail
+  bbox(0.24f, 0.24f, -0.07f, 0.38f, 0.44f, 0.11f, 0.0f, bag);         // small bag
   outline();
-  ell(0, 0.40f, 0.12f, 0.25f, 0.27f, 0.21f, belly, 8, 4);             // pancia bianca
-  ell_rot(v3(-0.115f, 1.43f, 0.008f), v3(0.042f, 0.18f, 0.028f), xf_rot_z(0.14f), pink, 5, 3);   // dentro l'orecchio
+  ell(0, 0.40f, 0.12f, 0.25f, 0.27f, 0.21f, belly, 8, 4);             // white belly
+  ell_rot(v3(-0.115f, 1.43f, 0.008f), v3(0.042f, 0.18f, 0.028f), xf_rot_z(0.14f), pink, 5, 3);   // inside of the ear
   ell_rot(v3(0.11f, 1.33f, 0.008f), v3(0.04f, 0.1f, 0.026f), xf_rot_z(-0.18f), pink, 5, 3);
   eye(-0.115f, 1.0f, 0.252f, 0.085f, 0.058f, 0xFFFFFF, pupil);
   eye(0.115f, 1.0f, 0.252f, 0.085f, 0.058f, 0xFFFFFF, pupil);
   ell(0, 0.915f, 0.293f, 0.038f, 0.026f, 0.022f, nose, 5, 3);
-  ell(0, 0.878f, 0.283f, 0.042f, 0.009f, 0.012f, pupil, 5, 2);        // bocca
-  bbox(-0.022f, 0.835f, 0.262f, 0.022f, 0.872f, 0.287f, 0.0f, belly);  // dentini
+  ell(0, 0.878f, 0.283f, 0.042f, 0.009f, 0.012f, pupil, 5, 2);        // mouth
+  bbox(-0.022f, 0.835f, 0.262f, 0.022f, 0.872f, 0.287f, 0.0f, belly);  // little teeth
   ell(-0.2f, 0.92f, 0.215f, 0.05f, 0.03f, 0.025f, cheek, 5, 2);
   ell(0.2f, 0.92f, 0.215f, 0.05f, 0.03f, 0.025f, cheek, 5, 2);
-  // Tracolla sopra la pancia e cristallo di luna che spunta dalla borsetta (sempre acceso).
+  // Shoulder strap over the belly and moon crystal sticking out of the small bag (always lit).
   tube(v3(0.3f, 0.44f, 0.08f), v3(0.13f, 0.6f, 0.3f), 0.018f, strap, 4);
   tube(v3(0.13f, 0.6f, 0.3f), v3(-0.12f, 0.72f, 0.245f), 0.018f, strap, 4);
   tube(v3(-0.12f, 0.72f, 0.245f), v3(-0.25f, 0.76f, 0.0f), 0.018f, strap, 4);
@@ -368,7 +368,7 @@ void build_mochi(CharMesh& m) {
   unlit(false);
   skip_outline();
   m.body = end();
-  // Meta' alta dell'orecchio piegato: ricade in fuori e in avanti, si muove da sola.
+  // Upper half of the bent ear: it droops outward and forward, it moves on its own.
   m.fx_at = v3(0.14f, 1.44f, -0.03f);
   begin();
   {
@@ -389,17 +389,17 @@ void build_mochi(CharMesh& m) {
   }
   m.tip = v3(0, -0.27f, 0.05f);
   begin();
-  ell(0, -0.09f, 0.08f, 0.105f, 0.08f, 0.19f, fur, 7, 4);             // piedone da coniglio
+  ell(0, -0.09f, 0.08f, 0.105f, 0.08f, 0.19f, fur, 7, 4);             // big rabbit foot
   outline();
   m.leg = end();
   for (int i = 0; i < 4; ++i) {
     const uint32_t c = PLAYER_RGB[i], c2 = rgb_mix(c, 0x000000, 0.18f);
     begin();
-    ell(0, 0.755f, 0.01f, 0.245f, 0.065f, 0.235f, c, 9, 3);           // sciarpa
-    ell(0.11f, 0.71f, 0.225f, 0.06f, 0.05f, 0.04f, c, 5, 3);           // nodo
+    ell(0, 0.755f, 0.01f, 0.245f, 0.065f, 0.235f, c, 9, 3);           // scarf
+    ell(0.11f, 0.71f, 0.225f, 0.06f, 0.05f, 0.04f, c, 5, 3);           // knot
     ell_rot(v3(0.15f, 0.6f, 0.245f), v3(0.045f, 0.1f, 0.025f), xf_rot_z(0.3f), c2, 5, 3);
-    ell_rot(v3(0.07f, 0.6f, -0.29f), v3(0.06f, 0.14f, 0.025f), xf_rot_x(-0.25f), c2, 5, 3);   // coda della sciarpa
-    ell_rot(v3(-0.185f, 1.25f, 0.0f), v3(0.065f, 0.04f, 0.035f), xf_rot_z(0.5f), c, 4, 3);    // fiocco
+    ell_rot(v3(0.07f, 0.6f, -0.29f), v3(0.06f, 0.14f, 0.025f), xf_rot_x(-0.25f), c2, 5, 3);   // scarf tail
+    ell_rot(v3(-0.185f, 1.25f, 0.0f), v3(0.065f, 0.04f, 0.035f), xf_rot_z(0.5f), c, 4, 3);    // bow
     ell_rot(v3(-0.065f, 1.25f, 0.0f), v3(0.065f, 0.04f, 0.035f), xf_rot_z(-0.5f), c, 4, 3);
     ball(-0.125f, 1.245f, 0.01f, 0.035f, c2, 4, 2);
     outline(0.022f);
@@ -407,40 +407,40 @@ void build_mochi(CharMesh& m) {
   }
 }
 
-// MARZIO, marziano delle calotte polari fatto di ghiaccio secco (controllo): tutto a faccette
-// azzurro ghiaccio, macchie di polvere rossa di Marte, un occhione rosso, punte di brina; le due
-// antenne con la punta accesa sono a parte e molleggiano. Colore del giocatore: cintura e placca.
+// MARZIO, Martian from the polar caps made of dry ice (control): all faceted in ice blue, patches
+// of red Mars dust, one big red eye, frost spikes; the two antennae with the glowing tips are
+// separate and bounce. Player color: belt and plate.
 void build_marzio(CharMesh& m) {
   const uint32_t ice = 0xBFE8FF, ice2 = 0x9AD3F2, ice_hi = 0xE2F5FF, rust = 0xC9573A, rust2 = 0xA8452E;
   const uint32_t iris = 0xE8452C, tip = 0xFF5A3C, frost = 0xF6FCFF, mouth = 0x23345A;
   m.sh_x = 0.29f; m.sh_y = 0.66f; m.hip_x = 0.14f; m.hip_y = 0.17f; m.arm_len = 0.36f; m.top = 1.58f;
   m.rest_r = 0.0f; m.swing_r = 0.9f;
   begin();
-  ell(0, 0.46f, 0, 0.31f, 0.36f, 0.29f, ice, 7, 4);                   // corpo a faccette: y 0.10..0.82
-  ell(0, 1.0f, 0.01f, 0.34f, 0.29f, 0.31f, ice_hi, 8, 5);             // testa: y 0.71..1.29
-  cone(v3(-0.25f, 1.12f, -0.1f), v3(-0.7f, 0.8f, -0.3f), 0.06f, 0.15f, frost, 4);   // punte di brina
+  ell(0, 0.46f, 0, 0.31f, 0.36f, 0.29f, ice, 7, 4);                   // faceted body: y 0.10..0.82
+  ell(0, 1.0f, 0.01f, 0.34f, 0.29f, 0.31f, ice_hi, 8, 5);             // head: y 0.71..1.29
+  cone(v3(-0.25f, 1.12f, -0.1f), v3(-0.7f, 0.8f, -0.3f), 0.06f, 0.15f, frost, 4);   // frost spikes
   cone(v3(-0.13f, 1.25f, -0.17f), v3(-0.3f, 1.0f, -0.5f), 0.05f, 0.13f, frost, 4);
   cone(v3(0.24f, 1.1f, -0.16f), v3(0.6f, 0.7f, -0.5f), 0.05f, 0.12f, frost, 4);
   cone(v3(-0.26f, 0.7f, -0.08f), v3(-0.9f, 0.6f, -0.2f), 0.05f, 0.12f, frost, 4);
   cone(v3(0.27f, 0.62f, -0.1f), v3(0.9f, 0.5f, -0.3f), 0.045f, 0.11f, frost, 4);
   outline();
-  ell(-0.16f, 0.24f, 0.2f, 0.13f, 0.1f, 0.08f, rust, 5, 3);           // polvere rossa di Marte
+  ell(-0.16f, 0.24f, 0.2f, 0.13f, 0.1f, 0.08f, rust, 5, 3);           // red Mars dust
   ell(0.19f, 0.16f, -0.13f, 0.12f, 0.08f, 0.1f, rust2, 5, 3);
   ell(0.1f, 0.62f, -0.22f, 0.11f, 0.08f, 0.08f, rust, 5, 3);
   ell(0.15f, 1.23f, -0.07f, 0.14f, 0.07f, 0.14f, rust, 5, 3);
   ell(-0.24f, 0.94f, 0.12f, 0.07f, 0.06f, 0.06f, rust2, 4, 3);
-  // Occhione: bianco, iride rossa, pupilla, luce; sopracciglio di brina; bocca piccola.
+  // Big eye: white, red iris, pupil, highlight; frost eyebrow; small mouth.
   ell(0, 1.02f, 0.25f, 0.16f, 0.17f, 0.085f, 0xFFFFFF, 8, 5);
   ell(0, 1.0f, 0.315f, 0.1f, 0.105f, 0.035f, iris, 7, 4);
   ell(0, 0.995f, 0.347f, 0.05f, 0.062f, 0.02f, 0x1A1520, 6, 3);
   shine(-0.035f, 1.04f, 0.365f, 0.025f);
   shine(0.04f, 0.96f, 0.36f, 0.013f);
   ell(0, 1.17f, 0.235f, 0.165f, 0.045f, 0.075f, ice2, 7, 3);
-  ell_rot(v3(-0.035f, 0.828f, 0.285f), v3(0.042f, 0.014f, 0.02f), xf_rot_z(-0.35f), mouth, 4, 2);   // sorriso
+  ell_rot(v3(-0.035f, 0.828f, 0.285f), v3(0.042f, 0.014f, 0.02f), xf_rot_z(-0.35f), mouth, 4, 2);   // smile
   ell_rot(v3(0.035f, 0.828f, 0.285f), v3(0.042f, 0.014f, 0.02f), xf_rot_z(0.35f), mouth, 4, 2);
   skip_outline();
   m.body = end();
-  // Antenne con la punta accesa (molleggiano attorno a fx_at).
+  // Antennae with the glowing tips (they bounce around fx_at).
   m.fx_at = v3(0, 1.25f, -0.03f);
   begin();
   for (int s = -1; s <= 1; s += 2) {
@@ -474,8 +474,8 @@ void build_marzio(CharMesh& m) {
   for (int i = 0; i < 4; ++i) {
     const uint32_t c = PLAYER_RGB[i];
     begin();
-    ell(0, 0.40f, 0, 0.322f, 0.055f, 0.302f, c, 7, 2);                // cintura
-    cyl(v3(0, 0.40f, 0.27f), v3(0, 0, 1), 0.08f, 0.08f, 0.05f, rgb_mix(c, 0xFFFFFF, 0.35f), 7);   // placca
+    ell(0, 0.40f, 0, 0.322f, 0.055f, 0.302f, c, 7, 2);                // belt
+    cyl(v3(0, 0.40f, 0.27f), v3(0, 0, 1), 0.08f, 0.08f, 0.05f, rgb_mix(c, 0xFFFFFF, 0.35f), 7);   // plate
     outline(0.022f);
     ell(0, 0.40f, 0.322f, 0.035f, 0.035f, 0.008f, 0xFFFFFF, 5, 2);
     skip_outline();
@@ -483,22 +483,22 @@ void build_marzio(CharMesh& m) {
   }
 }
 
-// ZOLFO, fiamma viva delle nubi di zolfo di Venere (lanciafiamme): goccia di fuoco giallo zolfo e
-// arancio con il contorno arancio scuro, la punta che tremola (a parte), occhi di brace, piedi di
-// roccia lavica, braccia a lingua di fuoco. Colore del giocatore: anello attorno al collo.
+// ZOLFO, living flame from the sulfur clouds of Venus (flamethrower): a drop of sulfur-yellow and
+// orange fire with a dark orange outline, the flickering tip (separate), ember eyes, feet of lava
+// rock, arms shaped like tongues of fire. Player color: ring around the neck.
 void build_zolfo(CharMesh& m) {
   const uint32_t flame_lo = 0xFF8A1C, flame_hi = 0xFFCB3A, core = 0xFFF2A8, edge = 0x8C2F06;
   const uint32_t rock = 0x4C3B37, lava = 0xFF6A1A, coal = 0x2E1206, ember = 0xFFE07A;
   m.sh_x = 0.33f; m.sh_y = 0.64f; m.hip_x = 0.15f; m.hip_y = 0.2f; m.arm_len = 0.4f; m.top = 1.6f;
   m.rest_r = 0.0f; m.swing_r = 0.9f;
   begin();
-  // Goccia di fuoco: sotto arancio rossastro, sopra giallo zolfo (a fasce, come una sfumatura).
+  // Fire drop: reddish orange below, sulfur yellow above (in bands, like a gradient).
   static const float BODY[10][2] = { { 0.18f, 0.0f }, { 0.2f, 0.17f }, { 0.26f, 0.29f }, { 0.36f, 0.355f }, { 0.5f, 0.38f },
                                      { 0.64f, 0.365f }, { 0.78f, 0.32f }, { 0.9f, 0.255f }, { 1.0f, 0.16f }, { 1.05f, 0.0f } };
   static const uint32_t BODY_C[9] = { 0xF2541B, 0xF7651E, 0xFC7A20, 0xFF8E22, 0xFFA126, 0xFFB22A, 0xFFC22E, 0xFFCF34, 0xFFCF34 };
   lathe(BODY, 10, 12, 0.0f, 0.0f, 1.0f, 0.92f, xf_identity(), 0, BODY_C);   // y 0.18..1.05
   outline(OL, edge);
-  // Fiamma chiara dentro la pancia (sempre accesa), occhi di brace, sorriso.
+  // Light flame inside the belly (always lit), ember eyes, smile.
   unlit(true);
   {
     static const float CORE[6][2] = { { 0.26f, 0.0f }, { 0.3f, 0.13f }, { 0.42f, 0.18f }, { 0.56f, 0.14f }, { 0.68f, 0.07f }, { 0.78f, 0.0f } };
@@ -511,12 +511,12 @@ void build_zolfo(CharMesh& m) {
   ell(-0.113f, 0.822f, 0.298f, 0.025f, 0.034f, 0.012f, ember, 4, 2);
   ell(0.137f, 0.822f, 0.298f, 0.025f, 0.034f, 0.012f, ember, 4, 2);
   unlit(false);
-  ell_rot(v3(-0.13f, 0.905f, 0.262f), v3(0.06f, 0.014f, 0.02f), xf_rot_z(-0.3f), coal, 4, 2);   // sopracciglia
+  ell_rot(v3(-0.13f, 0.905f, 0.262f), v3(0.06f, 0.014f, 0.02f), xf_rot_z(-0.3f), coal, 4, 2);   // eyebrows
   ell_rot(v3(0.13f, 0.905f, 0.262f), v3(0.06f, 0.014f, 0.02f), xf_rot_z(0.3f), coal, 4, 2);
-  ell(0, 0.685f, 0.315f, 0.06f, 0.026f, 0.02f, coal, 6, 2);             // sorriso
+  ell(0, 0.685f, 0.315f, 0.06f, 0.026f, 0.02f, coal, 6, 2);             // smile
   skip_outline();
   m.body = end();
-  // Parte alta della fiamma, accesa: la punta che si arriccia e due lingue ai lati; tremola attorno a fx_at.
+  // Upper part of the flame, lit: the curling tip and two tongues at the sides; it flickers around fx_at.
   m.fx_at = v3(0, 0.9f, 0);
   begin();
   {
@@ -543,7 +543,7 @@ void build_zolfo(CharMesh& m) {
   }
   m.tip = v3(0, -0.4f, 0.1f);
   begin();
-  ell(0, -0.115f, 0.04f, 0.125f, 0.09f, 0.155f, rock, 6, 3);          // piede di roccia lavica
+  ell(0, -0.115f, 0.04f, 0.125f, 0.09f, 0.155f, rock, 6, 3);          // lava rock foot
   outline();
   unlit(true);
   bbox(-0.07f, -0.04f, 0.04f, 0.07f, -0.025f, 0.075f, 0.0f, lava);
@@ -554,27 +554,27 @@ void build_zolfo(CharMesh& m) {
   for (int i = 0; i < 4; ++i) {
     const uint32_t c = PLAYER_RGB[i];
     begin();
-    torus(xf_translate(v3(0, 0.9f, 0.0f)), 0.265f, 0.042f, 12, 4, c);   // anello attorno al collo
-    ell(0, 0.88f, 0.29f, 0.055f, 0.055f, 0.035f, rgb_mix(c, 0xFFFFFF, 0.4f), 5, 3);   // gemma
+    torus(xf_translate(v3(0, 0.9f, 0.0f)), 0.265f, 0.042f, 12, 4, c);   // ring around the neck
+    ell(0, 0.88f, 0.29f, 0.055f, 0.055f, 0.035f, rgb_mix(c, 0xFFFFFF, 0.4f), 5, 3);   // gem
     outline(0.022f);
     m.accent[i] = end();
   }
 }
 
-// --- mostri della Terra -----------------------------------------------------------------
+// --- Earth monsters ---------------------------------------------------------------------
 
-// SCORPIONE (corridore, dalla 0.5.1 al posto dello sciacallo): scorpione del deserto color ambra,
-// piatto e largo: addome a segmenti con le fasce scure (si vedono dall'alto), carapace con gli
-// occhietti neri, due chele grandi tenute avanti con il dito mobile a parte, 8 zampette scure (una
-// mesh sola disegnata 8 volte), coda a segmenti che si inarca sulla schiena e pungiglione scuro con
-// la punta rosso fuoco accesa. Perni SCORPION_* in models.h.
+// SCORPIONE (runner, since 0.5.1 in place of the jackal): amber desert scorpion, flat and wide:
+// segmented abdomen with dark bands (visible from above), carapace with small black eyes, two big
+// pincers held forward with the movable finger separate, 8 small dark legs (a single mesh drawn 8
+// times), segmented tail that arches over the back and dark stinger with a glowing fire-red tip.
+// SCORPION_* pivots in models.h.
 const uint32_t SC_AMBER = 0xE8892A, SC_AMBER2 = 0xF6A93E, SC_BAND = 0x8A4418, SC_DARK = 0x4A2210, SC_STING = 0x2E1A12;
 void build_scorpion(void) {
   const uint32_t black = 0x17121A;
   begin();
   {
-    // Addome lungo Z, dalla coda (dietro) al carapace: sezioni a esagono schiacciato, fasce scure
-    // tra un segmento e l'altro.
+    // Abdomen along Z, from the tail (back) to the carapace: flattened-hexagon sections, dark bands
+    // between one segment and the next.
     static const float ABD[9][2] = { { 0.0f, 0.0f }, { 0.1f, 0.17f }, { 0.16f, 0.19f }, { 0.29f, 0.235f }, { 0.35f, 0.245f },
                                      { 0.47f, 0.27f }, { 0.53f, 0.275f }, { 0.67f, 0.262f }, { 0.76f, 0.0f } };
     static const uint32_t ABD_C[8] = { SC_AMBER, SC_BAND, SC_AMBER, SC_BAND, SC_AMBER, SC_BAND, SC_AMBER, SC_AMBER };
@@ -582,21 +582,21 @@ void build_scorpion(void) {
   }
   ell(0, 0.32f, 0.2f, 0.215f, 0.13f, 0.2f, SC_AMBER2, 7, 3);          // carapace: y 0.19..0.45
   outline();
-  ball(-0.05f, 0.44f, 0.27f, 0.04f, black, 4, 2);                     // occhietti neri in cima al carapace
+  ball(-0.05f, 0.44f, 0.27f, 0.04f, black, 4, 2);                     // small black eyes atop the carapace
   ball(0.05f, 0.44f, 0.27f, 0.04f, black, 4, 2);
   skip_outline();
   M.scorpion_body = end();
 
-  // Zampa destra (verso +X dal perno all'anca): sale al ginocchio e scende al piede a terra. Sottile
-  // e scura, senza contorno: da lontano e' un tratto d'inchiostro come il contorno (e costa la meta').
+  // Right leg (toward +X from the hip pivot): goes up to the knee and down to the foot on the ground.
+  // Thin and dark, no outline: from afar it is an ink stroke like the outline (and costs half).
   begin();
   tube(v3(-0.03f, 0.0f, 0.0f), v3(0.19f, 0.13f, 0.0f), 0.045f, SC_BAND, 3);
   cone(v3(0.19f, 0.13f, 0.0f), v3(0.16f, -0.4f, 0.0f), 0.045f, 0.43f, SC_BAND, 3);
   skip_outline();
   M.scorpion_leg = end();
 
-  // Chele (sistema della spalla): braccio in fuori, avambraccio in avanti, mano grossa e dito fisso
-  // scuro di fuori; il dito mobile (di dentro) e' a parte e si apre ruotando sul suo perno.
+  // Pincers (shoulder frame): arm outward, forearm forward, big hand and dark fixed finger on the
+  // outside; the movable finger (on the inside) is separate and opens by rotating on its pivot.
   for (int side = 0; side < 2; ++side) {
     const float sx = side ? 1.0f : -1.0f;
     begin();
@@ -612,7 +612,7 @@ void build_scorpion(void) {
     (side ? M.scorpion_finger_r : M.scorpion_finger_l) = end();
   }
 
-  // Segmenti della coda lungo +Z (si toccano un po'), sempre piu' sottili e scuri verso la punta.
+  // Tail segments along +Z (they touch a little), ever thinner and darker toward the tip.
   for (int k = 0; k < SCORPION_SEGS; ++k) {
     const float w = 0.1f - 0.008f * (float)k;
     begin();
@@ -621,7 +621,7 @@ void build_scorpion(void) {
     outline();
     M.scorpion_tail[k] = end();
   }
-  // Pungiglione: vescicola gonfia e uncino scuro che si piega verso il dentro della curva (+Y), punta accesa.
+  // Stinger: swollen bulb and dark hook bending toward the inside of the curve (+Y), glowing tip.
   begin();
   ell_rot(v3(0, 0.0f, 0.1f), v3(0.085f, 0.115f, 0.08f), xf_rot_x(D_HALF_PI), SC_DARK, 5, 3);
   cone(v3(0, 0.03f, 0.18f), v3(0, 0.75f, 1.0f), 0.045f, 0.17f, SC_STING, 4);
@@ -633,26 +633,26 @@ void build_scorpion(void) {
   M.scorpion_sting = end();
 }
 
-// ARCIERE DI TERRACOTTA (tiratore, dalla 0.5.1 al posto del lama): compagno del guerriero
-// nell'esercito di Xi'an, della stessa argilla ma piu' snello: veste al ginocchio, corazzina a
-// placche con i ribattini, crocchia in cima alla testa sul lato destro, occhi accesi, faretra sulla
-// schiena con le penne rosse e bianche delle frecce (si vedono dall'alto). L'arco (legno scuro, punte a ricciolo
-// di bronzo) si tiene con la sinistra; la destra tende la corda. Per tirare si inginocchia come
-// l'arciere inginocchiato di Xi'an: per questo braccio destro e gambe sono a due pezzi.
-// Perni ARCHER_* in models.h.
+// ARCIERE DI TERRACOTTA (shooter, since 0.5.1 in place of the llama): companion of the warrior in
+// the army of Xi'an, of the same clay but slimmer: knee-length robe, small plated armor with the
+// rivets, bun on top of the head on the right side, glowing eyes, quiver on the back with the red
+// and white arrow feathers (visible from above). The bow (dark wood, curled bronze tips) is held
+// in the left hand; the right one draws the string. To shoot he kneels like the kneeling archer of
+// Xi'an: that is why the right arm and the legs are in two pieces.
+// ARCHER_* pivots in models.h.
 void build_archer(void) {
   const uint32_t clay = 0xC67C4E, clay2 = 0xA45E38, clay3 = 0xDC9A6C, armor = 0x7C4A33, rivet = 0xE3AE80;
   const uint32_t hair = 0x6B3C26, robe = 0xB46C45, glow = 0xFFD24A, leather = 0x5E3A24;
   const uint32_t feather = 0xE8402E, feather2 = 0xF6E8D0;
   begin();
-  cyl(v3(0, 0.44f, 0), v3(0, 1, 0), 0.25f, 0.2f, 0.44f, robe, 7);     // veste: y 0.44..0.88
-  ell(0, 1.0f, 0, 0.255f, 0.27f, 0.185f, armor, 7, 4);                // corazzina: y 0.73..1.27
-  ell(-0.25f, 1.16f, 0, 0.1f, 0.075f, 0.115f, armor, 5, 2);           // spallacci
+  cyl(v3(0, 0.44f, 0), v3(0, 1, 0), 0.25f, 0.2f, 0.44f, robe, 7);     // robe: y 0.44..0.88
+  ell(0, 1.0f, 0, 0.255f, 0.27f, 0.185f, armor, 7, 4);                // small armor: y 0.73..1.27
+  ell(-0.25f, 1.16f, 0, 0.1f, 0.075f, 0.115f, armor, 5, 2);           // pauldrons
   ell(0.25f, 1.16f, 0, 0.1f, 0.075f, 0.115f, armor, 5, 2);
-  ell(0, 1.4f, 0.02f, 0.145f, 0.16f, 0.145f, clay3, 6, 4);            // testa: y 1.24..1.56
-  ell(0, 1.46f, -0.025f, 0.155f, 0.12f, 0.145f, hair, 6, 3);          // capelli raccolti
-  ell_rot(v3(0.065f, 1.6f, -0.03f), v3(0.075f, 0.065f, 0.07f), xf_rot_z(-0.5f), hair, 5, 3);   // crocchia a destra
-  // Faretra di cuoio sulla schiena, di traverso (bocca in alto a destra), con le penne delle frecce.
+  ell(0, 1.4f, 0.02f, 0.145f, 0.16f, 0.145f, clay3, 6, 4);            // head: y 1.24..1.56
+  ell(0, 1.46f, -0.025f, 0.155f, 0.12f, 0.145f, hair, 6, 3);          // tied-up hair
+  ell_rot(v3(0.065f, 1.6f, -0.03f), v3(0.075f, 0.065f, 0.07f), xf_rot_z(-0.5f), hair, 5, 3);   // bun on the right
+  // Leather quiver on the back, slanted (opening at the top right), with the arrow feathers.
   cyl(v3(-0.08f, 0.74f, -0.21f), v3(0.24f, 1.0f, -0.12f), 0.075f, 0.085f, 0.62f, leather, 5);
   {
     const Vec3 top = v3(-0.08f, 0.74f, -0.21f) + normalize(v3(0.24f, 1.0f, -0.12f)) * 0.62f;
@@ -663,17 +663,17 @@ void build_archer(void) {
     }
   }
   outline();
-  // Placche, ribattini, cintura, nastro della crocchia, cinghia della faretra.
+  // Plates, rivets, belt, bun ribbon, quiver strap.
   ell(0, 0.92f, 0, 0.245f, 0.014f, 0.178f, clay2, 7, 2);
   ell(0, 1.09f, 0, 0.245f, 0.014f, 0.178f, clay2, 7, 2);
   for (int c = -1; c <= 1; c += 2) {
     const float y = 1.0f, a = 0.33f * (float)c;
     ball(0.255f * d_sin(a), y, 0.185f * d_cos(a), 0.024f, rivet, 4, 2);
   }
-  ell(0, 0.8f, 0, 0.215f, 0.045f, 0.165f, clay2, 7, 2);              // cintura
-  ball(0.08f, 1.665f, -0.035f, 0.035f, feather, 4, 2);                // nastro rosso
+  ell(0, 0.8f, 0, 0.215f, 0.045f, 0.165f, clay2, 7, 2);              // belt
+  ball(0.08f, 1.665f, -0.035f, 0.035f, feather, 4, 2);                // red ribbon
   tube(v3(-0.24f, 1.18f, 0.06f), v3(0.2f, 0.78f, 0.16f), 0.024f, leather, 4);
-  // Faccia: occhi accesi, sopracciglia severe, naso, baffetti.
+  // Face: glowing eyes, stern eyebrows, nose, small mustache.
   unlit(true);
   ell(-0.055f, 1.43f, 0.15f, 0.03f, 0.014f, 0.018f, glow, 5, 2);
   ell(0.055f, 1.43f, 0.15f, 0.03f, 0.014f, 0.018f, glow, 5, 2);
@@ -686,15 +686,15 @@ void build_archer(void) {
   skip_outline();
   M.archer_body = end();
 
-  // Braccio sinistro (dell'arco): manica, avambraccio con il pugno chiuso sull'impugnatura.
+  // Left arm (the bow arm): sleeve, forearm with the fist closed on the grip.
   begin();
   ell(0, -0.17f, 0, 0.085f, 0.19f, 0.085f, robe, 6, 3);
   ell(0, -0.4f, 0.01f, 0.072f, 0.125f, 0.072f, clay, 5, 3);
   outline();
-  tube(v3(0, -0.29f, 0.01f), v3(0, -0.37f, 0.01f), 0.082f, armor, 5);   // bracciale
+  tube(v3(0, -0.29f, 0.01f), v3(0, -0.37f, 0.01f), 0.082f, armor, 5);   // bracer
   skip_outline();
   M.archer_arm_l = end();
-  // Braccio destro: braccio (fino al gomito) e avambraccio con il pugno che tiene la corda.
+  // Right arm: upper arm (up to the elbow) and forearm with the fist holding the string.
   begin();
   ell(0, -0.13f, 0, 0.085f, 0.16f, 0.085f, robe, 6, 3);
   outline();
@@ -704,7 +704,7 @@ void build_archer(void) {
   ball(0, -0.25f, 0.0f, 0.072f, clay3, 5, 2);
   outline();
   M.archer_fore_r = end();
-  // Gambe: coscia (pantaloni) e stinco con la scarpa.
+  // Legs: thigh (trousers) and shin with the shoe.
   begin();
   ell(0, -0.165f, 0, 0.09f, 0.2f, 0.09f, robe, 5, 2);
   outline();
@@ -715,8 +715,8 @@ void build_archer(void) {
   outline();
   M.archer_shin = end();
 
-  // Arco: impugnatura nell'origine, flettenti di legno scuro che piegano verso la corda (-Z) e
-  // punte a ricciolo di bronzo; la corda (a parte) va dalle punte alla mano destra.
+  // Bow: grip at the origin, dark wood limbs that bend toward the string (-Z) and curled bronze
+  // tips; the string (separate) goes from the tips to the right hand.
   begin();
   {
     const uint32_t wood = 0x4E3020, bronze = 0xD49A3A, wrap = 0xD8402E;
@@ -725,29 +725,29 @@ void build_archer(void) {
       const float sy = (float)s;
       for (int k = 0; k < 3; ++k)
         tube(v3(0, sy * LIMB[k][0], LIMB[k][1]), v3(0, sy * LIMB[k + 1][0], LIMB[k + 1][1]), 0.044f - 0.007f * (float)k, wood, 3);
-      cone(v3(0, sy * (ARCHER_BOW_TIP - 0.03f), ARCHER_STRING_Z), v3(0, sy * 0.6f, 1.0f), 0.034f, 0.15f, bronze, 3);   // ricciolo
+      cone(v3(0, sy * (ARCHER_BOW_TIP - 0.03f), ARCHER_STRING_Z), v3(0, sy * 0.6f, 1.0f), 0.034f, 0.15f, bronze, 3);   // curl
     }
-    tube(v3(0, -0.085f, 0.04f), v3(0, 0.085f, 0.04f), 0.052f, wrap, 5);   // impugnatura fasciata di rosso
+    tube(v3(0, -0.085f, 0.04f), v3(0, 0.085f, 0.04f), 0.052f, wrap, 5);   // grip wrapped in red
     outline(0.028f);
   }
   M.bow = end();
-  // Mezza corda: un filo lungo 1 lungo +Y (il disegno lo stira tra una punta e la mano).
+  // Half string: a wire 1 long along +Y (the drawing code stretches it from a tip to the hand).
   begin();
   tube(v3(0, 0, 0), v3(0, 1, 0), 0.009f, 0xF2E6C8, 3);
   M.bow_string = end();
 }
 
-// SCARABEO (sciame): corazza turchese metallica con i fregi d'oro, elitre aperte, corno d'oro,
-// occhietti rossi accesi, zampette scure; le ali sottili battono a parte.
+// SCARABEO (swarm): metallic turquoise shell with gold trims, open elytra, gold horn, small glowing
+// red eyes, small dark legs; the thin wings flap separately.
 void build_scarab(void) {
   const uint32_t shell = 0x1FB59E, shell2 = 0x14806F, gold = 0xF2C230, dark = 0x1D2A2C, wing = 0xE4F2EC;
   begin();
-  ell(0, -0.02f, -0.03f, 0.13f, 0.09f, 0.2f, dark, 5, 3);             // corpo sotto le elitre
-  ell(0, 0.03f, 0.13f, 0.12f, 0.075f, 0.09f, shell2, 5, 3);           // scudo del torace
-  ell(0, 0.0f, 0.24f, 0.075f, 0.06f, 0.06f, dark, 4, 3);              // testa
-  ell_rot(v3(-0.1f, 0.07f, -0.06f), v3(0.1f, 0.04f, 0.19f), xf_mul(xf_rot_z(0.45f), xf_rot_x(-0.15f)), shell, 6, 4);   // elitre
+  ell(0, -0.02f, -0.03f, 0.13f, 0.09f, 0.2f, dark, 5, 3);             // body under the elytra
+  ell(0, 0.03f, 0.13f, 0.12f, 0.075f, 0.09f, shell2, 5, 3);           // thorax shield
+  ell(0, 0.0f, 0.24f, 0.075f, 0.06f, 0.06f, dark, 4, 3);              // head
+  ell_rot(v3(-0.1f, 0.07f, -0.06f), v3(0.1f, 0.04f, 0.19f), xf_mul(xf_rot_z(0.45f), xf_rot_x(-0.15f)), shell, 6, 4);   // elytra
   ell_rot(v3(0.1f, 0.07f, -0.06f), v3(0.1f, 0.04f, 0.19f), xf_mul(xf_rot_z(-0.45f), xf_rot_x(-0.15f)), shell, 6, 4);
-  cone(v3(0, 0.02f, 0.27f), v3(0, 0.75f, 1.0f), 0.035f, 0.13f, gold, 4);   // corno
+  cone(v3(0, 0.02f, 0.27f), v3(0, 0.75f, 1.0f), 0.035f, 0.13f, gold, 4);   // horn
   outline(0.022f);
   for (int s = -1; s <= 1; s += 2) {
     const float sx = (float)s;
@@ -773,23 +773,23 @@ void build_scarab(void) {
   }
 }
 
-// GUERRIERO DI TERRACOTTA (grosso): statua d'argilla che cammina, corazza a placche con i ribattini,
-// capelli raccolti con la crocchia di lato, baffi, occhi accesi, qualche crepa. Braccia, gambe e
-// alabarda sono a parte (perni WARRIOR_* in models.h).
+// GUERRIERO DI TERRACOTTA (big one): walking clay statue, plated armor with the rivets, tied-up hair
+// with the bun on the side, mustache, glowing eyes, a few cracks. Arms, legs and halberd are
+// separate (WARRIOR_* pivots in models.h).
 void build_warrior(void) {
   const uint32_t clay = 0xC67C4E, clay2 = 0xA45E38, clay3 = 0xDC9A6C, armor = 0x7C4A33, rivet = 0xE3AE80;
   const uint32_t hair = 0x6B3C26, robe = 0xB46C45, glow = 0xFFD24A, crack = 0x4A2A1A;
   begin();
-  cyl(v3(0, 0.40f, 0), v3(0, 1, 0), 0.37f, 0.30f, 0.5f, robe, 9);    // veste lunga: y 0.40..0.90
-  ell(0, 1.12f, 0, 0.42f, 0.42f, 0.31f, clay, 8, 5);                 // busto: y 0.70..1.54
-  ell(0, 1.07f, 0, 0.445f, 0.31f, 0.33f, armor, 8, 4);              // corazza: y 0.76..1.38
-  ell(-0.45f, 1.33f, 0, 0.17f, 0.11f, 0.18f, armor, 6, 3);           // spallacci
+  cyl(v3(0, 0.40f, 0), v3(0, 1, 0), 0.37f, 0.30f, 0.5f, robe, 9);    // long robe: y 0.40..0.90
+  ell(0, 1.12f, 0, 0.42f, 0.42f, 0.31f, clay, 8, 5);                 // torso: y 0.70..1.54
+  ell(0, 1.07f, 0, 0.445f, 0.31f, 0.33f, armor, 8, 4);              // armor: y 0.76..1.38
+  ell(-0.45f, 1.33f, 0, 0.17f, 0.11f, 0.18f, armor, 6, 3);           // pauldrons
   ell(0.45f, 1.33f, 0, 0.17f, 0.11f, 0.18f, armor, 6, 3);
-  ell(0, 1.66f, 0.02f, 0.2f, 0.22f, 0.2f, clay3, 7, 5);              // testa: y 1.44..1.88
-  ell(0, 1.73f, -0.03f, 0.21f, 0.17f, 0.2f, hair, 7, 3);             // capelli raccolti
-  ball(0.09f, 1.93f, -0.03f, 0.09f, hair, 5, 3);                      // crocchia di lato
+  ell(0, 1.66f, 0.02f, 0.2f, 0.22f, 0.2f, clay3, 7, 5);              // head: y 1.44..1.88
+  ell(0, 1.73f, -0.03f, 0.21f, 0.17f, 0.2f, hair, 7, 3);             // tied-up hair
+  ball(0.09f, 1.93f, -0.03f, 0.09f, hair, 5, 3);                      // bun on the side
   outline();
-  // Righe di placche con i ribattini, cintura.
+  // Rows of plates with the rivets, belt.
   ell(0, 0.97f, 0, 0.432f, 0.016f, 0.322f, clay2, 8, 2);
   ell(0, 1.17f, 0, 0.432f, 0.016f, 0.322f, clay2, 8, 2);
   for (int r = 0; r < 3; ++r) {
@@ -800,12 +800,12 @@ void build_warrior(void) {
       ball(0.445f * k * d_sin(a), y, 0.33f * k * d_cos(a), 0.026f, rivet, 4, 2);
     }
   }
-  ell(-0.2f, 1.66f, 0.0f, 0.03f, 0.05f, 0.035f, clay3, 4, 2);        // orecchie
+  ell(-0.2f, 1.66f, 0.0f, 0.03f, 0.05f, 0.035f, clay3, 4, 2);        // ears
   ell(0.2f, 1.66f, 0.0f, 0.03f, 0.05f, 0.035f, clay3, 4, 2);
-  ell(0, 0.86f, 0, 0.36f, 0.05f, 0.29f, clay2, 8, 2);               // cintura
-  bbox(-0.06f, 0.82f, 0.27f, 0.06f, 0.9f, 0.3f, 0.0f, rivet);        // fibbia
-  ball(0.09f, 1.85f, -0.03f, 0.05f, clay2, 5, 3);                     // nastro della crocchia
-  // Faccia: occhi accesi, sopracciglia severe, naso, baffi spioventi, bocca.
+  ell(0, 0.86f, 0, 0.36f, 0.05f, 0.29f, clay2, 8, 2);               // belt
+  bbox(-0.06f, 0.82f, 0.27f, 0.06f, 0.9f, 0.3f, 0.0f, rivet);        // buckle
+  ball(0.09f, 1.85f, -0.03f, 0.05f, clay2, 5, 3);                     // bun ribbon
+  // Face: glowing eyes, stern eyebrows, nose, drooping mustache, mouth.
   unlit(true);
   ell(-0.072f, 1.69f, 0.202f, 0.036f, 0.016f, 0.02f, glow, 5, 2);
   ell(0.072f, 1.69f, 0.202f, 0.036f, 0.016f, 0.02f, glow, 5, 2);
@@ -816,27 +816,27 @@ void build_warrior(void) {
   ell_rot(v3(-0.05f, 1.585f, 0.208f), v3(0.058f, 0.017f, 0.02f), xf_rot_z(0.4f), hair, 4, 2);
   ell_rot(v3(0.05f, 1.585f, 0.208f), v3(0.058f, 0.017f, 0.02f), xf_rot_z(-0.4f), hair, 4, 2);
   ell(0, 1.548f, 0.2f, 0.035f, 0.008f, 0.012f, crack, 4, 2);
-  // Crepe dell'argilla.
+  // Cracks in the clay.
   box_rot(v3(-0.2f, 1.25f, 0.27f), v3(0.006f, 0.07f, 0.01f), xf_mul(xf_rot_y(-0.6f), xf_rot_z(0.4f)), crack);
   box_rot(v3(-0.23f, 1.17f, 0.25f), v3(0.006f, 0.05f, 0.01f), xf_mul(xf_rot_y(-0.6f), xf_rot_z(-0.5f)), crack);
   skip_outline();
   M.warrior_body = end();
   for (int s = 0; s < 2; ++s) {
     begin();
-    ell(0, -0.2f, 0, 0.12f, 0.24f, 0.12f, robe, 6, 3);               // manica
-    ell(0, -0.46f, 0.01f, 0.105f, 0.15f, 0.105f, clay, 5, 3);        // avambraccio
-    ball(0, -0.62f, 0.03f, 0.1f, clay3, 5, 3);                        // pugno
+    ell(0, -0.2f, 0, 0.12f, 0.24f, 0.12f, robe, 6, 3);               // sleeve
+    ell(0, -0.46f, 0.01f, 0.105f, 0.15f, 0.105f, clay, 5, 3);        // forearm
+    ball(0, -0.62f, 0.03f, 0.1f, clay3, 5, 3);                        // fist
     outline();
-    cyl(v3(0, -0.4f, 0.01f), v3(0, -1, 0), 0.115f, 0.11f, 0.1f, armor, 6);   // bracciale
+    cyl(v3(0, -0.4f, 0.01f), v3(0, -1, 0), 0.115f, 0.11f, 0.1f, armor, 6);   // bracer
     skip_outline();
     (s ? M.warrior_arm_r : M.warrior_arm_l) = end();
   }
   begin();
-  cyl(v3(0, 0, 0), v3(0, -1, 0), 0.13f, 0.11f, 0.48f, robe, 6);       // pantaloni
-  ell(0, -0.535f, 0.05f, 0.135f, 0.085f, 0.19f, armor, 5, 3);         // scarpa
+  cyl(v3(0, 0, 0), v3(0, -1, 0), 0.13f, 0.11f, 0.48f, robe, 6);       // trousers
+  ell(0, -0.535f, 0.05f, 0.135f, 0.085f, 0.19f, armor, 5, 3);         // shoe
   outline();
   M.warrior_leg = end();
-  // Alabarda (ji): impugnatura nell'origine, asta lungo +Y, lama a mezzaluna verso +Z.
+  // Halberd (ji): grip at the origin, shaft along +Y, crescent blade toward +Z.
   begin();
   {
     const uint32_t pole = 0x5B3A22, bronze = 0xD49A3A, tassel = 0xD8402E;
@@ -848,45 +848,45 @@ void build_warrior(void) {
     cyl(v3(0, 1.28f, 0), v3(0, 1, 0), 0.055f, 0.055f, 0.06f, bronze, 6);
     cone(v3(0, -0.75f, 0), v3(0, -1, 0), 0.045f, 0.08f, bronze, 4);
     outline(0.022f);
-    ell(0, 1.17f, 0, 0.065f, 0.12f, 0.065f, tassel, 6, 3);            // nappa rossa
+    ell(0, 1.17f, 0, 0.065f, 0.12f, 0.065f, tassel, 6, 3);            // red tassel
     outline(0.02f);
   }
   M.halberd = end();
 }
 
-// --- boss: il Gladiatore gigante ------------------------------------------------------------
+// --- boss: the giant Gladiator --------------------------------------------------------------
 
 const uint32_t GL_SKIN = 0xD9976A, GL_SKIN2 = 0xC07E55, GL_BRONZE = 0xD9A040, GL_BRONZE2 = 0xA8742A, GL_RED = 0xCC2830;
 const uint32_t GL_LEATHER = 0x7A4A2C, GL_GOLD = 0xF2C230, GL_STEEL = 0xDDE5EE, GL_DARK = 0x24160E, GL_CLOTH = 0xF0E6D2;
 const uint32_t GL_WOOD = 0x8A5A32, GL_IRON = 0x6A6E78;
 
-// Alto quasi 5 m: petto muscoloso, cintura di bronzo, gonnellino con le strisce di cuoio, faretra
-// con i giavellotti sulla schiena, fodero al fianco. Testa (elmo di bronzo con la cresta rossa e la
-// visiera a grata), braccia, gambe, gladio e scudo sono pezzi a parte (perni BOSS_* in models.h).
+// Almost 5 m tall: muscular chest, bronze belt, kilt with the leather strips, quiver with the
+// javelins on the back, scabbard at the hip. Head (bronze helmet with the red crest and the grated
+// visor), arms, legs, gladius and shield are separate pieces (BOSS_* pivots in models.h).
 void build_boss(void) {
   begin();
-  cyl(v3(0, 1.22f, 0), v3(0, 1, 0), 0.8f, 0.68f, 0.66f, GL_CLOTH, 10);   // gonnellino: y 1.22..1.88
-  for (int k = 0; k < 10; ++k) {                                        // strisce di cuoio
+  cyl(v3(0, 1.22f, 0), v3(0, 1, 0), 0.8f, 0.68f, 0.66f, GL_CLOTH, 10);   // kilt: y 1.22..1.88
+  for (int k = 0; k < 10; ++k) {                                        // leather strips
     const float a = D_TWO_PI * ((float)k + 0.5f) / 10.0f;
     const Vec3 p = v3(0.79f * d_sin(a), 1.47f, 0.79f * d_cos(a));
     box_rot(p, v3(0.15f, 0.26f, 0.03f), xf_mul(xf_rot_y(a), xf_rot_x(-0.12f)), GL_LEATHER);
   }
-  cyl(v3(0, 1.82f, 0), v3(0, 1, 0), 0.74f, 0.74f, 0.3f, GL_BRONZE, 10);   // cintura: y 1.82..2.12
-  ell(0, 2.78f, 0, 0.98f, 0.8f, 0.62f, GL_SKIN, 11, 6);                // busto: y 1.98..3.58
-  ell(-0.34f, 3.0f, 0.4f, 0.38f, 0.27f, 0.22f, GL_SKIN, 7, 4);         // pettorali
+  cyl(v3(0, 1.82f, 0), v3(0, 1, 0), 0.74f, 0.74f, 0.3f, GL_BRONZE, 10);   // belt: y 1.82..2.12
+  ell(0, 2.78f, 0, 0.98f, 0.8f, 0.62f, GL_SKIN, 11, 6);                // torso: y 1.98..3.58
+  ell(-0.34f, 3.0f, 0.4f, 0.38f, 0.27f, 0.22f, GL_SKIN, 7, 4);         // pecs
   ell(0.34f, 3.0f, 0.4f, 0.38f, 0.27f, 0.22f, GL_SKIN, 7, 4);
-  ell(0, 2.48f, 0.42f, 0.42f, 0.4f, 0.2f, GL_SKIN, 7, 3);             // pancia
-  cyl(v3(0, 3.38f, -0.03f), v3(0, 1, 0), 0.36f, 0.32f, 0.3f, GL_SKIN, 8);   // collo
-  ell(1.0f, 3.42f, 0, 0.44f, 0.25f, 0.44f, GL_BRONZE, 8, 4);           // spallaccio del braccio della spada
-  cyl(v3(0.35f, 2.15f, -0.66f), v3(0.28f, 1.0f, -0.12f), 0.2f, 0.22f, 1.15f, GL_LEATHER, 8);   // faretra
+  ell(0, 2.48f, 0.42f, 0.42f, 0.4f, 0.2f, GL_SKIN, 7, 3);             // belly
+  cyl(v3(0, 3.38f, -0.03f), v3(0, 1, 0), 0.36f, 0.32f, 0.3f, GL_SKIN, 8);   // neck
+  ell(1.0f, 3.42f, 0, 0.44f, 0.25f, 0.44f, GL_BRONZE, 8, 4);           // pauldron of the sword arm
+  cyl(v3(0.35f, 2.15f, -0.66f), v3(0.28f, 1.0f, -0.12f), 0.2f, 0.22f, 1.15f, GL_LEATHER, 8);   // quiver
   {
-    const int fv = B.nv, ft = B.nt;                                      // fodero (gladio dentro: vedi boss_scabbard)
+    const int fv = B.nv, ft = B.nt;                                      // scabbard (gladius inside: see boss_scabbard)
     bbox(-0.085f, -0.21f, 0.1f, 0.085f, 0.21f, 1.75f, 0.0f, GL_LEATHER);
     cone(v3(0, 0, 1.74f), v3(0, 0, 1), 0.16f, 0.28f, GL_BRONZE, 4);
     mb_apply(&B, fv, ft, boss_scabbard());
   }
   outline(0.05f);
-  // Giavellotti nella faretra.
+  // Javelins in the quiver.
   for (int k = 0; k < 3; ++k) {
     const Vec3 b = v3(0.62f + 0.09f * (float)(k - 1), 3.2f, -0.8f + 0.06f * (float)(k - 1));
     const Vec3 d = normalize(v3(0.3f + 0.08f * (float)(k - 1), 1.0f, -0.12f));
@@ -894,7 +894,7 @@ void build_boss(void) {
     cone(b + d * 0.9f, d, 0.07f, 0.24f, GL_BRONZE, 4);
   }
   outline(0.03f);
-  // Cinghia di cuoio sul petto, con le borchie; ombelico, ribattini e fibbia della cintura.
+  // Leather strap on the chest, with the studs; navel, rivets and belt buckle.
   {
     const Vec3 sp[4] = { v3(0.9f, 3.35f, 0.18f), v3(0.42f, 3.02f, 0.66f), v3(-0.32f, 2.5f, 0.66f), v3(-0.82f, 2.2f, 0.3f) };
     for (int k = 0; k < 3; ++k) tube(sp[k], sp[k + 1], 0.07f, GL_LEATHER, 6);
@@ -912,26 +912,26 @@ void build_boss(void) {
   skip_outline();
   M.boss_body = end();
 
-  // Testa: elmo (galea) con tesa larga, visiera a grata con gli occhi accesi, cresta rossa.
+  // Head: helmet (galea) with a wide brim, grated visor with the glowing eyes, red crest.
   begin();
-  ell(0, 4.05f, 0.0f, 0.47f, 0.45f, 0.47f, GL_BRONZE, 10, 5);         // calotta: y 3.60..4.50
-  cyl(v3(0, 3.95f, 0.0f), v3(0, 1, 0), 0.7f, 0.64f, 0.07f, GL_BRONZE, 10);   // tesa
-  ell(0, 3.78f, 0.16f, 0.42f, 0.32f, 0.36f, GL_BRONZE2, 9, 4);        // visiera: y 3.46..4.10
-  ell(0, 4.47f, -0.04f, 0.1f, 0.12f, 0.46f, GL_BRONZE, 6, 4);         // supporto della cresta
-  ell(0, 4.8f, -0.1f, 0.16f, 0.4f, 0.66f, GL_RED, 7, 6);              // cresta: y 4.40..5.20
+  ell(0, 4.05f, 0.0f, 0.47f, 0.45f, 0.47f, GL_BRONZE, 10, 5);         // dome: y 3.60..4.50
+  cyl(v3(0, 3.95f, 0.0f), v3(0, 1, 0), 0.7f, 0.64f, 0.07f, GL_BRONZE, 10);   // brim
+  ell(0, 3.78f, 0.16f, 0.42f, 0.32f, 0.36f, GL_BRONZE2, 9, 4);        // visor: y 3.46..4.10
+  ell(0, 4.47f, -0.04f, 0.1f, 0.12f, 0.46f, GL_BRONZE, 6, 4);         // crest support
+  ell(0, 4.8f, -0.1f, 0.16f, 0.4f, 0.66f, GL_RED, 7, 6);              // crest: y 4.40..5.20
   outline(0.045f);
-  for (int k = 0; k < 5; ++k) {                                         // ciuffi della cresta
+  for (int k = 0; k < 5; ++k) {                                         // crest tufts
     const float a = -1.2f + 0.6f * (float)k;
     ball(0, 4.8f + 0.36f * d_cos(a), -0.1f + 0.6f * d_sin(a), 0.14f, GL_RED, 4, 3);
   }
   outline(0.03f);
-  ell(-0.16f, 3.88f, 0.48f, 0.11f, 0.085f, 0.06f, GL_DARK, 6, 3);     // fori per gli occhi
+  ell(-0.16f, 3.88f, 0.48f, 0.11f, 0.085f, 0.06f, GL_DARK, 6, 3);     // eye holes
   ell(0.16f, 3.88f, 0.48f, 0.11f, 0.085f, 0.06f, GL_DARK, 6, 3);
   unlit(true);
   ell(-0.16f, 3.88f, 0.52f, 0.075f, 0.055f, 0.02f, 0xFF5A2A, 5, 2);
   ell(0.16f, 3.88f, 0.52f, 0.075f, 0.055f, 0.02f, 0xFF5A2A, 5, 2);
   unlit(false);
-  for (int r = 0; r < 2; ++r)                                          // grata
+  for (int r = 0; r < 2; ++r)                                          // grating
     for (int c = -2; c <= 2; c += (r ? 1 : 2)) {
       const float x = 0.085f * (float)c, y = 3.72f - 0.1f * (float)r;
       const float ry = (y - 3.78f) / 0.32f, rx = x / 0.42f;
@@ -943,7 +943,7 @@ void build_boss(void) {
   skip_outline();
   M.boss_head = end();
 
-  // Braccio della spada: muscolo, manica a fasce di bronzo, pugno. Braccio dello scudo: polsiera.
+  // Sword arm: muscle, sleeve of bronze bands, fist. Shield arm: wristband.
   for (int s = 0; s < 2; ++s) {
     begin();
     ell(0, -0.42f, 0, 0.3f, 0.5f, 0.3f, GL_SKIN, 8, 4);
@@ -955,11 +955,11 @@ void build_boss(void) {
       ell(0, -0.95f, 0.02f, 0.25f, 0.35f, 0.25f, GL_SKIN, 7, 4);
       cyl(v3(0, -1.08f, 0.02f), v3(0, -1, 0), 0.24f, 0.23f, 0.2f, GL_LEATHER, 8);
     }
-    ell(0, -1.45f, 0.05f, 0.25f, 0.22f, 0.25f, GL_SKIN, 7, 4);         // pugno
+    ell(0, -1.45f, 0.05f, 0.25f, 0.22f, 0.25f, GL_SKIN, 7, 4);         // fist
     outline(0.045f);
     (s ? M.boss_arm_r : M.boss_arm_l) = end();
   }
-  // Gambe: coscia, schiniere di bronzo (sinistra) o fasce di stoffa (destra), sandalo.
+  // Legs: thigh, bronze greave (left) or cloth wrappings (right), sandal.
   for (int s = 0; s < 2; ++s) {
     begin();
     ell(0, -0.3f, 0.0f, 0.3f, 0.45f, 0.3f, GL_SKIN, 7, 4);
@@ -973,7 +973,7 @@ void build_boss(void) {
     outline(0.045f);
     (s ? M.boss_leg_r : M.boss_leg_l) = end();
   }
-  // Gladio: impugnatura nell'origine, lama verso +Z (larga lungo Y, sottile lungo X).
+  // Gladius: grip at the origin, blade toward +Z (wide along Y, thin along X).
   begin();
   cyl(v3(0, 0, -0.3f), v3(0, 0, 1), 0.075f, 0.075f, 0.42f, GL_LEATHER, 6);
   ball(0, 0, -0.34f, 0.12f, GL_GOLD, 6, 4);
@@ -983,8 +983,8 @@ void build_boss(void) {
   shine(0.0f, 0.06f, 0.85f, 0.04f);
   skip_outline();
   M.boss_sword = end();
-  // Scudo (scutum): curvo, rosso con il bordo d'oro, umbone di bronzo e due fulmini d'oro.
-  // Impugnatura nell'origine, davanti verso +Z.
+  // Shield (scutum): curved, red with the gold rim, bronze boss and two gold lightning bolts.
+  // Grip at the origin, front toward +Z.
   begin();
   {
     const float R = 1.15f, A = 0.48f, y0 = -0.88f, y1 = 0.88f, th = 0.08f, zc = 0.4f - R;
@@ -1013,7 +1013,7 @@ void build_boss(void) {
       tri_from(fr[e][0], bk[e][1], bk[e][0], ctr, GL_RED);
     }
     outline(0.04f);
-    // Bordo d'oro, umbone, fulmini.
+    // Gold rim, boss, lightning bolts.
     for (int k = 0; k < N; ++k)
       for (int e = 0; e < 2; ++e) {
         const float a0 = -A + 2.0f * A * (float)k / (float)N, a1 = -A + 2.0f * A * (float)(k + 1) / (float)N, y = e ? y1 : y0;
@@ -1037,9 +1037,9 @@ void build_boss(void) {
   M.boss_shield = end();
 }
 
-// --- colpi, oggetti, segni ------------------------------------------------------
+// --- shots, items, marks --------------------------------------------------------
 
-// Quadrilatero orizzontale rivolto verso l'alto (segni a terra).
+// Horizontal quad facing up (marks on the ground).
 void flat_quad(Vec3 a, Vec3 b, Vec3 c, Vec3 d, uint32_t col) {
   const int ia = mb_vert(&B, a), ib = mb_vert(&B, b), ic = mb_vert(&B, c), id = mb_vert(&B, d);
   const Vec3 below = (a + b + c + d) * 0.25f - v3(0, 1, 0);
@@ -1047,26 +1047,26 @@ void flat_quad(Vec3 a, Vec3 b, Vec3 c, Vec3 d, uint32_t col) {
   tri_from(ia, ic, id, below, col);
 }
 
-// Segni a terra del gladiatore (0.5.1), rossi come il cerchio dei giavellotti: il settore del
-// fendente (raggio 1, BOSS_SWEEP_HALF per parte attorno a +Z) e la corsia della carica.
+// The gladiator's marks on the ground (0.5.1), red like the javelin circle: the sweep sector
+// (radius 1, BOSS_SWEEP_HALF on each side around +Z) and the charge lane.
 void build_boss_marks(void) {
   const uint32_t RED = 0xFF3A2A, FILL = 0xC8402A, HIT = 0xFFE07A, ARROW = 0xFF7A50;
   const int N = 16;
   const float H = BOSS_SWEEP_HALF, y = 0.04f;
   begin();
   unlit(true);
-  for (int k = 0; k < N; ++k) {                          // arco esterno
+  for (int k = 0; k < N; ++k) {                          // outer arc
     const float a0 = -H + 2.0f * H * (float)k / (float)N, a1 = -H + 2.0f * H * (float)(k + 1) / (float)N;
     flat_quad(v3(0.93f * d_sin(a0), y, 0.93f * d_cos(a0)), v3(d_sin(a0), y, d_cos(a0)), v3(d_sin(a1), y, d_cos(a1)),
               v3(0.93f * d_sin(a1), y, 0.93f * d_cos(a1)), RED);
   }
-  for (int e = -1; e <= 1; e += 2) {                     // i due lati
+  for (int e = -1; e <= 1; e += 2) {                     // the two sides
     const float a = H * (float)e, sx = d_sin(a), sz = d_cos(a), px = sz * 0.022f, pz = -sx * 0.022f;
     flat_quad(v3(0.12f * sx - px, y, 0.12f * sz - pz), v3(0.12f * sx + px, y, 0.12f * sz + pz), v3(0.96f * sx + px, y, 0.96f * sz + pz),
               v3(0.96f * sx - px, y, 0.96f * sz - pz), RED);
   }
   M.mark_sector = end();
-  for (int v = 0; v < 2; ++v) {                          // riempimento; lampo del colpo
+  for (int v = 0; v < 2; ++v) {                          // fill; flash of the hit
     begin();
     unlit(true);
     const int c = mb_vert(&B, v3(0, 0.03f, 0));
@@ -1079,17 +1079,17 @@ void build_boss_marks(void) {
     }
     (v ? M.mark_sector_hit : M.mark_sector_fill) = end();
   }
-  begin();                                               // scia della spada: arco sottile, si disegna in alto
+  begin();                                               // sword trail: thin arc, drawn up high
   unlit(true);
   for (int k = 0; k < N; ++k) {
     const float a0 = -H + 2.0f * H * (float)k / (float)N, a1 = -H + 2.0f * H * (float)(k + 1) / (float)N;
-    const float w0 = 0.86f + 0.1f * (float)k / (float)N, w1 = 0.86f + 0.1f * (float)(k + 1) / (float)N;   // piu' sottile verso la fine
+    const float w0 = 0.86f + 0.1f * (float)k / (float)N, w1 = 0.86f + 0.1f * (float)(k + 1) / (float)N;   // thinner toward the end
     flat_quad(v3(w0 * d_sin(a0), 0.0f, w0 * d_cos(a0)), v3(d_sin(a0), 0.0f, d_cos(a0)), v3(d_sin(a1), 0.0f, d_cos(a1)),
               v3(w1 * d_sin(a1), 0.0f, w1 * d_cos(a1)), 0xFFFFFF);
   }
   M.mark_swoosh = end();
-  // Corsia verso +Z: riempimento largo 2 (si scala con la mezza larghezza) e lungo 1, bordo lungo 1,
-  // fondo, freccia, segno dell'urto (una stella a punte).
+  // Lane toward +Z: fill 2 wide (scaled by the half width) and 1 long, edge 1 long, end, arrow,
+  // impact mark (a spiky star).
   begin();
   unlit(true);
   flat_quad(v3(-1.0f, 0.03f, 0.0f), v3(1.0f, 0.03f, 0.0f), v3(1.0f, 0.03f, 1.0f), v3(-1.0f, 0.03f, 1.0f), FILL);
@@ -1128,7 +1128,7 @@ void build_boss_marks(void) {
 }
 
 void build_shots(void) {
-  // Fucilone di Astro: proiettile di energia azzurra con la scia.
+  // Astro's big rifle: light blue energy projectile with its trail.
   begin();
   unlit(true);
   ell(0, 0, 0.02f, 0.075f, 0.075f, 0.14f, 0x9AF8FF, 6, 3);
@@ -1136,7 +1136,7 @@ void build_shots(void) {
   unlit(false);
   outline(0.018f, 0x0E3A6A);
   M.bullet = end();
-  // Razzo a ricerca: corpo bianco, punta arancio, alette blu; la fiamma dello scarico e' a parte.
+  // Homing rocket: white body, orange tip, blue fins; the exhaust flame is separate.
   begin();
   ell(0, 0, -0.02f, 0.085f, 0.085f, 0.2f, 0xF4F6FA, 8, 4);
   cone(v3(0, 0, 0.12f), v3(0, 0, 1), 0.074f, 0.17f, 0xFF7A26, 8);
@@ -1151,14 +1151,14 @@ void build_shots(void) {
   cone(v3(0, 0, -0.26f), v3(0, 0, -1), 0.07f, 0.3f, 0xFFA42A, 7);
   cone(v3(0, 0, -0.26f), v3(0, 0, -1), 0.04f, 0.18f, 0xFFF2A0, 5);
   M.rocket_fire = end();
-  // Mochi: scheggia di cristallo di luna lilla.
+  // Mochi: lilac moon crystal shard.
   begin();
   ell(0, 0, 0.02f, 0.085f, 0.085f, 0.27f, 0xD9CBFF, 5, 2);
   outline(0.018f, 0x4A2E8A);
   shine(-0.03f, 0.04f, 0.06f, 0.028f);
   skip_outline();
   M.shard = end();
-  // Marzio: palla di ghiaccio secco a faccette; il vapore bianco gira attorno (a parte).
+  // Marzio: faceted dry ice ball; the white vapor swirls around it (separate).
   begin();
   ball(0, 0, 0, 0.15f, 0xCDEEFF, 6, 4);
   outline(0.022f, 0x3A6A98);
@@ -1180,8 +1180,8 @@ void build_shots(void) {
   unlit(false);
   skip_outline();
   M.lava = end();
-  // Freccia dell'arciere di terracotta (verso +Z, origine a meta'): asta chiara, punta di bronzo,
-  // tre penne rosse e bianche (sottili, senza contorno). Piu' grande del vero: si deve leggere da 30 m.
+  // Arrow of the terracotta archer (toward +Z, origin at the middle): light shaft, bronze tip, three
+  // red and white feathers (thin, no outline). Bigger than real: it must be readable from 30 m.
   begin();
   tube(v3(0, 0, -0.55f), v3(0, 0, 0.36f), 0.032f, 0xE8C088, 4);
   cyl(v3(0, 0, 0.33f), v3(0, 0, 1), 0.065f, 0.0f, 0.22f, 0xD49A3A, 4);
@@ -1191,12 +1191,12 @@ void build_shots(void) {
     const uint32_t c = k ? 0xE8402E : 0xF6E8D0;
     const int p0 = mb_vert(&B, v3(0.025f * ca, 0.025f * sa, -0.56f)), p1 = mb_vert(&B, v3(0.12f * ca, 0.12f * sa, -0.5f));
     const int p2 = mb_vert(&B, v3(0.025f * ca, 0.025f * sa, -0.22f));
-    mb_tri(&B, p0, p1, p2, c);                 // le due facce della penna
+    mb_tri(&B, p0, p1, p2, c);                 // the two faces of the feather
     mb_tri(&B, p0, p2, p1, c);
   }
   skip_outline();
   M.arrow = end();
-  // Giavellotto del gladiatore: asta di legno, collo di ferro, punta di bronzo (verso +Z).
+  // The gladiator's javelin: wooden shaft, iron neck, bronze tip (toward +Z).
   begin();
   cyl(v3(0, 0, -1.0f), v3(0, 0, 1), 0.052f, 0.052f, 1.5f, GL_WOOD, 5);
   cyl(v3(0, 0, 0.5f), v3(0, 0, 1), 0.03f, 0.03f, 0.35f, GL_IRON, 4);
@@ -1221,7 +1221,7 @@ void build_items(void) {
       mb_tri(&B, up, b, a, k & 1 ? 0x3CE07A : 0x5CF09A);
       mb_tri(&B, dn, a, b, k & 1 ? 0x22A055 : 0x2CB862);
     }
-    // Normali verso l'esterno: se il primo triangolo guarda dentro, si girano tutti.
+    // Normals facing outward: if the first triangle faces inward, they are all flipped.
     if (dot(B.t[ft].n, B.v[B.t[ft].a]) < 0.0f)
       for (int i = ft; i < B.nt; ++i) {
         MeshTri& t = B.t[i];
@@ -1252,8 +1252,8 @@ void build_items(void) {
     static const int SEG[4] = { 10, 10, 12, 16 };
     for (int k = 0; k < 4; ++k) {
       M.shadow[k] = flat_disc(R[k], SEG[k], 0x4E6E3C);
-      M.shadow_tone[0][k] = flat_disc(R[k], SEG[k], 0xA88A5A);     // sabbia
-      M.shadow_tone[1][k] = flat_disc(R[k], SEG[k], 0x6E6C66);     // pietra
+      M.shadow_tone[0][k] = flat_disc(R[k], SEG[k], 0xA88A5A);     // sand
+      M.shadow_tone[1][k] = flat_disc(R[k], SEG[k], 0x6E6C66);     // stone
     }
   }
   for (int i = 0; i < 4; ++i) {
@@ -1275,8 +1275,8 @@ void build_items(void) {
   M.mark_rise = flat_ring(0.25f, 0.55f, 12, 0x6A4A2E, 0.025f);
   M.mark_blast = flat_ring(0.9f, 1.0f, 24, 0xFFE07A, 0.05f);
   build_boss_marks();
-  // Crepa nel terreno lungo Z (i segni del colpo di spada sono a 0,8 m l'uno dall'altro: i pezzi si
-  // toccano e fanno una crepa sola), con la riga accesa dentro; poi le pietre a punta.
+  // Crack in the ground along Z (the marks of the sword blow are 0.8 m apart: the pieces touch and
+  // make a single crack), with the glowing line inside; then the pointed stones.
   {
     static const float ZZ[4][2] = { { 0.0f, -0.5f }, { 0.09f, -0.17f }, { -0.09f, 0.17f }, { 0.0f, 0.5f } };
     for (int v = 0; v < 2; ++v) {
@@ -1284,7 +1284,7 @@ void build_items(void) {
       unlit(true);
       const float y = v ? 0.036f : 0.03f, w = v ? 0.042f : 0.1f;
       const uint32_t c = v ? 0xFF8A2A : 0x2E2018;
-      // Tre tratti a zigzag, allungati di w ai capi perche' si sovrappongano negli angoli.
+      // Three zigzag strokes, lengthened by w at the ends so that they overlap at the corners.
       for (int k = 0; k < 3; ++k) {
         const float dx = ZZ[k + 1][0] - ZZ[k][0], dz = ZZ[k + 1][1] - ZZ[k][1], l = sqrtf(dx * dx + dz * dz);
         const float ux = dx / l, uz = dz / l, nx = -uz, nz = ux;
@@ -1292,10 +1292,10 @@ void build_items(void) {
         const float x0 = ZZ[k][0] - ux * e0, z0 = ZZ[k][1] - uz * e0, x1 = ZZ[k + 1][0] + ux * e1, z1 = ZZ[k + 1][1] + uz * e1;
         const int a = mb_vert(&B, v3(x0 - nx * w, y, z0 - nz * w)), b = mb_vert(&B, v3(x0 + nx * w, y, z0 + nz * w));
         const int cc = mb_vert(&B, v3(x1 + nx * w, y, z1 + nz * w)), d = mb_vert(&B, v3(x1 - nx * w, y, z1 - nz * w));
-        mb_tri(&B, a, b, cc, c);           // verso l'alto
+        mb_tri(&B, a, b, cc, c);           // facing up
         mb_tri(&B, a, cc, d, c);
       }
-      if (v == 0) {                       // rametti della crepa
+      if (v == 0) {                       // small branches of the crack
         static const float BR[3][4] = { { 0.09f, -0.17f, 0.3f, -0.08f }, { -0.09f, 0.17f, -0.3f, 0.08f }, { 0.0f, -0.36f, -0.17f, -0.44f } };
         for (const auto& r : BR) {
           const float dx = r[2] - r[0], dz = r[3] - r[1], l = sqrtf(dx * dx + dz * dz), nx = -dz / l * 0.055f, nz = dx / l * 0.055f;
@@ -1322,7 +1322,7 @@ void build_items(void) {
   unlit(true);
   ball(0, 0, 0, 1.0f, 0xFFD24A, 10, 6);
   M.blast = end();
-  // Lampo del fucilone: stella azzurra rivolta avanti (+Z).
+  // Muzzle flash of the big rifle: light blue star facing forward (+Z).
   begin();
   unlit(true);
   ell(0, 0, 0.04f, 0.11f, 0.11f, 0.07f, 0xE8FFFF, 6, 3);
@@ -1339,9 +1339,9 @@ void build_items(void) {
   M.alert = end();
   M.snow_ring = flat_ring(0.94f, 1.0f, 28, 0xDDF2FF, 0.05f);
   begin();
-  ball(0, 0, 0, 0.12f, 0xD9DDE3, 7, 5);                // sbuffo di fumo (capsula aperta)
+  ball(0, 0, 0, 0.12f, 0xD9DDE3, 7, 5);                // puff of smoke (capsule opened)
   M.smoke = end();
-  // Stellina gialla (stordito): due rombi incrociati.
+  // Small yellow star (stunned): two crossed rhombi.
   begin();
   unlit(true);
   ell(0, 0, 0, 0.11f, 0.035f, 0.03f, 0xFFE45C, 4, 2);
@@ -1351,23 +1351,24 @@ void build_items(void) {
   M.stars = end();
 }
 
-// --- capsula dell'esploratore ----------------------------------------------------------------
-// Navicella bianca e arancio su tre zampette, aperta in alto: la cupola di vetro e' solo il telaio
-// con due riflessi, cosi' con la telecamera inclinata di 56 gradi si vede l'esploratore dentro.
+// --- the explorer's capsule ------------------------------------------------------------------
+// Small white and orange ship on three little legs, open at the top: the glass dome is only the
+// frame with two reflections, so that with the camera tilted by 56 degrees the explorer inside
+// can be seen.
 
 const uint32_t CP_WHITE = 0xF1F3F7, CP_ORANGE = 0xFF7F2A, CP_DARK = 0x4A505C, CP_IN = 0x7A8494, CP_FRAME = 0xB9C6D6;
 const float CP_RIM_Y = 0.62f, CP_RIM_R = 0.36f;
 
-// Scafo a scodella con la parete di dentro, pavimento, fascia arancio, zampette.
-// Bonus delle casse (0.5.4): moneta dal bordo scuro con il disegno bianco del bonus, in rilievo sulle
-// due facce (dietro specchiato, cosi' girando si legge sempre uguale). Disegni fatti di pezzi convessi:
-// >> per VELOCITA', una fiamma per FURIA, uno scudo per INVINCIBILE, un fulmine per CARICA.
-// Barra da (ax, ay) a (bx, by) larga 2t, sulla faccia tra z0 e z1 (sx: -1 la faccia di dietro).
+// Crate power-ups (0.5.4): coin with a dark rim and the white design of the power-up, embossed on
+// both faces (the back one mirrored, so while spinning it always reads the same). Designs made of
+// convex pieces: >> for VELOCITA', a flame for FURIA, a shield for INVINCIBILE, a lightning bolt
+// for CARICA.
+// Bar from (ax, ay) to (bx, by), 2t wide, on the face between z0 and z1 (sx: -1 the back face).
 void coin_bar(float ax, float ay, float bx, float by, float t, float z0, float z1, float sx, uint32_t col) {
   const float dx = bx - ax, dy = by - ay, l = sqrtf(dx * dx + dy * dy), nx = -dy / l * t, ny = dx / l * t;
   float p[4][2] = { { ax + nx, ay + ny }, { bx + nx, by + ny }, { bx - nx, by - ny }, { ax - nx, ay - ny } };
   for (int k = 0; k < 4; ++k) p[k][0] *= sx;
-  if (sx < 0.0f) {                       // giro al contrario: il poligono resta nel verso giusto
+  if (sx < 0.0f) {                       // reversed order: the polygon keeps the right winding
     float q[4][2];
     for (int k = 0; k < 4; ++k) { q[k][0] = p[3 - k][0]; q[k][1] = p[3 - k][1]; }
     prism(q, 4, z0, z1, xf_identity(), col);
@@ -1382,7 +1383,7 @@ void build_powers(void) {
   const float R = 0.26f, T = 0.09f;
   for (int k = 0; k < 4; ++k) {
     const uint32_t c = PW_RGB[k], dark = rgb_mix(c, 0x101018, 0.45f);
-    const uint32_t ink = k == 2 ? 0x5A3410 : 0xFFFFFF;    // disegno bianco, sull'oro marrone scuro
+    const uint32_t ink = k == 2 ? 0x5A3410 : 0xFFFFFF;    // white design, dark brown on the gold
     begin();
     cyl(v3(0, 0, -0.5f * T), v3(0, 0, 1), R, R, T, dark, 16);
     cyl(v3(0, 0, -0.5f * T - 0.006f), v3(0, 0, 1), R * 0.8f, R * 0.8f, T + 0.012f, c, 16);
@@ -1398,7 +1399,7 @@ void build_powers(void) {
             coin_bar(x + 0.04f, 0.0f, x - 0.035f, -0.1f, 0.026f, z0, z1, sx, ink);
           }
           break;
-        case 1: {                          // FURIA: fiamma (bianca, il cuore giallo)
+        case 1: {                          // FURIA: flame (white, with the yellow heart)
           static const float F[8][2] = { { 0.0f, 0.14f }, { 0.065f, 0.03f }, { 0.085f, -0.04f }, { 0.055f, -0.105f },
                                          { 0.0f, -0.125f }, { -0.055f, -0.105f }, { -0.085f, -0.04f }, { -0.065f, 0.03f } };
           static const float G[6][2] = { { 0.0f, 0.04f }, { 0.04f, -0.04f }, { 0.03f, -0.085f }, { -0.03f, -0.085f }, { -0.04f, -0.04f },
@@ -1407,13 +1408,13 @@ void build_powers(void) {
           coin_poly(G, 5, face ? z0 - 0.008f : z0 + 0.008f, face ? z1 - 0.008f : z1 + 0.008f, 0xFFE45C);
           break;
         }
-        case 2: {                          // INVINCIBILE: scudo
+        case 2: {                          // INVINCIBILE: shield
           static const float S[7][2] = { { -0.085f, 0.115f }, { 0.085f, 0.115f }, { 0.085f, 0.0f }, { 0.05f, -0.08f }, { 0.0f, -0.125f },
                                          { -0.05f, -0.08f }, { -0.085f, 0.0f } };
           coin_poly(S, 7, z0, z1, ink);
           break;
         }
-        default:                           // CARICA: fulmine
+        default:                           // CARICA: lightning bolt
           coin_bar(0.05f, 0.13f, -0.025f, 0.005f, 0.026f, z0, z1, sx, ink);
           coin_bar(-0.035f, 0.005f, 0.035f, 0.005f, 0.024f, z0, z1, sx, ink);
           coin_bar(0.025f, 0.005f, -0.05f, -0.13f, 0.026f, z0, z1, sx, ink);
@@ -1426,11 +1427,12 @@ void build_powers(void) {
   }
 }
 
+// Bowl-shaped hull with the inner wall, floor, orange band, little legs.
 void pod_hull(void) {
   const Vec3 c = v3(0, 0.42f, 0), r = v3(0.43f, 0.36f, 0.43f);
   shell(c, r, 12, 6, v3(0, 1, 0), 0.55f, CP_WHITE, false);
   torus(xf_translate(v3(0, 0.4f, 0)), 0.43f, 0.045f, 12, 4, CP_ORANGE);
-  for (int k = 0; k < 3; ++k) {                        // zampette
+  for (int k = 0; k < 3; ++k) {                        // little legs
     const float a = D_TWO_PI * (float)k / 3.0f + 0.5f;
     const Vec3 d = v3(d_sin(a), 0, d_cos(a));
     tube(d * 0.3f + v3(0, 0.22f, 0), d * 0.47f + v3(0, 0.04f, 0), 0.03f, CP_DARK, 5);
@@ -1438,16 +1440,16 @@ void pod_hull(void) {
   }
   outline();
   shell(c, v3(0.395f, 0.33f, 0.395f), 12, 6, v3(0, 1, 0), 0.55f, CP_IN, true);
-  torus(xf_translate(v3(0, CP_RIM_Y, 0)), CP_RIM_R + 0.01f, 0.035f, 12, 3, CP_ORANGE);   // bordo
-  mb_disc(&B, v3(0, CAPSULE_FLOOR, 0), 0.34f, 10, 0x5E6878);              // pavimento
-  for (int k = 0; k < 4; ++k) {                       // oblo' finti e ribattini sulla fascia
+  torus(xf_translate(v3(0, CP_RIM_Y, 0)), CP_RIM_R + 0.01f, 0.035f, 12, 3, CP_ORANGE);   // rim
+  mb_disc(&B, v3(0, CAPSULE_FLOOR, 0), 0.34f, 10, 0x5E6878);              // floor
+  for (int k = 0; k < 4; ++k) {                       // fake portholes and rivets on the band
     const float a = D_HALF_PI * (float)k + 0.25f;
     ball(0.445f * d_sin(a), 0.4f, 0.445f * d_cos(a), 0.03f, 0xFFFFFF, 4, 2);
   }
   skip_outline();
 }
 
-// Arco del telaio della cupola sul piano verticale che forma l'angolo yaw con X.
+// Arc of the dome frame on the vertical plane that forms the angle yaw with X.
 void dome_arc(float yaw, float a0, float a1, const Xform& xf) {
   const int fv = B.nv, ft = B.nt;
   const int N = 6;
@@ -1463,14 +1465,14 @@ void dome_arc(float yaw, float a0, float a1, const Xform& xf) {
 void build_capsule(void) {
   begin();
   pod_hull();
-  // Telaio della cupola: due archi incrociati in diagonale (davanti resta libero per la faccia).
+  // Dome frame: two arcs crossed diagonally (the front stays clear for the face).
   dome_arc(D_HALF_PI * 0.5f, -0.05f, D_PI + 0.05f, xf_identity());
   dome_arc(-D_HALF_PI * 0.5f, -0.05f, D_PI + 0.05f, xf_identity());
   ball(0, CP_RIM_Y + 0.42f, 0, 0.05f, CP_FRAME, 5, 3);
-  // Antenna dietro a destra (la lucina in cima e' a parte e lampeggia).
+  // Antenna at the back right (the small light on top is separate and blinks).
   tube(v3(0.24f, CP_RIM_Y - 0.02f, -0.24f), v3(0.3f, CAPSULE_LIGHT_Y - 0.04f, -0.3f), 0.018f, CP_DARK, 4);
   outline(0.022f);
-  // Riflessi del vetro.
+  // Glass reflections.
   unlit(true);
   {
     const float yaw = -2.2f;
@@ -1493,18 +1495,18 @@ void build_capsule(void) {
   M.capsule_light = end();
 }
 
-// Capsula aperta: telaio saltato via (un arco piegato a terra), antenna storta, bruciature sul bordo.
+// Opened capsule: frame blown off (one bent arc on the ground), crooked antenna, burns on the rim.
 void build_capsule_open(void) {
   begin();
   pod_hull();
-  dome_arc(D_HALF_PI * 0.5f, -0.05f, 0.9f, xf_identity());                 // moncone ancora attaccato
+  dome_arc(D_HALF_PI * 0.5f, -0.05f, 0.9f, xf_identity());                 // stump still attached
   dome_arc(-D_HALF_PI * 0.5f, -0.05f, 0.55f, xf_identity());
-  // Arco staccato, a terra accanto alla capsula.
+  // Detached arc, on the ground next to the capsule.
   dome_arc(0.0f, 0.1f, D_PI - 0.1f, xf_mul(xf_translate(v3(0.62f, 0.035f, 0.42f)),
                                            xf_mul(xf_rot_y(0.9f), xf_mul(xf_rot_x(-D_HALF_PI), xf_translate(v3(0, -CP_RIM_Y, 0))))));
-  tube(v3(0.24f, CP_RIM_Y - 0.02f, -0.24f), v3(0.4f, 1.0f, -0.22f), 0.018f, CP_DARK, 4);   // antenna storta
+  tube(v3(0.24f, CP_RIM_Y - 0.02f, -0.24f), v3(0.4f, 1.0f, -0.22f), 0.018f, CP_DARK, 4);   // crooked antenna
   outline(0.022f);
-  for (int k = 0; k < 5; ++k) {                                            // bruciature sul bordo
+  for (int k = 0; k < 5; ++k) {                                            // burns on the rim
     const float a = 0.9f * (float)k + 0.3f;
     ell(CP_RIM_R * d_sin(a), CP_RIM_Y + 0.025f, CP_RIM_R * d_cos(a), 0.08f, 0.03f, 0.08f, 0x3A3A42, 5, 2);
   }
@@ -1512,40 +1514,41 @@ void build_capsule_open(void) {
   M.capsule_open = end();
 }
 
-// Esploratore: bambino astronauta alto 0,75 m con la tuta arancio e il casco a bolla (vetro azzurro
-// con un'apertura davanti per la faccia), braccia in alto ("aiuto!"). Un pezzo solo: lo anima il salto.
+// Explorer: child astronaut 0.75 m tall with the orange suit and the bubble helmet (light blue
+// glass with an opening at the front for the face), arms up ("aiuto!"). A single piece: the jump
+// animates it.
 void build_explorer(void) {
   const uint32_t suit = 0xFF8A2A, suit2 = 0xE06A1A, white = 0xF4F6FA, skin = 0xFFD2B0, hair = 0x8A4E2A;
   const uint32_t glass = 0xBFE6FA, glass_in = 0x8FC2DC, blush = 0xF7939F, dark = 0x2B2238;
   begin();
-  ell(-0.07f, 0.045f, 0.03f, 0.06f, 0.045f, 0.08f, white, 5, 3);        // stivaletti
+  ell(-0.07f, 0.045f, 0.03f, 0.06f, 0.045f, 0.08f, white, 5, 3);        // little boots
   ell(0.07f, 0.045f, 0.03f, 0.06f, 0.045f, 0.08f, white, 5, 3);
   cyl(v3(-0.07f, 0.07f, 0), v3(0, 1, 0), 0.05f, 0.05f, 0.14f, suit, 5);
   cyl(v3(0.07f, 0.07f, 0), v3(0, 1, 0), 0.05f, 0.05f, 0.14f, suit, 5);
-  ell(0, 0.31f, 0, 0.14f, 0.16f, 0.12f, suit, 6, 4);                  // corpo: y 0.15..0.47
-  bbox(-0.09f, 0.22f, -0.17f, 0.09f, 0.42f, -0.08f, 0.02f, white);     // zainetto
-  for (int s = -1; s <= 1; s += 2) {                                    // braccia in alto
+  ell(0, 0.31f, 0, 0.14f, 0.16f, 0.12f, suit, 6, 4);                  // body: y 0.15..0.47
+  bbox(-0.09f, 0.22f, -0.17f, 0.09f, 0.42f, -0.08f, 0.02f, white);     // backpack
+  for (int s = -1; s <= 1; s += 2) {                                    // arms up
     const float sx = (float)s;
     const Vec3 sh = v3(sx * 0.11f, 0.4f, 0.0f), d = normalize(v3(sx * 0.65f, 1.0f, 0.15f));
     cyl(sh, d, 0.045f, 0.04f, 0.2f, suit, 5);
     ball(sh.x + d.x * 0.23f, sh.y + d.y * 0.23f, sh.z + d.z * 0.23f, 0.052f, white, 5, 3);
   }
-  ball(0, 0.58f, 0.01f, 0.12f, skin, 7, 4);                              // testa
+  ball(0, 0.58f, 0.01f, 0.12f, skin, 7, 4);                              // head
   ell(0, 0.63f, -0.02f, 0.125f, 0.09f, 0.12f, hair, 6, 3);
   outline();
-  ell(0, 0.29f, 0.115f, 0.05f, 0.05f, 0.015f, white, 5, 2);            // stemma
+  ell(0, 0.29f, 0.115f, 0.05f, 0.05f, 0.015f, white, 5, 2);            // badge
   ell(0, 0.29f, 0.125f, 0.025f, 0.025f, 0.01f, 0x2E6BD6, 4, 2);
-  ell(0, 0.18f, 0.0f, 0.13f, 0.03f, 0.11f, suit2, 7, 2);               // cintura
-  ball(-0.045f, 0.59f, 0.115f, 0.022f, dark, 4, 3);                       // occhi
+  ell(0, 0.18f, 0.0f, 0.13f, 0.03f, 0.11f, suit2, 7, 2);               // belt
+  ball(-0.045f, 0.59f, 0.115f, 0.022f, dark, 4, 3);                       // eyes
   ball(0.045f, 0.59f, 0.115f, 0.022f, dark, 4, 3);
   shine(-0.05f, 0.598f, 0.135f, 0.007f);
   shine(0.04f, 0.598f, 0.135f, 0.007f);
-  ell(0, 0.54f, 0.113f, 0.035f, 0.016f, 0.012f, 0xC2384A, 5, 2);       // bocca aperta
+  ell(0, 0.54f, 0.113f, 0.035f, 0.016f, 0.012f, 0xC2384A, 5, 2);       // open mouth
   ell(-0.08f, 0.55f, 0.09f, 0.025f, 0.015f, 0.015f, blush, 4, 2);
   ell(0.08f, 0.55f, 0.09f, 0.025f, 0.015f, 0.015f, blush, 4, 2);
-  torus(xf_translate(v3(0, 0.45f, 0)), 0.12f, 0.03f, 8, 3, white);      // collare del casco
+  torus(xf_translate(v3(0, 0.45f, 0)), 0.12f, 0.03f, 8, 3, white);      // helmet collar
   skip_outline();
-  // Casco a bolla: vetro azzurro con l'apertura davanti, parete di dentro, riflesso.
+  // Bubble helmet: light blue glass with the opening at the front, inner wall, reflection.
   const Vec3 hc = v3(0, 0.58f, 0.0f);
   const Vec3 hole = normalize(v3(0, 0.2f, 1.0f));
   shell(hc, v3(0.19f, 0.19f, 0.19f), 9, 5, hole, 0.45f, glass, false);

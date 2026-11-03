@@ -30,7 +30,7 @@ extern const Screen SCREENS[NSCREENS];
 inline uint32_t O(uint32_t rgb) { return HUD_OPAQUE(rgb); }
 inline uint32_t A(uint32_t rgb, float a) { return hud_a(rgb, a); }
 
-// Stelle del giro di un pianeta: quante, quante ne servono, cosa dire a destra.
+// Stars of the round of a planet: how many, how many are needed, what to say on the right.
 struct Giro { int stars, max, need, giro; bool last, ready; };
 
 // common.cpp

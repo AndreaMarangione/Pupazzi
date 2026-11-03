@@ -1,27 +1,27 @@
 #!/usr/bin/env python3
-# Pupazzi - prove dei comandi dalla rete (Remote RetroPad) con il frontend di prova.
+# Pupazzi - tests of the commands from the network (Remote RetroPad) with the test frontend.
 #
 #   python3 tests/test_remote.py [--host build/native/host] [--core build/native/pupazzi_libretro.so]
-#                                [--prima CORE_DI_PRIMA.so]
+#                                [--prima PREVIOUS_CORE.so]
 #
-# Il frontend di prova fa girare il gioco (mappa 1, 2 giocatori) e da qui si mandano i messaggi
-# del Remote RetroPad (tools/remote_send.py) alle porte del gioco su 127.0.0.1 (porte libere scelte
-# a caso, PUPAZZI_REMOTO_PORTA). Per sapere prima di quale fotogramma arrivano, il frontend si
-# ferma (SIGSTOP) mentre si mandano e riparte subito; nel tratto col tremolio invece si manda
-# mentre gira. Con PUPAZZI_TRACE il core scrive l'impronta della partita a ogni fotogramma e lo
-# stato arrivato dalla rete ("rete F giocatore G: ..."): da quelle righe si rifanno gli stessi
-# comandi come pad del frontend (--in) e si rigioca. Le impronte devono essere identiche
-# fotogramma per fotogramma: nessun ritardo e nessun movimento fantasma dopo il rilascio.
+# The test frontend runs the game (map 1, 2 players) and from here the Remote RetroPad messages
+# (tools/remote_send.py) are sent to the game's ports on 127.0.0.1 (free ports chosen at random,
+# PUPAZZI_REMOTO_PORTA). To know before which frame they arrive, the frontend is stopped (SIGSTOP)
+# while they are sent and restarted right away; in the jitter stretch instead they are sent while
+# it runs. With PUPAZZI_TRACE the core writes the game hash at every frame and the state that
+# arrived from the network ("rete F giocatore G: ..."): from those lines the same commands are
+# recreated as frontend pad input (--in) and the game is replayed. The hashes must be identical
+# frame by frame: no delay and no ghost movement after the release.
 #
-#  a) raffica di 200 messaggi delle levette: tutti nel fotogramma dopo l'invio, vale l'ultimo;
-#  b) dopo un tratto di tremolio continuo (piu' messaggi che fotogrammi) levetta tenuta 2 secondi e
-#     lasciata: arriva nel fotogramma dopo l'invio (al massimo due) e il personaggio si ferma come
-#     con il pad;
-#  c) tasti premuti e lasciati: la carta scelta con A dalla rete, salto, colpi; pad del frontend e
-#     rete sullo stesso giocatore; messaggi di misura sbagliata; un'altra console sulla stessa
-#     porta; gioco fermo per piu' di mezzo secondo (i comandi in coda si scartano);
-#  d) senza messaggi: stessa partita con e senza porte aperte (con --prima anche uguale al core di
-#     prima, con i comandi scritti e con i giocatori automatici).
+#  a) burst of 200 stick messages: all in the frame after the send, the last one wins;
+#  b) after a stretch of continuous jitter (more messages than frames) stick held 2 seconds and
+#     released: it arrives in the frame after the send (at most two) and the character stops as
+#     with the pad;
+#  c) buttons pressed and released: the card chosen with A from the network, jump, shots; frontend
+#     pad and network on the same player; messages of the wrong size; another console on the same
+#     port; game stopped for more than half a second (the queued commands are discarded);
+#  d) without messages: same game with and without open ports (with --prima also equal to the
+#     previous core, with the scripted commands and with the bots).
 import argparse
 import os
 import random
@@ -35,7 +35,7 @@ import tempfile
 import time
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.dont_write_bytecode = True          # niente __pycache__ in tools/
+sys.dont_write_bytecode = True          # no __pycache__ in tools/
 sys.path.insert(0, os.path.join(ROOT, "tools"))
 import remote_send as rs  # noqa: E402
 
@@ -43,8 +43,8 @@ TRACE_RE = re.compile(r"^traccia (\d+) ([0-9a-f]+)$")
 NET_RE = re.compile(r"^rete (\d+) giocatore (\d+): (\d+) messaggi, tasti ([0-9a-f]+), levette (-?\d+) (-?\d+) (-?\d+) (-?\d+)$")
 GAME_ENV = {"PUPAZZI_TRACE": "1", "PUPAZZI_RENDERER": "software", "PUPAZZI_RES": "320", "PUPAZZI_MAPPA": "1",
             "PUPAZZI_GIOCATORI": "2", "PUPAZZI_HUD": "0"}
-# Sotto queste soglie le levette sono dentro le zone morte del core (sinistra per asse, destra
-# circolare, vedi read_input): per il gioco valgono zero. Il tremolio delle prove resta sotto.
+# Below these thresholds the sticks are inside the core's dead zones (left per axis, right
+# circular, see read_input): for the game they count as zero. The tests' jitter stays below.
 DEAD_SMALL = 6000
 JITTER = 2000
 
@@ -59,9 +59,9 @@ def check(cond, what):
 
 
 def free_base():
-    """Quattro porte UDP consecutive libere (aperte senza SO_REUSEADDR, come fa il core)."""
+    """Four free consecutive UDP ports (opened without SO_REUSEADDR, as the core does)."""
     for _ in range(500):
-        base = random.randrange(20000, 32000, 4)    # sotto le porte che il sistema da' alle connessioni in uscita
+        base = random.randrange(20000, 32000, 4)    # below the ports the system gives to outgoing connections
         socks = []
         try:
             for p in range(4):
@@ -78,7 +78,7 @@ def free_base():
 
 
 class Host:
-    """Il frontend di prova in un processo a parte, con il registro letto mentre gira."""
+    """The test frontend in a separate process, with the log read while it runs."""
 
     def __init__(self, args, frames, script="", env=None, core=None):
         self.dir = tempfile.mkdtemp(prefix="rete_", dir=args.tmp)
@@ -96,8 +96,8 @@ class Host:
         self.f = None
         self.buf = ""
         self.lines = []
-        self.frame = -1         # ultimo fotogramma scritto nel registro ("traccia")
-        self.next_ok = 0        # prima di cosi' non si manda la volta dopo (vedi window)
+        self.frame = -1         # last frame written to the log ("traccia")
+        self.next_ok = 0        # the next send does not happen before this (see window)
         self.stopped = False
 
     def read(self):
@@ -151,9 +151,9 @@ class Host:
         self.stopped = False
 
     def window(self, target, send, hold=0.0):
-        """Ferma il frontend dal fotogramma target in poi, manda, lo fa ripartire. Restituisce
-        l'ultimo fotogramma scritto prima dell'invio: cio' che si e' mandato vale dal successivo
-        (o da quello dopo, se il frontend si e' fermato a meta' della lettura dei pad)."""
+        """Stops the frontend from frame target on, sends, restarts it. Returns the last frame
+        written before the send: what was sent applies from the next one (or from the one after,
+        if the frontend stopped halfway through reading the pads)."""
         self.wait_frame(max(target, self.next_ok))
         last = self.stop()
         try:
@@ -162,7 +162,7 @@ class Host:
             send()
         finally:
             self.cont()
-        self.next_ok = last + 3     # cosi' ogni invio cade in un fotogramma suo
+        self.next_ok = last + 3     # so each send falls in a frame of its own
         return last
 
     def finish(self):
@@ -197,7 +197,7 @@ class Host:
         return t
 
     def net(self):
-        """Righe "rete": (fotogramma, giocatore 1-4, messaggi, tasti, [levette])."""
+        """The "rete" lines: (frame, player 1-4, messages, buttons, [sticks])."""
         out = []
         for line in self.lines:
             m = NET_RE.match(line)
@@ -232,10 +232,10 @@ def same_traces(a, b, frames, what):
                  (what, frames, "" if not diff else " (diversa dal fotogramma %d)" % diff[0]))
 
 
-# --- comandi rifatti come pad del frontend ------------------------------------
+# --- commands recreated as frontend pad input ---------------------------------
 
 def axis_text(a):
-    """Testo per --in che il frontend di prova trasforma esattamente nell'intero a."""
+    """Text for --in that the test frontend turns into exactly the integer a."""
     v = rs.f32(a / 32767.0)
     for _ in range(200):
         txt = "%.9g" % v
@@ -243,16 +243,16 @@ def axis_text(a):
         if got == a:
             return txt
         bits = struct.unpack("<I", struct.pack("<f", v))[0]
-        up = (got < a) == (v >= 0.0)        # verso valori piu' grandi in modulo?
+        up = (got < a) == (v >= 0.0)        # towards values larger in magnitude?
         bits = bits + 1 if up else bits - 1
         v = struct.unpack("<f", struct.pack("<I", bits))[0]
     raise RuntimeError("valore %d non rappresentabile con --in" % a)
 
 
 def merged_states(local_script, net_lines, frames):
-    """Per ogni fotogramma e giocatore cio' che arriva al gioco: pad del frontend (come in
-    tools/host.cpp) e rete insieme come in read_input (tasti in OR, per asse il piu' lontano dal
-    centro), con le levette dentro le zone morte a zero."""
+    """For each frame and player what reaches the game: frontend pad (as in tools/host.cpp) and
+    network together as in read_input (buttons ORed, per axis the one furthest from the center),
+    with the sticks inside the dead zones set to zero."""
     events = [rs.parse_event(t) for t in local_script.split(",")] if local_script else []
     for e in events:
         e["t0"], e["t1"] = int(e["t0"]), int(e["t1"])
@@ -312,8 +312,8 @@ def script_from_states(states, frames):
 
 
 def replay_check(args, run, local_script, frames, what):
-    """Rigioca con il pad del frontend gli stessi comandi arrivati dalla rete (e i suoi):
-    stessa partita, fotogramma per fotogramma. Senza i comandi dalla rete deve cambiare."""
+    """Replays with the frontend pad the same commands that arrived from the network (and its own):
+    same game, frame by frame. Without the commands from the network it must change."""
     states = merged_states(local_script, run.net(), frames)
     script = script_from_states(states, frames)
     replay = run_plain(args, frames, script, {"PUPAZZI_REMOTO": "0"})
@@ -325,7 +325,7 @@ def replay_check(args, run, local_script, frames, what):
 
 
 def applied(run, player, last, what, n=None, btn=None, ax=None):
-    """La riga "rete" del giocatore nel fotogramma dopo l'invio (al massimo due dopo)."""
+    """The player's "rete" line in the frame after the send (at most two after)."""
     rows = [r for r in run.net() if r[1] == player and last < r[0] <= last + 2]
     if not rows:
         return check(False, "%s: nessuna riga 'rete' per il giocatore %d nei fotogrammi %d-%d" % (what, player, last + 1, last + 2))
@@ -340,20 +340,20 @@ def applied(run, player, last, what, n=None, btn=None, ax=None):
 BTN = {name: 1 << i for i, name in enumerate(rs.BUTTONS)}
 
 
-# --- prove ------------------------------------------------------------------------
+# --- tests ------------------------------------------------------------------------
 
 def test_main(args):
     print("--- comandi dalla rete durante la partita (a, b, c)")
     frames = 540
     base = free_base()
-    # Pad del frontend: G1 sceglie la carta (0.5.4: A dopo il banner apre le carte, A sceglie); G2 tiene la
-    # levetta a sinistra e R mentre arriva altro dalla rete.
+    # Frontend pad: G1 picks the card (0.5.4: A after the banner opens the cards, A picks); G2 holds the
+    # stick to the left and R while other input arrives from the network.
     local = "0:A@20-22,0:A@30-32,1:lx=-0.5@400-470,1:R@400-470"
     h = Host(args, frames, local, {"PUPAZZI_REMOTO_PORTA": str(base)})
     try:
         sa, sb, sc = (socket.socket(socket.AF_INET, socket.SOCK_DGRAM) for _ in range(3))
         pad2 = rs.RemotePad("127.0.0.1", base + 1, sa)
-        pad2b = rs.RemotePad("127.0.0.1", base + 1, sb)     # un'altra console (o il Remote RetroPad ripartito)
+        pad2b = rs.RemotePad("127.0.0.1", base + 1, sb)     # another console (or the restarted Remote RetroPad)
         pad1 = rs.RemotePad("127.0.0.1", base, sc)
         sent2 = [0]
         marks = {}
@@ -363,12 +363,12 @@ def test_main(args):
             sent2[0] += n
             return n
 
-        # c) G2 sceglie la carta con A dalla rete: la prima apre le sue carte (passato il banner), la seconda sceglie
+        # c) G2 picks the card with A from the network: the first opens its cards (past the banner), the second picks
         marks["A"] = h.window(24, lambda: send2(pad2, BTN["A"]))
         marks["A0"] = h.window(28, lambda: send2(pad2, 0))
         marks["A2"] = h.window(34, lambda: send2(pad2, BTN["A"]))
         marks["A20"] = h.window(38, lambda: send2(pad2, 0))
-        # b) tremolio continuo su tutte e quattro le levette, mandato mentre il gioco gira
+        # b) continuous jitter on all four sticks, sent while the game runs
         h.wait_frame(45)
         jit0, jit_frames0 = sent2[0], h.frame
         while h.frame < 105:
@@ -376,11 +376,11 @@ def test_main(args):
             h.read()
             time.sleep(0.0005)
         jitter_msgs, jitter_frames = sent2[0] - jit0, h.frame - jit_frames0
-        h.next_ok = h.frame + 4     # gli ultimi del tremolio letti prima della levetta tenuta
+        h.next_ok = h.frame + 4     # the last jitter messages read before the held stick
         hold_ax = [32767] + pad2.ax[1:]
         marks["tieni"] = h.window(105, lambda: send2(pad2, None, hold_ax))
         marks["lascia"] = h.window(marks["tieni"] + 120, lambda: send2(pad2, None, [0, 0, 0, 0]))
-        # a) raffica di 200 messaggi delle levette, con byte di riempimento a caso: vale l'ultimo per asse
+        # a) burst of 200 stick messages, with random padding bytes: the last one per axis wins
         burst_final = [-32767, 16383, 32767, 0]
 
         def burst():
@@ -394,7 +394,7 @@ def test_main(args):
         marks["raffica"] = h.window(245, burst)
         marks["raffica0"] = h.window(265, lambda: send2(pad2, None, [0, 0, 0, 0]))
 
-        # misura sbagliata (ignorati) e messaggi giusti ma che non toccano nulla (contati)
+        # wrong size (ignored) and valid messages that do not affect anything (counted)
         def odd():
             for size in (0, 19, 21, 40):
                 sa.sendto(os.urandom(size), ("127.0.0.1", base + 1))
@@ -402,18 +402,18 @@ def test_main(args):
                 pad2.raw(dev, idx, id_, 1)
             sent2[0] += 5
         marks["strani"] = h.window(285, odd)
-        # c) salto (R2) e colpi (R)
+        # c) jump (R2) and shots (R)
         marks["R2R"] = h.window(300, lambda: send2(pad2, BTN["R2"] | BTN["R"]))
         marks["R2off"] = h.window(306, lambda: send2(pad2, BTN["R"]))
         marks["Roff"] = h.window(330, lambda: send2(pad2, 0))
-        # un'altra console sulla stessa porta: si riparte da fermi, poi vale il suo stato
+        # another console on the same port: it restarts from rest, then its state applies
         marks["lx"] = h.window(345, lambda: send2(pad2, None, [32767, 0, 0, 0]))
         marks["altra"] = h.window(355, lambda: send2(pad2b, None, [0, 32767, 0, 0]))
         marks["altra0"] = h.window(365, lambda: send2(pad2b, None, [0, 0, 0, 0]))
-        # pad del frontend (levetta a sinistra a meta', R) e rete (levetta a destra, L) insieme
+        # frontend pad (stick half to the left, R) and network (stick to the right, L) together
         marks["misti"] = h.window(420, lambda: send2(pad2b, BTN["L"], [32767, 0, 0, 0]))
         marks["misti0"] = h.window(440, lambda: send2(pad2b, 0, [0, 0, 0, 0]))
-        # giocatore 1 dalla sua porta: mira a destra
+        # player 1 from its own port: aim to the right
         marks["g1"] = h.window(480, lambda: pad1.set(None, [0, 0, 32767, 0]))
         marks["g1off"] = h.window(500, lambda: pad1.set(None, [0, 0, 0, 0]))
         h.finish()
@@ -469,15 +469,15 @@ def test_stall(args):
         try:
             pad2 = rs.RemotePad("127.0.0.1", base + 1)
             m_hold = h.window(60, lambda: pad2.set(None, [32767, 0, 0, 0]))
-            # fermo 0,7 secondi; nel frattempo la console-controller manda R premuto e levetta lasciata
+            # stopped for 0.7 seconds; meanwhile the controller console sends R pressed and stick released
             m_stall = h.window(100, lambda: pad2.set(BTN["R"], [0, 0, 0, 0]), hold=0.7)
             m_rel = h.window(140, lambda: pad2.set(0))
             h.finish()
         except Exception:
             h.kill()
             raise
-        # Fermato proprio dentro la lettura della rete, dopo che il core ha preso l'ora: per lui
-        # la pausa non c'e' stata e i comandi valgono (raro). Si rifa'.
+        # Stopped right inside the network read, after the core took the time: for the core there
+        # was no pause and the commands apply (rare). Run it again.
         late = [r for r in h.net() if r[1] == 2 and m_stall < r[0] <= m_stall + 2 and r[2] == 2]
         if not late:
             break
@@ -505,7 +505,7 @@ def test_quiet(args):
           and not a.net(), "porte aperte, nessun messaggio, nessuna riga 'rete'")
     check(b.has("comandi dalle altre console: spenti (PUPAZZI_REMOTO=0)"), "PUPAZZI_REMOTO=0: porte non aperte")
     same_traces(a, b, frames, "d) comandi scritti, porte aperte e PUPAZZI_REMOTO=0")
-    # Porte gia' occupate: il core lo scrive e gioca lo stesso.
+    # Ports already in use: the core logs it and plays anyway.
     busy = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     busy.bind(("0.0.0.0", base + 2))
     c = run_plain(args, frames, script, {"PUPAZZI_REMOTO_PORTA": str(base)})

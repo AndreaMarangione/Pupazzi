@@ -5,7 +5,7 @@
 
 namespace screens {
 
-// GIOCO IN RETE: crea una partita (poi il salvataggio con cui giocarla) o unisciti (si cerca subito).
+// GIOCO IN RETE: create a game (then the save to play it with) or join (the search starts at once).
 void net_update(Game& g) {
   const int nav = any_nav(g);
   if (nav != NAV_NONE) g.menu_sel ^= 1;
@@ -27,8 +27,8 @@ void net_update(Game& g) {
   }
 }
 
-// Sala d'attesa: chi ha creato la partita la fa cominciare (A, con almeno un'altra console) o la
-// annulla (B); chi cerca sceglie una partita (A) o torna indietro (B); chi si e' unito aspetta (B esce).
+// Waiting room: the host starts the game (A, with at least one other console) or cancels it (B);
+// whoever is searching picks a game (A) or goes back (B); whoever has joined waits (B leaves).
 void lobby_update(Game& g) {
   const NetView& v = net_view(g);
   if (v.error_seq != g.session.net_err_seen) {
@@ -87,7 +87,7 @@ void lobby_update(Game& g) {
         net_req(g, NR_LEAVE, 0);
       }
       break;
-    default:      // la rete non si e' aperta (o si e' chiusa): di nuovo GIOCO IN RETE
+    default:      // the network did not open (or it closed): back to GIOCO IN RETE
       if (g.screen_t > 3) {
         go_screen(g, SC_NET);
         g.menu_sel = g.session.lobby_join ? 1 : 0;
@@ -96,8 +96,8 @@ void lobby_update(Game& g) {
   }
 }
 
-// Indirizzo di questa console nella rete (o l'avviso che non c'e' una rete), centrato su cx; in
-// basso, sopra il piede (sulla velatura scura: sopra gli eroi non si leggerebbe).
+// Address of this console on the network (or the notice that there is no network), centered on cx;
+// at the bottom, above the footer (on the dark scrim: over the heroes it would not be readable).
 const float NET_IP_Y = 414.0f, NET_HINT_Y = 390.0f;
 
 void net_ip_line(const Game& g, Hud* h, float cx, float cy) {
@@ -115,7 +115,7 @@ void net_ip_line(const Game& g, Hud* h, float cx, float cy) {
   ui::text(h, x + 26.0f, cy, HF_S13, O(v.ip[0] ? ui::FTX : ui::L2), t, 0.5f);
 }
 
-// Sottotitolo sopra un pannello (testo con l'ombra, centrato).
+// Subtitle above a panel (text with the shadow, centered).
 void subtitle(Hud* h, float cy, const char* s) {
   char t[256];
   ui::fit(t, sizeof(t), s, HF_S15, 1.0f, 576.0f);
@@ -123,14 +123,14 @@ void subtitle(Hud* h, float cy, const char* s) {
   ui::text(h, 320, cy, HF_S15, O(ui::FTX), t, 1.0f, 0);
 }
 
-// Nome di una partita in rete: quello dato o "PARTITA N".
+// Name of a LAN game: the one given or "PARTITA N".
 const char* net_game_name(const NetGame& gm, char* buf, int n) {
   if (gm.name[0]) return gm.name;
   snprintf(buf, (size_t)n, tr("PARTITA %d"), gm.slot + 1);
   return buf;
 }
 
-// "TERRA · GIRO 1" di una partita in rete.
+// "TERRA · GIRO 1" of a LAN game.
 void net_game_where(const NetGame& gm, char* buf, int n) {
   char wn[96];
   const int w = gm.world >= 0 && gm.world < NWORLDS ? gm.world : 0;
@@ -152,7 +152,7 @@ void net_hud(const Game& g, Hud* h) {
     const bool sel = k == g.menu_sel;
     if (k > 0) ui::sep(h, PX + 24.0f, y - GAP * 0.5f, PW - 48.0f);
     if (sel) ui::bar_sel(h, PX + 10.0f, y, PW - 20.0f, RH);
-    // A sinistra chi gioca: uno che crea, due che si uniscono.
+    // On the left, who plays: one who creates, two who join.
     if (k == 0) {
       ui::avatar(h, PX + 30.0f, cy - 16.0f, 0, false);
     } else {
@@ -167,7 +167,7 @@ void net_hud(const Game& g, Hud* h) {
   footer(g, h, tr("conferma"), tr("indietro"));
 }
 
-// Sala d'attesa: i 4 posti, chi c'e' e chi e' questa console.
+// Waiting room: the 4 places, who is there and which one is this console.
 void lobby_places(Hud* h, const NetView& v, float PX, float PY, float PW) {
   const float RH = 46.0f;
   ui::panel(h, PX, PY, PW, 16.0f + RH * (float)MAX_PLAYERS);
@@ -177,7 +177,7 @@ void lobby_places(Hud* h, const NetView& v, float PX, float PY, float PW) {
     const bool here = ((v.present >> i) & 1u) != 0u;
     float x = PX + 20.0f;
     ui::gp(h, x, cy, i, HF_B13);
-    x += 30.0f + 12.0f;                        // G1...G4 non sono larghi uguali: i nomi incolonnati
+    x += 30.0f + 12.0f;                        // G1...G4 are not equally wide: the names aligned in a column
     char buf[96];
     snprintf(buf, sizeof(buf), tr("GIOCATORE %d"), i + 1);
     ui::text(h, x, cy, HF_B16, O(here ? ui::TX : ui::DIS), buf, 1.5f);
@@ -195,7 +195,7 @@ void lobby_hud(const Game& g, Hud* h) {
   char buf[256], nm[64], where[128];
   if (v.mode == NV_SEARCH || (v.mode == NV_OFF && g.session.lobby_join)) {
     ui::title(h, 320, 26, HF_T32, tr("PARTITE IN RETE"), 3.0f);
-    // "cerco nella stessa Wi-Fi..." con i puntini che crescono.
+    // "cerco nella stessa Wi-Fi..." with the growing dots.
     const int dots = (int)((g.ui_tick / 20u) % 4u);
     snprintf(buf, sizeof(buf), "%s%s", tr("cerco nella stessa Wi-Fi"), dots == 0 ? "" : (dots == 1 ? "." : (dots == 2 ? ".." : "...")));
     subtitle(h, 80.0f, buf);
@@ -247,7 +247,7 @@ void lobby_hud(const Game& g, Hud* h) {
     }
     return;
   }
-  // Chi ha creato la partita, o chi si e' unito: la partita e i 4 posti.
+  // The host, or whoever has joined: the game and the 4 places.
   ui::title(h, 320, 26, HF_T32, tr("PARTITA IN RETE"), 3.0f);
   net_game_where(v.game, where, sizeof(where));
   snprintf(buf, sizeof(buf), "%s · %s", net_game_name(v.game, nm, sizeof(nm)), where);

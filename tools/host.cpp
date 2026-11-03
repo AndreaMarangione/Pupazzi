@@ -1,17 +1,17 @@
-// Frontend libretro minimo, senza finestra, per provare il core senza console.
+// Minimal libretro frontend, without a window, to test the core without a console.
 //
 //   host CORE.so [--frames N] [--dump DIR] [--at 10,60,...] [--in SCRIPT] [--var k=v]
 //                [--gl] [--depth16] [--no-proc] [--dirty N] [--hashes] [--quiet] [--wav FILE] [--tempo HZ]
 //
-// SCRIPT: eventi separati da virgola, "porta:NOME@inizio-fine" per un tasto oppure
-// "porta:asse=valore@inizio-fine" per una levetta (assi lx ly rx ry, valore tra -1 e 1).
-// Esempio: --in "0:RIGHT@10-60,1:A@30-32,0:rx=0.5@80-120"
+// SCRIPT: comma-separated events, "port:NAME@start-end" for a button or
+// "port:axis=value@start-end" for a stick (axes lx ly rx ry, value between -1 and 1).
+// Example: --in "0:RIGHT@10-60,1:A@30-32,0:rx=0.5@80-120"
 //
-// Con --gl (solo se compilato con -DHOST_GL) offre al core un contesto OpenGL ES 2 fuori
-// schermo e controlla che il core lasci pulito lo stato GL, come si aspetta RetroArch.
-// --dirty N sporca lo stato GL prima di ogni fotogramma (vedi gl_dirty): l'immagine non deve cambiare.
-// --tempo HZ: HZ fotogrammi al secondo come un frontend (le prove del gioco in rete con piu' copie,
-// che devono andare allo stesso passo); senza, il piu' veloce possibile.
+// With --gl (only if compiled with -DHOST_GL) it offers the core an offscreen OpenGL ES 2
+// context and checks that the core leaves the GL state clean, as RetroArch expects.
+// --dirty N dirties the GL state before every frame (see gl_dirty): the image must not change.
+// --tempo HZ: HZ frames per second like a frontend (the LAN game tests with several copies,
+// which must run in step); without it, as fast as possible.
 #include <dlfcn.h>
 #include <stdarg.h>
 #include <stdint.h>
@@ -72,7 +72,7 @@ static void log_printf(enum retro_log_level level, const char* fmt, ...) {
   va_end(ap);
 }
 
-// --- OpenGL ES fuori schermo ---------------------------------------------
+// --- offscreen OpenGL ES -------------------------------------------------
 #ifdef HOST_GL
 #define HGL(X) \
   X(void, glGenFramebuffers, (int, unsigned*)) \
@@ -166,7 +166,7 @@ static bool gl_setup(unsigned side) {
   HGL(X)
 #undef X
   printf("host: EGL %d.%d, %s, %s\n", major, minor, (const char*)h_glGetString(0x1F01), (const char*)h_glGetString(0x1F02));
-  // Stessa struttura dell'FBO di RetroArch: quadrato, lato potenza di due, RGBA8, profondita' e stencil.
+  // Same structure as RetroArch's FBO: square, side a power of two, RGBA8, depth and stencil.
   h_glGenTextures(1, &g_fbo_tex);
   h_glBindTexture(0x0DE1, g_fbo_tex);
   h_glTexImage2D(0x0DE1, 0, 0x1908, (int)side, (int)side, 0, 0x1908, 0x1401, NULL);
@@ -190,10 +190,10 @@ static bool gl_setup(unsigned side) {
   return true;
 }
 
-// --dirty N: prima di ogni fotogramma lascia lo stato GL "sporco", come potrebbe lasciarlo il
-// frontend o un core precedente. Il core deve disegnare la stessa immagine comunque.
-// N e' una maschera di bit: 1 lo stato che RetroArch tocca davvero, 2 array di attributi accesi
-// che il core non usa, 4 equazione di fusione, 8 scostamento dei poligoni, 16 copertura dei campioni.
+// --dirty N: before every frame leaves the GL state "dirty", as the frontend or a previous core
+// might leave it. The core must draw the same image anyway.
+// N is a bit mask: 1 the state that RetroArch really touches, 2 enabled attribute arrays that the
+// core does not use, 4 blend equation, 8 polygon offset, 16 sample coverage.
 static int g_dirty;
 static unsigned g_dvbo, g_dtex;
 static void gl_dirty(void) {
@@ -207,14 +207,14 @@ static void gl_dirty(void) {
     h_glGenTextures(1, &g_dtex);
   }
   if (g_dirty & 1) {
-    h_glEnable(0x0BE2); h_glBlendFunc(1, 1);                           // fusione ONE/ONE
-    h_glEnable(0x0C11); h_glScissor(5, 5, 20, 20);                     // forbice
-    h_glEnable(0x0B71); h_glDepthFunc(0x0200); h_glDepthMask(0);       // profondita' NEVER, senza scrittura
-    h_glEnable(0x0B44); h_glCullFace(0x0404); h_glFrontFace(0x0900);   // scarto delle facce anteriori, senso orario
+    h_glEnable(0x0BE2); h_glBlendFunc(1, 1);                           // ONE/ONE blending
+    h_glEnable(0x0C11); h_glScissor(5, 5, 20, 20);                     // scissor
+    h_glEnable(0x0B71); h_glDepthFunc(0x0200); h_glDepthMask(0);       // depth NEVER, no writes
+    h_glEnable(0x0B44); h_glCullFace(0x0404); h_glFrontFace(0x0900);   // front-face culling, clockwise
     h_glEnable(0x0B90); h_glStencilFunc(0x0200, 0, 0xFF); h_glStencilMask(0);
     h_glColorMask(1, 0, 1, 0);
-    h_glDisable(0x0BD0);                                               // dithering spento
-    h_glActiveTexture(0x84C3); h_glBindTexture(0x0DE1, g_dtex);        // unita' 3 attiva
+    h_glDisable(0x0BD0);                                               // dithering off
+    h_glActiveTexture(0x84C3); h_glBindTexture(0x0DE1, g_dtex);        // unit 3 active
     h_glClearColor(1, 0, 1, 0); h_glClearDepthf(0.0f); h_glClearStencil(7);
     h_glDepthRangef(0.3f, 0.6f);
     h_glPixelStorei(0x0CF5, 1);
@@ -228,7 +228,7 @@ static void gl_dirty(void) {
     for (unsigned i = 3; i < 8; ++i) { h_glEnableVertexAttribArray(i); h_glVertexAttribPointer(i, 2, 0x1406, 0, 0, 0); }
     h_glBindBuffer(0x8892, 0);
   }
-  if (g_dirty & 4) h_glBlendEquation(0x800A);                          // sottrazione
+  if (g_dirty & 4) h_glBlendEquation(0x800A);                          // subtraction
   if (g_dirty & 8) { h_glEnable(0x8037); h_glPolygonOffset(50.0f, 5000.0f); }
   if (g_dirty & 16) { h_glEnable(0x80A0); h_glSampleCoverage(0.0f, 0); h_glEnable(0x809E); }
 }
@@ -239,7 +239,7 @@ static retro_proc_address_t hw_get_proc(const char* sym) {
   return (retro_proc_address_t)h_eglGetProcAddress(sym);
 }
 
-// Dopo retro_run lo stato deve essere quello che RetroArch non ripristina da solo.
+// After retro_run, the state that RetroArch does not restore by itself must be clean.
 static void gl_leak_check(void) {
   if (g_leak_reported) return;
   int v = 0;
@@ -261,7 +261,7 @@ static void gl_leak_check(void) {
 }
 #endif
 
-// --- ambiente -------------------------------------------------------------
+// --- environment ----------------------------------------------------------
 
 static bool environment(unsigned cmd, void* data) {
   switch (cmd) {
@@ -329,7 +329,7 @@ static void video_refresh(const void* data, unsigned w, unsigned h, size_t pitch
     h_glReadPixels(0, 0, (int)w, (int)h, 0x1908, 0x1401, g_rgba);
     h_glBindFramebuffer(0x8D40, 0);
     for (unsigned y = 0; y < h; ++y) {
-      const uint8_t* s = g_rgba + (size_t)(h - 1 - y) * w * 4;      // origine in basso a sinistra
+      const uint8_t* s = g_rgba + (size_t)(h - 1 - y) * w * 4;      // origin at the bottom left
       uint32_t* d = g_last + (size_t)y * w;
       for (unsigned x = 0; x < w; ++x) d[x] = 0xFF000000u | ((uint32_t)s[x * 4] << 16) | ((uint32_t)s[x * 4 + 1] << 8) | s[x * 4 + 2];
     }
@@ -341,7 +341,7 @@ static void video_refresh(const void* data, unsigned w, unsigned h, size_t pitch
   store_frame((const uint32_t*)data, w, h, pitch);
 }
 
-// --wav FILE: il sonoro del core in un file WAV (48 kHz, stereo, 16 bit) per misurarlo.
+// --wav FILE: the core's sound into a WAV file (48 kHz, stereo, 16 bit) to measure it.
 static FILE* g_wav;
 static long g_wav_frames;
 static void wav_header(FILE* f, long frames) {
@@ -495,7 +495,7 @@ int main(int argc, char** argv) {
 
   void* lib = dlopen(path, RTLD_NOW | RTLD_LOCAL);
   if (!lib) { printf("host: dlopen fallita: %s\n", dlerror()); return 1; }
-  // RetroArch pretende tutti e 25 i simboli dell'interfaccia.
+  // RetroArch requires all 25 symbols of the interface.
   static const char* const ALL[25] = {
     "retro_init", "retro_deinit", "retro_api_version", "retro_get_system_info", "retro_get_system_av_info",
     "retro_set_environment", "retro_set_video_refresh", "retro_set_audio_sample", "retro_set_audio_sample_batch",
@@ -519,7 +519,7 @@ int main(int argc, char** argv) {
   struct retro_system_info si;
   memset(&si, 0, sizeof(si));
   core.get_system_info(&si);
-  // Stesso ordine di RetroArch: ambiente, init, load_game, callback, av_info, contesto video.
+  // Same order as RetroArch: environment, init, load_game, callbacks, av_info, video context.
   core.set_environment(environment);
   core.init();
   if (!g_no_game) { printf("host: il core non dichiara di partire senza contenuto\n"); return 1; }
@@ -551,7 +551,7 @@ int main(int argc, char** argv) {
   const double t_start = now_ms();
   for (g_frame = 0; g_frame < frames && !g_shutdown; ++g_frame) {
     if (tempo > 0.0) {
-      // Al passo di un frontend: il fotogramma n non prima di n / HZ secondi dall'inizio.
+      // At a frontend's pace: frame n not before n / HZ seconds from the start.
       const double due = t_start + (double)g_frame * 1000.0 / tempo;
       for (double t = now_ms(); t < due; t = now_ms()) {
         struct timespec ts;
@@ -563,7 +563,7 @@ int main(int argc, char** argv) {
     }
 #ifdef HOST_GL
     if (g_hw_set) {
-      h_glBindFramebuffer(0x8D40, 0);          // RetroArch entra in retro_run con il framebuffer 0 legato
+      h_glBindFramebuffer(0x8D40, 0);          // RetroArch enters retro_run with framebuffer 0 bound
       h_glViewport(0, 0, 7, 7);
       h_glUseProgram(0);
       gl_dirty();

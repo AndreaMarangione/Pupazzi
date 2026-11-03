@@ -1,10 +1,10 @@
-// Prove del sonoro senza console: ogni effetto e ogni brano in un WAV con le misure, controllo del punto
-// di ripresa dei brani, una battaglia affollata di 60 s con musica e tempi di calcolo (con il bilanciamento tra
-// musica ed effetti), casi limite.
-//   make test-audio    (oppure: make build/native/test_audio && ./build/native/test_audio CARTELLA)
-// Esce con errore se trova NaN o infiniti, campioni al fondo scala, continua oltre l'1%, errori nei brani, brani a
-// ripetizione fuori dalla finestra di livello (RMS tra -28 e -22 dBFS con la musica a 7) o la musica di una mappa
-// che nella battaglia non sta almeno 3 LU sotto gli effetti.
+// Sound tests without the console: each sound effect and each tune in a WAV with the measurements, check of
+// the tunes' loop point, a crowded 60 s battle with music and computation times (with the balance between
+// music and sound effects), edge cases.
+//   make test-audio    (or: make build/native/test_audio && ./build/native/test_audio DIR)
+// Exits with an error if it finds NaN or infinities, samples at full scale, DC above 1%, errors in the tunes,
+// looping tunes outside the level window (RMS between -28 and -22 dBFS with the music at 7) or the music of a
+// map that in the battle is not at least 3 LU below the sound effects.
 #include "engine/audio.h"
 #include "test.h"
 #include <math.h>
@@ -14,7 +14,7 @@
 #include <time.h>
 
 static const int RATE = 48000, FRAME = 800;
-static const char* g_dir = ".";   // primo argomento: dove scrivere i WAV
+static const char* g_dir = ".";   // first argument: where to write the WAVs
 
 // A check of the sound tests: silent when it passes (the tables already show the values), a line
 // "ERRORE ..." when it fails (cut to 1 KB); doctest counts both.
@@ -27,8 +27,8 @@ static const char* g_dir = ".";   // primo argomento: dove scrivere i WAV
     CHECK_MESSAGE(audio_ok_, doctest::String(audio_what_));                              \
   } while (0)
 
-// Tempo di CPU di questo thread: non conta i momenti in cui la macchina fa altro (con altri programmi accesi il tempo
-// dell'orologio salta di millisecondi).
+// CPU time of this thread: it does not count the moments when the machine does something else (with other
+// programs running, the wall-clock time jumps by milliseconds).
 static double now_ms(void) {
   timespec ts;
   clock_gettime(CLOCK_THREAD_CPUTIME_ID, &ts);
@@ -37,7 +37,7 @@ static double now_ms(void) {
 
 struct Buf {
   int16_t* s = nullptr;
-  int n = 0, cap = 0;   // campioni per canale
+  int n = 0, cap = 0;   // samples per channel
   void reserve(int frames) { if (frames > cap) { s = (int16_t*)realloc(s, (size_t)frames * 4); cap = frames; } }
   int16_t* add(int frames) { reserve(n + frames > cap ? (n + frames) * 2 : cap); int16_t* p = s + 2 * n; n += frames; return p; }
 };
@@ -45,7 +45,7 @@ struct Buf {
 struct Timing {
   double sum = 0, max = 0, v[8192];
   int n = 0, at = 0;
-  double pct(double q) const {   // percentile dei tempi
+  double pct(double q) const {   // percentile of the times
     static double t[8192];
     const int m = n < 8192 ? n : 8192;
     memcpy(t, v, sizeof(double) * (size_t)m);
@@ -84,8 +84,8 @@ static void write_wav(const char* dir, const char* name, const Buf& b) {
   fclose(f);
 }
 
-// Butterworth del 4o ordine (due biquad): energia sopra i 6 kHz (suoni stridenti) e sotto i 200 Hz (che
-// l'altoparlantino della console non riproduce).
+// 4th-order Butterworth (two biquads): energy above 6 kHz (shrill sounds) and below 200 Hz (which the
+// console's little speaker does not reproduce).
 struct Biquad {
   double b0, b1, b2, a1, a2, x1 = 0, x2 = 0, y1 = 0, y2 = 0;
   Biquad(double fc, double q, bool low = false) {
@@ -103,7 +103,7 @@ struct Biquad {
 
 struct Meas { double dur, peak, rms, dc, hf, frms, lf, lufs; int full; };
 
-// Sonorita' alla BS.1770 (filtro K a 48 kHz, senza soglie): LUFS = -0,691 + 10 log10 (somma dei due canali).
+// Loudness per BS.1770 (K filter at 48 kHz, no thresholds): LUFS = -0.691 + 10 log10 (sum of both channels).
 static double loudness(const Buf& b, int from = 0, int to = -1) {
   if (to < 0) to = b.n;
   if (to <= from) return -200;
@@ -148,7 +148,7 @@ static Meas measure(const Buf& b, int from = 0, int to = -1) {
       ea += x * x;
       ed += (x - xp) * (x - xp);
     }
-  m.frms = ea > 0 ? RATE / (2 * M_PI) * sqrt(ed / ea) : 0;   // "frequenza media" (dalla derivata): quanto e' brillante
+  m.frms = ea > 0 ? RATE / (2 * M_PI) * sqrt(ed / ea) : 0;   // "mean frequency" (from the derivative): how bright it is
   m.peak = pk > 0 ? 20 * log10(pk) : -200;
   m.rms = act > 0 && ea > 0 ? 10 * log10(ea / (2.0 * act)) : -200;
   m.dc = n > 0 ? 100.0 * fabs(sum / (2.0 * n)) : 0;
@@ -165,7 +165,7 @@ static void check_meas(const char* what, const Meas& m) {
 
 static void silence(int frames) { Buf b; render(b, frames); free(b.s); }
 
-// la tabella delle tarature in audio.cpp: ogni suono si ritara da zero e si confronta
+// the calibration table in audio.cpp: each sound is recalibrated from scratch and compared
 TEST_CASE("1) taratura degli effetti") {
   const char* dir = g_dir;
   AudioStats st;
@@ -176,7 +176,7 @@ TEST_CASE("1) taratura degli effetti") {
   audio_get_stats(&st);
   char path[512];
   snprintf(path, sizeof(path), "%s/taratura.txt", dir);
-  const char* rows = strchr(tab, '\n');   // la prima riga e' l'elenco dei suoni da rifare, poi la tabella
+  const char* rows = strchr(tab, '\n');   // the first line is the list of sounds to redo, then the table
   if (FILE* f = fopen(path, "w")) { fputs(rows ? rows + 1 : tab, f); fclose(f); }
   printf("taratura completa: %.1f ms di CPU, %.1f s di suono; tabella CAL_TAB %s\n", c1 - c0, st.init_samples / (double)RATE,
          diff == 0 ? "giusta" : "da rifare");
@@ -187,7 +187,7 @@ TEST_CASE("1) taratura degli effetti") {
   audio_set_volume(7, 8);
 }
 
-// --- effetti --------------------------------------------------------------------------------------
+// --- sound effects --------------------------------------------------------------------------------
 
 TEST_CASE("2) effetti, ognuno da solo (effetti a 8, al centro, vol 1)") {
   const char* dir = g_dir;
@@ -202,7 +202,7 @@ TEST_CASE("2) effetti, ognuno da solo (effetti a 8, al centro, vol 1)") {
     audio_play(id, 0.0f, 1.0f);
     AudioStats st;
     int t = 0;
-    // la fiamma si tiene premuta per 1 s, come nel gioco (una richiesta ogni 5 fotogrammi)
+    // the flame is held down for 1 s, as in the game (one request every 5 frames)
     do {
       if (id == SND_FLAME && t < 60 && t % 5 == 0) audio_play(id, 0.0f, 1.0f);
       render(b, FRAME);
@@ -224,7 +224,7 @@ TEST_CASE("2) effetti, ognuno da solo (effetti a 8, al centro, vol 1)") {
   }
 }
 
-// --- brani ----------------------------------------------------------------------------------------
+// --- tunes ----------------------------------------------------------------------------------------
 
 TEST_CASE("3) brani (musica a 7)") {
   const char* dir = g_dir;
@@ -238,7 +238,7 @@ TEST_CASE("3) brani (musica a 7)") {
     audio_music(id);
     Buf b;
     Timing tm;
-    // 60 s, e comunque oltre il punto di ripresa
+    // 60 s, and in any case past the loop point
     const int frames = loop_s < 0 ? (int)((len_s + 3.0f) * RATE)
                                   : (len_s + 5.0f > 60.0f ? (int)((len_s + 5.0f) * RATE) : 60 * RATE);
     render(b, frames, &tm);
@@ -252,7 +252,7 @@ TEST_CASE("3) brani (musica a 7)") {
     printf("%-10s durata %6.2f s (ripresa %s), suono fino a %6.2f s, picco %6.1f dBFS, RMS %6.1f dBFS, %.1f LUFS, continua %.3f%%, "
            ">6kHz %.2f%%, <200Hz %.1f%%\n", audio_music_name(id), len_s, loop_s < 0 ? "nessuna" : "si'", m.dur, m.peak, m.rms, m.lufs,
            m.dc, m.hf, m.lf);
-    // i brani delle mappe stanno sotto gli effetti (0.5: la musica della 0.4 era a -20 dBFS e copriva il gioco)
+    // the map tunes stay below the sound effects (0.5: the music of 0.4 was at -20 dBFS and covered the game)
     AUDIO_CHECK(!(loop_s >= 0 && (m.rms < -28.0 || m.rms > -22.0)),
                 "%s: livello fuori dalla finestra (RMS tra -28 e -22 dBFS con la musica a 7)", audio_music_name(id));
     printf("           tempo per fotogramma di 800 campioni: medio %.4f ms, 99%% sotto %.4f ms, massimo %.4f ms (fotogramma %d); "
@@ -261,10 +261,10 @@ TEST_CASE("3) brani (musica a 7)") {
     int nbars = 0;
     { float bpm, sw; const char* c = strchr(text, ':'); if (c) sscanf(c + 1, " %f BPM, swing %f, %d battute", &bpm, &sw, &nbars); }
     if (loop_s >= 0 && nbars > 1) {
-      // Punto di ripresa. (1) Salto massimo tra campioni vicini nei 10 ms attorno alla ripresa, rispetto allo stesso
-      // valore ai cambi di battuta del primo giro (li' la musica e' continua per costruzione). (2) Livello nei 250 ms
-      // prima e dopo. (3) Inviluppo (RMS a finestre di 20 ms) dei 4 s dopo la ripresa contro quelli dell'inizio: le fasi
-      // degli oscillatori non ripartono da zero, quindi si confronta l'andamento, non i campioni.
+      // Loop point. (1) Maximum jump between neighboring samples in the 10 ms around the loop point, compared with
+      // the same value at the bar changes of the first pass (there the music is continuous by construction). (2) Level
+      // in the 250 ms before and after. (3) Envelope (RMS in 20 ms windows) of the 4 s after the loop point against
+      // those of the start: the oscillator phases do not restart from zero, so the trend is compared, not the samples.
       const int seam = onset + (int)lround((double)len_s * RATE), lsamp = (int)lround((double)loop_s * RATE);
       const double bar = (double)len_s * RATE / nbars;
       auto jump = [&](int at) {
@@ -318,7 +318,7 @@ TEST_CASE("3) brani (musica a 7)") {
   AUDIO_CHECK(!st.parse_errors, "%d errori nei testi dei brani (vedi i file musica_*.txt)", st.parse_errors);
 }
 
-// --- battaglia affollata ------------------------------------------------------------------------------
+// --- crowded battle -----------------------------------------------------------------------------------
 
 static unsigned g_r = 12345;
 static float frand(void) { g_r = g_r * 1664525u + 1013904223u; return (float)(g_r >> 8) / 16777216.0f; }
@@ -326,7 +326,7 @@ static bool chance(float per_s) { return frand() < per_s / 60.0f; }
 
 struct Delayed { int frame, id; float pan; };
 
-// mode: 0 musica ed effetti (a 7 e 8), 1 solo musica, 2 solo effetti; stessa sequenza di richieste ogni volta
+// mode: 0 music and sound effects (at 7 and 8), 1 music only, 2 effects only; same request sequence each time
 static Buf run_battle(int mode, Timing* tmp, int* nplays, int song = MUS_PIRAMIDI) {
   audio_reset();
   silence(RATE);
@@ -349,13 +349,13 @@ static Buf run_battle(int mode, Timing* tmp, int* nplays, int song = MUS_PIRAMID
     for (int p = 0; p < 4; ++p) {
       pan[p] += (frand() - 0.5f) * 0.04f;
       pan[p] = pan[p] < -0.9f ? -0.9f : (pan[p] > 0.9f ? 0.9f : pan[p]);
-      // raffiche di 1-3 s e pause di 0,5-1,5 s
+      // bursts of 1-3 s and pauses of 0.5-1.5 s
       if (fire[p] > 0) fire[p]--;
       else if (cool[p] > 0) cool[p]--;
       else { fire[p] = 60 + (int)(frand() * 120); cool[p] = 30 + (int)(frand() * 60); }
       if (fire[p] <= 0) continue;
       const float v = 0.8f + 0.2f * frand();
-      switch (p) {   // ASTRO a raffiche di tre colpi, MOCHI cristalli, MARZIO ghiaccio secco, ZOLFO fiamma
+      switch (p) {   // ASTRO in bursts of three shots, MOCHI crystals, MARZIO dry ice, ZOLFO flame
       case 0: if (f % 9 == 0) { play(SND_BULLET, pan[p], v); later(f + 4, SND_BULLET, pan[p]); later(f + 8, SND_BULLET, pan[p]); } break;
       case 1: if (f % 15 == 0) play(SND_SHARD, pan[p], v); break;
       case 2: if (f % 12 == 0) play(SND_FROST, pan[p], v); break;
@@ -369,7 +369,7 @@ static Buf run_battle(int mode, Timing* tmp, int* nplays, int song = MUS_PIRAMID
     if (chance(0.3f)) play(SND_EXPLODE_SMALL, rp, rv);
     if (chance(0.15f)) play(frand() < 0.5f ? SND_PICK_TALISMAN : SND_PICK_BOMB, rp, 1.0f);
     if (chance(0.35f)) play(SND_SCORPION, rp, rv);
-    if (chance(0.5f)) { play(SND_BOW, rp, rv); later(f + 55, SND_ARROW_LAND, rp * 0.8f); }   // la freccia cade dopo 0,9 s
+    if (chance(0.5f)) { play(SND_BOW, rp, rv); later(f + 55, SND_ARROW_LAND, rp * 0.8f); }   // the arrow lands after 0.9 s
     if (chance(0.7f)) play(SND_SCARAB, rp, rv);
     if (chance(0.1f)) play(SND_WARRIOR, rp, rv);
     if (chance(0.5f)) play(SND_HURT, rp, 1.0f);
@@ -390,7 +390,7 @@ static Buf run_battle(int mode, Timing* tmp, int* nplays, int song = MUS_PIRAMID
         break;
       }
     }
-    if (f == 20 * 60 || f == 45 * 60) {   // pausa: menu con qualche spostamento
+    if (f == 20 * 60 || f == 45 * 60) {   // pause: menu with a few moves
       play(SND_PAUSE, 0, 1); audio_duck(true);
       for (int k = 1; k <= 3; ++k) later(f + 15 * k, SND_UI_MOVE, 0);
       later(f + 70, SND_UI_OK, 0);
@@ -398,13 +398,13 @@ static Buf run_battle(int mode, Timing* tmp, int* nplays, int song = MUS_PIRAMID
     if (f == 20 * 60 + 75 || f == 45 * 60 + 75) audio_duck(false);
     if (f == 30 * 60) play(SND_ZONE_CLEAR, 0, 1);
     if (f == 31 * 60) { play(SND_WAVE, 0, 1); play(SND_CARD_OPEN, 0, 1); later(f + 50, SND_CARD_PICK, 0); }
-    if (f >= 40 * 60 && f < 50 * 60 && f % 170 == 0) play(SND_HELP, 0.3f, 0.8f);   // l'esploratore chiama aiuto
+    if (f >= 40 * 60 && f < 50 * 60 && f % 170 == 0) play(SND_HELP, 0.3f, 0.8f);   // the explorer calls for help
     if (f == 50 * 60) { play(SND_CRATE_BREAK, 0.3f, 1); play(SND_RESCUE, 0.3f, 1); }
-    if (f == 25 * 60)   // quattro scorpioni si fermano quasi insieme
+    if (f == 25 * 60)   // four scorpions stop almost together
       for (int k = 0; k < 4; ++k) later(f + 7 * k, SND_SCORPION, -0.6f + 0.4f * (float)k);
-    if (f == 35 * 60) play(SND_SPLASH, 0.2f, 1.0f);   // un giocatore cade nel cenote
-    // il gladiatore, due volte per 10 s: cammina (un passo ogni 27 fotogrammi), fendente (avviso, colpo 33 fotogrammi
-    // dopo), carica (preparazione di 48 fotogrammi, corsa con un passo ogni 9, poi il muro), cammina ancora
+    if (f == 35 * 60) play(SND_SPLASH, 0.2f, 1.0f);   // a player falls into the cenote
+    // the gladiator, twice for 10 s: walks (one step every 27 frames), slash (warning, hit 33 frames later),
+    // charge (48-frame wind-up, run with one step every 9, then the wall), walks again
     for (int w = 0; w < 2; ++w) {
       const int t = f - (w ? 38 : 8) * 60;
       if (t < 0 || t >= 10 * 60) continue;
@@ -428,7 +428,7 @@ TEST_CASE("4) battaglia affollata: 60 s, le piramidi, 4 giocatori (ASTRO, MOCHI,
   const char* dir = g_dir;
   Timing tm, tm2;
   int plays = 0, p2 = 0;
-  // bilanciamento: la stessa battaglia con la sola musica e con i soli effetti
+  // balance: the same battle with only the music and with only the sound effects
   Buf bm = run_battle(1, &tm2, &p2), bs = run_battle(2, &tm2, &p2);
   const double lm = loudness(bm), ls = loudness(bs);
   write_wav(dir, "battaglia_musica", bm);
@@ -453,7 +453,7 @@ TEST_CASE("4) battaglia affollata: 60 s, le piramidi, 4 giocatori (ASTRO, MOCHI,
   AUDIO_CHECK(!(ls - lm < 3.0), "battaglia: la musica copre gli effetti (meno di 3 LU sotto)");
   write_wav(dir, "battaglia", b);
   free(b.s);
-  // le altre mappe: la stessa battaglia con la loro musica, contro gli stessi effetti
+  // the other maps: the same battle with their music, against the same sound effects
   printf("bilanciamento delle altre mappe (musica da sola, LU sotto gli effetti):");
   const int other[3] = { MUS_CHICHENITZA, MUS_MURAGLIA, MUS_COLOSSEO };
   for (int k = 0; k < 3; ++k) {
@@ -467,7 +467,7 @@ TEST_CASE("4) battaglia affollata: 60 s, le piramidi, 4 giocatori (ASTRO, MOCHI,
   printf("\n");
 }
 
-// --- dissolvenze e casi limite -------------------------------------------------------------------------
+// --- fades and edge cases ------------------------------------------------------------------------------
 
 TEST_CASE("5) cambi di brano, volumi e casi limite") {
   const char* dir = g_dir;
@@ -477,11 +477,11 @@ TEST_CASE("5) cambi di brano, volumi e casi limite") {
   Buf b;
   audio_music(MUS_TITLE);
   render(b, 3 * RATE);
-  audio_music(MUS_TITLE);              // stesso brano: continua
+  audio_music(MUS_TITLE);              // same tune: it continues
   render(b, RATE);
   audio_music(MUS_PIRAMIDI);
   render(b, RATE / 10);
-  audio_music(MUS_COLOSSEO);               // cambio mentre la dissolvenza e' in corso
+  audio_music(MUS_COLOSSEO);               // change while the fade is in progress
   render(b, RATE / 10);
   audio_music(MUS_PIRAMIDI);
   render(b, 3 * RATE);
@@ -489,20 +489,20 @@ TEST_CASE("5) cambi di brano, volumi e casi limite") {
   render(b, RATE);
   audio_duck(false);
   audio_set_volume(10, 10);
-  for (int k = 0; k < 6; ++k) audio_play(SND_EXPLODE, -1.0f + 0.4f * k, 1.0f);   // sei esplosioni insieme al massimo
+  for (int k = 0; k < 6; ++k) audio_play(SND_EXPLODE, -1.0f + 0.4f * k, 1.0f);   // six explosions together at maximum
   render(b, RATE);
-  for (int k = 0; k < 200; ++k) audio_play(1 + k % (NSOUNDS - 1), (k % 7) / 3.5f - 1.0f, 1.0f);   // 200 richieste in un fotogramma
+  for (int k = 0; k < 200; ++k) audio_play(1 + k % (NSOUNDS - 1), (k % 7) / 3.5f - 1.0f, 1.0f);   // 200 requests in one frame
   render(b, RATE);
   audio_play(-5, 0, 1); audio_play(999, 0, 1); audio_play(SND_HIT, NAN, NAN); audio_play(SND_HIT, 5.0f, 7.0f);
   audio_play(SND_HIT, INFINITY, 1.0f); audio_play(SND_HIT, 0.0f, -INFINITY);
   audio_music(77); audio_music(-1); audio_set_volume(-3, 99);
   audio_render(nullptr, 800);
   { int16_t x[2] = { 0, 0 }; audio_render(x, 0); audio_render(x, -4); }
-  for (int k = 0; k < 50; ++k) { int16_t* p = b.add(1 + k % 37); audio_render(p, 1 + k % 37); }   // dimensioni strane
+  for (int k = 0; k < 50; ++k) { int16_t* p = b.add(1 + k % 37); audio_render(p, 1 + k % 37); }   // odd sizes
   audio_set_volume(7, 8);
   audio_music(MUS_VICTORY);
   render(b, 5 * RATE);
-  audio_music(MUS_VICTORY);            // finita: non riparte
+  audio_music(MUS_VICTORY);            // finished: it does not restart
   render(b, RATE);
   audio_music(MUS_COLOSSEO);
   render(b, 2 * RATE);

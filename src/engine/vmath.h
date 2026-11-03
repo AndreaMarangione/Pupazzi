@@ -1,5 +1,5 @@
-// Vettori, trasformazioni rigide e matrici 4x4.
-// Convenzioni: sistema destrorso, Y verso l'alto; Mat4 in ordine per colonne (come OpenGL).
+// Vectors, rigid transforms and 4x4 matrices.
+// Conventions: right-handed system, Y up; Mat4 in column-major order (like OpenGL).
 #pragma once
 #include "engine/dmath.h"
 
@@ -21,7 +21,7 @@ static inline Vec3 normalize(Vec3 a) {
 static inline float clampf(float v, float lo, float hi) { return v < lo ? lo : (v > hi ? hi : v); }
 static inline float lerpf(float a, float b, float t) { return a + (b - a) * t; }
 
-// Trasformazione rigida: p_mondo = R * p_locale + p. R e' 3x3 per righe.
+// Rigid transform: p_world = R * p_local + p. R is 3x3, row-major.
 struct Xform { float r[9]; Vec3 p; };
 
 static inline Xform xf_identity(void) {
@@ -33,14 +33,14 @@ static inline Xform xf_identity(void) {
   return x;
 }
 static inline Xform xf_translate(Vec3 p) { Xform x = xf_identity(); x.p = p; return x; }
-// Rotazione attorno a Y: porta (0,0,1) in (sin a, 0, cos a).
+// Rotation around Y: maps (0,0,1) to (sin a, 0, cos a).
 static inline Xform xf_rot_y(float a) {
   const float s = d_sin(a), c = d_cos(a);
   Xform x = xf_identity();
   x.r[0] = c; x.r[2] = s; x.r[6] = -s; x.r[8] = c;
   return x;
 }
-// Rotazione attorno a X: porta (0,1,0) in (0, cos a, sin a).
+// Rotation around X: maps (0,1,0) to (0, cos a, sin a).
 static inline Xform xf_rot_x(float a) {
   const float s = d_sin(a), c = d_cos(a);
   Xform x = xf_identity();
@@ -59,7 +59,7 @@ static inline Vec3 xf_inv_dir(const Xform& x, Vec3 v) {
             x.r[2] * v.x + x.r[5] * v.y + x.r[8] * v.z);
 }
 static inline Vec3 xf_inv_point(const Xform& x, Vec3 v) { return xf_inv_dir(x, v - x.p); }
-// Composizione: prima b, poi a.
+// Composition: first b, then a.
 static inline Xform xf_mul(const Xform& a, const Xform& b) {
   Xform o;
   for (int i = 0; i < 3; ++i)
@@ -69,14 +69,14 @@ static inline Xform xf_mul(const Xform& a, const Xform& b) {
   return o;
 }
 
-// Rotazione attorno a Z: porta (1,0,0) in (cos a, sin a, 0).
+// Rotation around Z: maps (1,0,0) to (cos a, sin a, 0).
 static inline Xform xf_rot_z(float a) {
   const float s = d_sin(a), c = d_cos(a);
   Xform x = xf_identity();
   x.r[0] = c; x.r[1] = -s; x.r[3] = s; x.r[4] = c;
   return x;
 }
-// Rotazione che porta l'asse Y locale lungo dir (unitario).
+// Rotation that brings the local Y axis along dir (unit length).
 static inline Xform xf_align_y(Vec3 dir) {
   const Vec3 y = dir;
   const Vec3 h = fabsf(y.z) < 0.9f ? v3(0, 0, 1) : v3(1, 0, 0);
@@ -88,7 +88,7 @@ static inline Xform xf_align_y(Vec3 dir) {
   x.r[2] = za.x; x.r[5] = za.y; x.r[8] = za.z;
   return x;
 }
-// Fattore di scala massimo della parte 3x3 (per allargare le sfere di scarto con squash & stretch).
+// Maximum scale factor of the 3x3 part (to enlarge the culling spheres with squash & stretch).
 static inline float xf_max_scale(const Xform& x) {
   float m = 0.0f;
   for (int c = 0; c < 3; ++c) {
@@ -97,14 +97,14 @@ static inline float xf_max_scale(const Xform& x) {
   }
   return sqrtf(m);
 }
-// Scala lungo gli assi.
+// Scale along the axes.
 static inline Xform xf_scale(float sx, float sy, float sz) {
   Xform x = xf_identity();
   x.r[0] = sx; x.r[4] = sy; x.r[8] = sz;
   return x;
 }
 
-struct Mat4 { float m[16]; };   // m[colonna * 4 + riga]
+struct Mat4 { float m[16]; };   // m[column * 4 + row]
 
 static inline Mat4 mat4_mul(const Mat4& a, const Mat4& b) {
   Mat4 o;
@@ -115,7 +115,7 @@ static inline Mat4 mat4_mul(const Mat4& a, const Mat4& b) {
   return o;
 }
 
-// Proiezione prospettica standard OpenGL (clip z in [-w, w]); w di clip = profondita' di vista.
+// Standard OpenGL perspective projection (clip z in [-w, w]); clip w = view depth.
 static inline Mat4 mat4_perspective(float fovy, float aspect, float zn, float zf) {
   const float f = d_cos(fovy * 0.5f) / d_sin(fovy * 0.5f);
   Mat4 o;
@@ -140,7 +140,7 @@ static inline Mat4 mat4_look_at(Vec3 eye, Vec3 at, Vec3 up) {
   return o;
 }
 
-// Righe 0, 1 e 3 di (VP * M) con M = [R p; 0 1]: bastano per x, y e w di clip.
+// Rows 0, 1 and 3 of (VP * M) with M = [R p; 0 1]: enough for clip x, y and w.
 static inline void mvp_rows013(const Mat4& vp, const Xform& x, float out[3][4]) {
   static const int rows[3] = { 0, 1, 3 };
   for (int k = 0; k < 3; ++k) {
@@ -153,9 +153,9 @@ static inline void mvp_rows013(const Mat4& vp, const Xform& x, float out[3][4]) 
   }
 }
 
-struct Plane { Vec3 n; float d; };   // dentro se dot(n, p) + d >= 0
+struct Plane { Vec3 n; float d; };   // inside if dot(n, p) + d >= 0
 
-// Piani sinistro, destro, basso, alto e vicino del tronco di vista, in spazio mondo.
+// Left, right, bottom, top and near planes of the view frustum, in world space.
 static inline void frustum_planes(const Mat4& vp, float zn, Plane out[5]) {
   const float* m = vp.m;
   const float r0[4] = { m[0], m[4], m[8], m[12] };

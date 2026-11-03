@@ -8,7 +8,7 @@
 namespace screens {
 
 void slots_refresh(Game& g) {
-  save_write();                    // la partita attiva com'e' adesso (il tempo di gioco)
+  save_write();                    // the active game as it is now (the play time)
   static SaveData d;
   for (int i = 0; i < SAVE_SLOTS; ++i) {
     SlotView& v = g.session.slot_view[i];
@@ -30,7 +30,7 @@ void slots_refresh(Game& g) {
   }
 }
 
-// Nome da mostrare: quello dato o "PARTITA N".
+// Name to show: the one given or "PARTITA N".
 const char* slot_name(const Game& g, int i, char* buf, int n) {
   if (i >= 0 && i < SAVE_SLOTS && g.session.slot_view[i].state == SAVE_LETTO && g.session.slot_view[i].name[0]) return g.session.slot_view[i].name;
   snprintf(buf, (size_t)n, tr("PARTITA %d"), i + 1);
@@ -55,12 +55,12 @@ void enter_slots(Game& g, int mode) {
   slots_refresh(g);
   g.slots_pop = SP_NONE;
   g.slots_sel = 0;
-  if (mode == SL_NET) {                             // in rete: la partita attiva, o la prima usata, o il primo posto
+  if (mode == SL_NET) {                             // LAN game: the active game, or the first used one, or the first slot
     if (save_slot() >= 0) g.slots_sel = save_slot();
     else
       for (int i = SAVE_SLOTS - 1; i >= 0; --i)
         if (g.session.slot_view[i].state != SAVE_NUOVO) g.slots_sel = i;
-  } else if (mode != SL_OVERWRITE) {                // il cursore sul primo posto usato
+  } else if (mode != SL_OVERWRITE) {                // the cursor on the first used slot
     while (g.slots_sel < SAVE_SLOTS - 1 && g.session.slot_view[g.slots_sel].state == SAVE_NUOVO) g.slots_sel++;
   }
 }
@@ -81,7 +81,7 @@ void slots_update(Game& g) {
           ev_sound_ui(g, SND_UI_OK);
           g.slots_pop = SP_OVERWRITE;
         } else if (g.slots_mode == SL_NET) {
-          // In rete: con un salvataggio che c'e' si crea subito la partita; un posto libero prima il nome.
+          // LAN game: with an existing save the game is created at once; a free slot first gets the name.
           ev_sound_ui(g, SND_UI_OK);
           if (v.state == SAVE_NUOVO) {
             enter_name(g, NM_NET, sel, who, false);
@@ -149,7 +149,7 @@ void slots_update(Game& g) {
         g.slots_pop = SP_NONE;
       }
       break;
-    default:   // SP_DELETE, SP_OVERWRITE: A si', B no
+    default:   // SP_DELETE, SP_OVERWRITE: A yes, B no
       if (ok) {
         if (g.slots_pop == SP_OVERWRITE) {
           ev_sound_ui(g, SND_UI_OK);
@@ -162,7 +162,7 @@ void slots_update(Game& g) {
         info(g, buf);
         slots_refresh(g);
         g.slots_pop = SP_NONE;
-        if (used_slots(g) == 0) back_to_title(g, TI_NEW);    // non resta niente da gestire
+        if (used_slots(g) == 0) back_to_title(g, TI_NEW);    // nothing left to manage
       } else if (no) {
         ev_sound_ui(g, SND_UI_BACK);
         g.slots_pop = SP_NONE;
@@ -171,27 +171,27 @@ void slots_update(Game& g) {
   }
 }
 
-// Durata del gioco: "12 min", "1 h 05 min".
+// Play duration: "12 min", "1 h 05 min".
 void play_time(char* buf, int n, uint32_t s) {
   const uint32_t m = s / 60u;
   if (m < 60u) snprintf(buf, (size_t)n, tr("%u min"), m);
   else snprintf(buf, (size_t)n, tr("%u h %02u min"), m / 60u, m % 60u);
 }
 
-// Un posto: numero, nome; sotto pianeta e giro, stelle, mappe aperte, tempo; vuoto o illeggibile.
+// A slot: number, name; below, planet and round, stars, open maps, time; empty or unreadable.
 void slot_row(const Game& g, Hud* h, float x, float y, float w, float hh, int i, bool sel) {
   const SlotView& v = g.session.slot_view[i];
   char buf[256], t[64];
   if (sel) ui::bar_sel(h, x, y, w, hh);
   const float cy = y + hh * 0.5f;
   const uint32_t mc = O(sel ? ui::ON : ui::TX), sub = O(sel ? ui::ON : ui::MU);
-  // Il numero in un tondo.
+  // The number in a circle.
   hud_ring(h, x + 30.0f, cy, 16.0f, 16.0f, 2.0f, O(sel ? ui::ON : ui::L1));
   snprintf(buf, sizeof(buf), "%d", i + 1);
   ui::text(h, x + 30.0f, cy, HF_B16, O(sel ? ui::ON : ui::L1), buf, 0.0f, 0);
   const float tx = x + 62.0f;
   if (v.state == SAVE_NUOVO) {
-    // In rete un posto libero e' una partita nuova (prima il nome).
+    // In a LAN game a free slot is a new game (first the name).
     if (g.slots_mode == SL_NET) ui::text(h, tx, cy, HF_B16, O(sel ? ui::ON : ui::L1), tr("NUOVA PARTITA"), 1.5f);
     else ui::text(h, tx, cy, HF_B16, O(sel ? ui::ON : ui::DIS), tr("POSTO LIBERO"), 1.5f);
     return;
@@ -218,12 +218,12 @@ void slot_row(const Game& g, Hud* h, float x, float y, float w, float hh, int i,
   lx += hud_text_w(HF_S13, buf, 0.5f) + 14.0f;
   play_time(t, sizeof(t), v.seconds);
   ui::text(h, lx, cy + 11.0f, HF_S13, sub, t, 0.5f);
-  // Il pianeta a destra.
+  // The planet on the right.
   if (v.world == 0) ui::earth(h, x + w - 40.0f, cy - 13.0f);
   else ui::planet(h, x + w - 34.0f, cy - 7.5f, v.world);
 }
 
-// Finestra sopra i posti: titolo e una o due righe; con le voci (azioni) o "A si' / B no".
+// Window over the slots: title and one or two lines; with the items (actions) or "A si' / B no".
 void slots_popup(const Game& g, Hud* h) {
   char buf[256];
   ui::overlay(h, 0.5f);
@@ -243,7 +243,7 @@ void slots_popup(const Game& g, Hud* h) {
     static const char* const HINT[SA_COUNT] = { N_("una copia nel primo posto libero"), N_("gli dai un nome nuovo"),
                                                 N_("lo cancella per sempre") };
     for (int k = 0; k < SA_COUNT; ++k) {
-      const float y = Y + 66.0f + 48.0f * (float)k;           // righe alte anche per cinese, giapponese e hindi
+      const float y = Y + 66.0f + 48.0f * (float)k;           // tall rows, also for Chinese, Japanese and Hindi
       const bool sel = k == g.slots_pop_sel;
       if (sel) ui::bar_sel(h, X + 12.0f, y, W - 24.0f, 44.0f);
       ui::text(h, X + 26.0f, y + 14.0f, HF_S16, O(sel ? ui::ON : (k == SA_DELETE ? ui::L2 : ui::TX)), tr(ACT[k]), 1.0f);

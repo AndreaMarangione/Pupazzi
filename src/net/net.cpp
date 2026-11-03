@@ -1,21 +1,21 @@
-// Gioco in rete nella stessa Wi-Fi (0.5.4): vedi net.h. Tutto nel thread di retro_run, con prese
-// UDP non bloccanti: a ogni fotogramma si legge tutto cio' che e' arrivato e si manda cio' che serve.
+// LAN game on the same Wi-Fi (0.5.4): see net.h. Everything in the retro_run thread, with
+// non-blocking UDP sockets: every frame, everything that arrived is read and what is needed is sent.
 //
-// Messaggi (interi little-endian; ognuno comincia con "PUPZ", la versione del protocollo e il tipo):
-//   DISCOVER  chi cerca -> tutta la rete      "ci sono partite?"
-//   OFFER     chi crea -> chi cerca           nome, pianeta e giro, console nella sala, versione,
-//                                             impronta delle mappe
-//   JOIN      chi cerca -> chi crea           versione, impronta delle mappe, mira
-//   WELCOME / REFUSE                          posto in partita / perche' no
-//   LOBBY / PING                              sala d'attesa, 5 volte al secondo nei due sensi
-//   START     chi crea -> le altre            la partita comincia: numero per mescolare, posti,
-//                                             mire, progressi di chi crea (finche' non risponde)
-//   INPUT     le altre -> chi crea            i comandi non ancora usati (fino a 16 fotogrammi) e il
-//                                             primo fotogramma della partita che le manca
-//   BUNDLE    chi crea -> le altre            i fotogrammi della partita (comandi di tutti) che
-//                                             mancano a quella console (fino a 16 per messaggio),
-//                                             i suoi comandi gia' usati, ogni 30 l'impronta
-//   BYE       nei due sensi                   esco (e perche')
+// Messages (little-endian integers; each starts with "PUPZ", the protocol version and the type):
+//   DISCOVER  searcher -> whole network       "any games?"
+//   OFFER     host -> searcher                name, planet and round, consoles in the room, version,
+//                                             maps hash
+//   JOIN      searcher -> host                version, maps hash, aim
+//   WELCOME / REFUSE                          slot in the game / why not
+//   LOBBY / PING                              waiting room, 5 times per second both ways
+//   START     host -> the others              the game starts: number for shuffling, slots, aims,
+//                                             the host's progress (until it answers)
+//   INPUT     the others -> host              the inputs not used yet (up to 16 frames) and the
+//                                             first game frame it is missing
+//   BUNDLE    host -> the others              the game frames (everyone's inputs) that are missing
+//                                             on that console (up to 16 per message), its inputs
+//                                             already used, the hash every 30
+//   BYE       both ways                       I am leaving (and why)
 #include "net/net.h"
 #include "game/sim/maps.h"
 #include "platform/plat.h"
@@ -37,31 +37,31 @@ namespace {
 const int NET_PORT = 55410, NET_PORTS = 10;
 const uint8_t PROTO = 1;
 enum { T_DISCOVER = 1, T_OFFER, T_JOIN, T_WELCOME, T_REFUSE, T_LOBBY, T_PING, T_BYE, T_START, T_INPUT, T_BUNDLE };
-const int HIST = 1024;              // fotogrammi tenuti (chi crea) e ricevuti (le altre): 17 secondi
-const int IN_RING = 64;             // comandi in arrivo da una console in attesa di essere usati
-// Numeri dei comandi di una console (ripartono da 0 a ogni partita): il primo che arriva deve essere
-// sotto FIRST_MAX (i primi possono andare persi), e uno piu' avanti di AHEAD_MAX di quelli in attesa e'
-// un messaggio sbagliato. Le differenze si fanno a 32 bit con segno: reggono anche il giro dei numeri.
+const int HIST = 1024;              // frames kept (host) and received (the others): 17 seconds
+const int IN_RING = 64;             // incoming inputs from a console waiting to be used
+// Input numbers of a console (they restart from 0 every game): the first one to arrive must be
+// below FIRST_MAX (the first ones can get lost), and one more than AHEAD_MAX ahead of those waiting is
+// a bad message. The differences are computed in signed 32 bits: they also survive the wraparound.
 const uint32_t FIRST_MAX = 1u << 16;
 const int32_t AHEAD_MAX = 1 << 20;
-const int WIN = 16;                 // fotogrammi o comandi al massimo in un messaggio
-const int MAX_PKTS = 4;             // messaggi al massimo per console in un fotogramma (quando e' indietro)
-const int MAX_STEPS = 4;            // fotogrammi della partita al massimo in un fotogramma (per recuperare)
-const int MAX_TARGET = 8;           // scorta al massimo
-const int CHECK_EVERY = 30;         // fotogrammi tra un controllo dell'impronta e l'altro
-const int PKT = 1400;               // byte al massimo in un messaggio (sotto i 1472 di un pacchetto Ethernet)
-const double SILENT_MS = 250.0;     // console che non manda nulla da tanto: comandi a riposo
-const double LOBBY_MS = 3000.0;     // sala d'attesa: chi non si sente da tanto non c'e' piu'
+const int WIN = 16;                 // max frames or inputs in one message
+const int MAX_PKTS = 4;             // max messages per console in one frame (when it is behind)
+const int MAX_STEPS = 4;            // max game frames in one frame (to catch up)
+const int MAX_TARGET = 8;           // max buffer
+const int CHECK_EVERY = 30;         // frames between one hash check and the next
+const int PKT = 1400;               // max bytes in one message (below the 1472 of an Ethernet packet)
+const double SILENT_MS = 250.0;     // console that has sent nothing for this long: neutral inputs
+const double LOBBY_MS = 3000.0;     // waiting room: whoever has not been heard from for this long is gone
 const double LOBBY_SEND_MS = 200.0;
 const double JOIN_RETRY_MS = 250.0, JOIN_GIVEUP_MS = 3000.0;
 const double DISCOVER_MS = 500.0, GAME_EXPIRE_MS = 2500.0;
-const double START_ACK_MS = 5000.0; // una console che non conferma l'inizio entro tanto esce
-const double CLOSE_MS = 5000.0;     // dopo la fine (titolo) chi crea aspetta tanto chi e' indietro
-const double CALM_MS = 6000.0;      // tanto senza restare senza fotogrammi (e sempre 2 di scorta): la scorta cala di 1
-const double STAT_MS = 10000.0;     // una riga nel registro ogni tanto
-const double IP_MS = 2000.0;        // indirizzo di questa console riletto ogni tanto
+const double START_ACK_MS = 5000.0; // a console that does not confirm the start within this time leaves
+const double CLOSE_MS = 5000.0;     // after the end (title) the host waits this long for those behind
+const double CALM_MS = 6000.0;      // this long without running out of frames (always 2 buffered): buffer drops by 1
+const double STAT_MS = 10000.0;     // a line in the log every so often
+const double IP_MS = 2000.0;        // address of this console read again every so often
 
-// Comandi di un giocatore in un fotogramma, come viaggiano: tasti, levette in 1/32767, START breve.
+// A player's inputs in one frame, as they travel: buttons, sticks in 1/32767, short START.
 struct NetPad {
   uint16_t btn;
   int16_t ax[4];
@@ -70,39 +70,39 @@ struct NetPad {
 enum { NP_TAP = 1 };
 
 struct Frame {
-  uint32_t no;                      // numero del fotogramma (il posto nell'anello e' no % HIST)
+  uint32_t no;                      // frame number (the slot in the ring is no % HIST)
   bool ok;
-  uint8_t consoles, silent;         // posti con una console; console che non rispondono (solo HUD)
+  uint8_t consoles, silent;         // slots with a console; consoles that do not answer (HUD only)
   bool check;
-  uint64_t hash;                    // impronta del gioco dopo questo fotogramma (se check)
+  uint64_t hash;                    // game hash after this frame (if check)
   NetPad pad[MAX_PLAYERS];
 };
 
-// Una console che si e' unita (vista da chi crea la partita).
+// A console that has joined (as seen by the host).
 struct Peer {
   bool used;
-  uint32_t id;                      // numero a caso della console
+  uint32_t id;                      // random number of the console
   sockaddr_in addr;
   int player;
   int aim;
   double last_rx, joined_ms;
-  // In partita.
-  bool acked;                       // ha confermato START
+  // During the game.
+  bool acked;                       // has confirmed START
   double start_ms;
-  uint32_t want;                    // primo fotogramma che le manca
-  NetPad rec[IN_RING];              // comandi arrivati (posto: numero % IN_RING)
+  uint32_t want;                    // first frame it is missing
+  NetPad rec[IN_RING];              // inputs received (slot: number % IN_RING)
   uint32_t rec_no[IN_RING];
   bool rec_ok[IN_RING];
-  uint32_t next, top;               // prossimo comando da usare, piu' alto arrivato
-  bool any;                         // e' arrivato almeno un comando
-  NetPad last;                      // gli ultimi usati
-  int gap_t;                        // fotogrammi con un buco (comando perso) prima di saltarlo
-  uint32_t echo;                    // ora della console nell'ultimo messaggio (tempo di andata e ritorno)
+  uint32_t next, top;               // next input to use, highest received
+  bool any;                         // at least one input has arrived
+  NetPad last;                      // the last ones used
+  int gap_t;                        // frames with a gap (lost input) before skipping it
+  uint32_t echo;                    // console time in the last message (round-trip time)
   double echo_rx;
   bool silent;
-  bool done;                        // dopo la fine: e' arrivata in fondo
-  // Statistiche.
-  int rtt, rtt_max;                 // come li misura la console
+  bool done;                        // after the end: it has reached the end
+  // Statistics.
+  int rtt, rtt_max;                 // as measured by the console
   unsigned repeats, merges, skips, silences, msgs;
 };
 
@@ -119,62 +119,62 @@ enum { R_OFF = 0, R_HOST_LOBBY, R_SEARCH, R_JOINING, R_JOINED, R_HOST_PLAY, R_CL
 struct State {
   int role;
   int fd;
-  int port;                         // chi crea: porta aperta
-  int base;                         // prima porta (55410)
+  int port;                         // host: open port
+  int base;                         // first port (55410)
   uint32_t session;
   uint32_t my_id;
   uint64_t content;
   char version[16];
   NetView view;
   double now, ip_t, stat_t;
-  uint32_t last_done;               // ultimo fotogramma della partita fatto (tracce)
-  int budget;                       // fotogrammi della partita che si possono fare in questo fotogramma
-  // Chi crea.
-  Peer peer[MAX_PLAYERS];           // posto = giocatore (0 = chi crea: non usato)
+  uint32_t last_done;               // last game frame run (traces)
+  int budget;                       // game frames that can be run in this frame
+  // Host.
+  Peer peer[MAX_PLAYERS];           // slot = player (0 = host: not used)
   double lobby_t;
   NetGame summary;
   NetStart start;
-  uint8_t st_open[SAVE_WORLDS], st_giro[SAVE_WORLDS], st_stars[256];   // progressi all'inizio (START)
+  uint8_t st_open[SAVE_WORLDS], st_giro[SAVE_WORLDS], st_stars[256];   // progress at the start (START)
   int st_nm;
-  Frame hist[HIST];                 // chi crea: fotogrammi fatti; le altre: fotogrammi ricevuti
-  uint32_t frame;                   // chi crea: prossimo fotogramma da fare
+  Frame hist[HIST];                 // host: frames run; the others: frames received
+  uint32_t frame;                   // host: next frame to run
   NetPad host_pad;
   uint8_t consoles;
   uint32_t close_frame;
   double close_t;
-  // Le altre.
+  // The others.
   double discover_t;
   Found found[NET_MAX_GAMES];
   sockaddr_in host;
   double join_t, join_first;
-  double host_rx;                   // ultimo messaggio di chi crea
-  bool host_over;                   // chi crea ha detto che la partita e' finita
+  double host_rx;                   // last message from the host
+  bool host_over;                   // the host said the game is over
   int player;
-  uint32_t contig;                  // fotogrammi ricevuti di fila (il primo che manca)
-  uint32_t next;                    // prossimo da fare
-  uint32_t cseq;                    // comandi di questa console fatti finora
-  NetPad mine[IN_RING];             // comandi di questa console non ancora usati da chi crea
-  uint32_t acked;                   // chi crea ha usato i comandi fino a questo (escluso)
+  uint32_t contig;                  // frames received in a row (the first missing one)
+  uint32_t next;                    // next one to run
+  uint32_t cseq;                    // inputs of this console produced so far
+  NetPad mine[IN_RING];             // inputs of this console not yet used by the host
+  uint32_t acked;                   // the host has used the inputs up to this one (excluded)
   int target, stall_run, min_avail;
-  int avail;                        // fotogrammi di scorta all'inizio di questo fotogramma (riquadro delle prestazioni)
+  int avail;                        // buffered frames at the start of this frame (performance overlay)
   double calm_t;
   float rtt;
   int rtt_max;
   unsigned stalls, catchup;
-  // Prove.
-  int auto_mode;                    // 0 niente, 1 crea, 2 unisciti
-  int auto_wait;                    // crea: quante altre console aspettare
-  bool force;                       // unisciti: anche a una partita che non va (prova dei rifiuti)
-  int auto_delay;                   // fotogrammi prima di crea/unisciti (prima si gioca da soli)
-  int loss, delay, jitter;          // per cento, ms, ms
-  double drop_ms;                   // una console che non risponde da tanto esce
+  // Tests.
+  int auto_mode;                    // 0 none, 1 crea, 2 unisciti
+  int auto_wait;                    // crea: how many other consoles to wait for
+  bool force;                       // unisciti: even to an incompatible game (refusal test)
+  int auto_delay;                   // frames before crea/unisciti (before that you play alone)
+  int loss, delay, jitter;          // percent, ms, ms
+  double drop_ms;                   // a console that has not answered for this long leaves
   uint32_t rnd;
 };
 State S;
 Game* g_game;                       // the game (net_init): menus and LAN start/stop go through it
-bool g_inited;                      // net_init fatta (prima S.fd non vale)
+bool g_inited;                      // net_init done (before that S.fd is not valid)
 
-// Messaggi in uscita trattenuti (prove: PUPAZZI_RETE_RITARDO).
+// Outgoing messages held back (tests: PUPAZZI_RETE_RITARDO).
 struct Delayed {
   double at;
   sockaddr_in to;
@@ -199,7 +199,7 @@ uint32_t fresh_id(void) {
   return v ? v : 1u;
 }
 
-// --- scrittura e lettura dei messaggi -------------------------------------------------------
+// --- writing and reading messages -----------------------------------------------------------
 
 struct Wr {
   uint8_t b[PKT];
@@ -209,7 +209,7 @@ struct Wr {
   void u16(uint32_t v) { u8(v & 255u); u8((v >> 8) & 255u); }
   void u32(uint32_t v) { u16(v & 0xFFFFu); u16(v >> 16); }
   void u64(uint64_t v) { u32((uint32_t)v); u32((uint32_t)(v >> 32)); }
-  void str(const char* s, int len) {          // lunghezza fissa, riempita con 0
+  void str(const char* s, int len) {          // fixed length, padded with 0
     const int l = s ? (int)strlen(s) : 0;
     for (int k = 0; k < len; ++k) u8(k < l ? (uint8_t)s[k] : 0u);
   }
@@ -278,8 +278,8 @@ void send_to(const sockaddr_in& to, const Wr& w) {
   raw_send(to, w.b, w.n);
 }
 
-// Messaggi trattenuti il cui momento e' arrivato (all: tutti, prima di chiudere), in ordine di
-// partenza: con il ritardo a caso possono superarsi, come nell'aria.
+// Held-back messages whose time has come (all: all of them, before closing), in sending order:
+// with the random delay they can overtake each other, as over the air.
 void flush_delayed(bool all) {
   int k = 0;
   for (int i = 0; i < g_ndelay; ++i) {
@@ -294,7 +294,7 @@ void flush_delayed(bool all) {
   g_ndelay = k;
 }
 
-// --- prese -------------------------------------------------------------------------------
+// --- sockets -----------------------------------------------------------------------------
 
 int open_socket(int port, bool broadcast) {
   const int fd = socket(AF_INET, SOCK_DGRAM | SOCK_NONBLOCK | SOCK_CLOEXEC, 0);
@@ -303,7 +303,7 @@ int open_socket(int port, bool broadcast) {
   if (broadcast) setsockopt(fd, SOL_SOCKET, SO_BROADCAST, &one, sizeof(one));
   int sz = 256 * 1024;
   setsockopt(fd, SOL_SOCKET, SO_RCVBUF, &sz, sizeof(sz));
-  // Priorita' "voce" nella Wi-Fi (WMM): meno attesa nell'aria per i messaggi piccoli e frequenti.
+  // "Voice" priority on the Wi-Fi (WMM): less waiting over the air for small, frequent messages.
   int tos = 0xB8;
   setsockopt(fd, IPPROTO_IP, IP_TOS, &tos, sizeof(tos));
   sockaddr_in a;
@@ -325,7 +325,7 @@ void close_socket(void) {
   S.fd = -1;
 }
 
-// Indirizzo di questa console (il primo IPv4 acceso che non sia 127.x; la Wi-Fi prima).
+// Address of this console (the first IPv4 that is up and is not 127.x; Wi-Fi first).
 void read_ip(void) {
   S.ip_t = S.now;
   S.view.ip[0] = 0;
@@ -347,14 +347,14 @@ void error(int e) {
   S.view.error_seq++;
 }
 
-// --- comandi --------------------------------------------------------------------------------
+// --- inputs ---------------------------------------------------------------------------------
 
 int16_t quant(float v) {
   v = v < -1.0f ? -1.0f : (v > 1.0f ? 1.0f : v);
   return (int16_t)(v * 32767.0f + (v >= 0.0f ? 0.5f : -0.5f));
 }
 
-// Da qui in poi tutte le console usano gli stessi valori (divisione esatta, uguale su ogni processore).
+// From here on all consoles use the same values (exact division, identical on every processor).
 Pad unpack(const NetPad& n) {
   Pad p;
   p.btn = n.btn;
@@ -406,7 +406,7 @@ void send_bye(const sockaddr_in& to, int reason, int times) {
   for (int k = 0; k < times; ++k) send_to(to, w);
 }
 
-// --- chi crea la partita --------------------------------------------------------------------
+// --- host -----------------------------------------------------------------------------------
 
 bool host_open(void) {
   close_socket();
@@ -492,7 +492,7 @@ void host_join(Rd& r, const sockaddr_in& from) {
   const int aim = (int)r.u8();
   if (r.bad) return;
   for (int p = 1; p < MAX_PLAYERS; ++p)
-    if (S.peer[p].used && S.peer[p].id == id) {      // JOIN ripetuto (il WELCOME si e' perso)
+    if (S.peer[p].used && S.peer[p].id == id) {      // repeated JOIN (the WELCOME got lost)
       if (S.role != R_HOST_LOBBY) return;
       S.peer[p].addr = from;
       S.peer[p].last_rx = S.now;
@@ -535,21 +535,21 @@ void host_drop(int pl, int reason, bool tell) {
   } else {
     plat_log("rete: giocatore %d (%s) esce dalla partita al fotogramma %u (%s): andata e ritorno %d ms (al massimo %d), comandi ripetuti %u, uniti %u, saltati %u, silenzi %u",
              pl + 1, addr_text(p.addr), S.frame, reason_text(reason), p.rtt, p.rtt_max, p.repeats, p.merges, p.skips, p.silences);
-    S.consoles &= (uint8_t)~(1u << pl);          // dal prossimo fotogramma: il suo eroe esce
+    S.consoles &= (uint8_t)~(1u << pl);          // from the next frame: its hero leaves
   }
   p.used = false;
 }
 
-// Il prossimo comando della console p per il fotogramma che si sta facendo: i comandi si usano
-// nell'ordine in cui li ha letti, uno a fotogramma.
+// The next input of console p for the frame being run: the inputs are used in the order the
+// console read them, one per frame.
 NetPad host_take(Peer& p) {
   if (!p.acked || !p.any) return neutral();
-  if (p.silent) {                              // non risponde: a riposo (l'eroe si ferma)
+  if (p.silent) {                              // not answering: neutral (the hero stops)
     p.last = neutral();
     return p.last;
   }
-  // Troppi in attesa (la console si era fermata, o i messaggi sono arrivati tutti insieme): si
-  // tengono solo gli ultimi.
+  // Too many waiting (the console had stopped, or the messages all arrived together): only the
+  // last ones are kept.
   if ((int32_t)(p.top - p.next) >= 8) {
     p.skips += p.top - 2u - p.next;
     p.next = p.top - 2u;
@@ -560,8 +560,8 @@ NetPad host_take(Peer& p) {
     p.rec_ok[slot] = false;
     p.next++;
     p.gap_t = 0;
-    // Ancora piu' di uno in attesa: se ne usano due in questo fotogramma (i tasti premuti nel primo
-    // restano premuti, cosi' una pressione breve non si perde).
+    // Still more than one waiting: two are used in this frame (the buttons pressed in the first one
+    // stay pressed, so a short press is not lost).
     const int s2 = (int)(p.next % IN_RING);
     if ((int32_t)(p.top - p.next) >= 1 && p.rec_ok[s2] && p.rec_no[s2] == p.next) {
       const NetPad b = p.rec[s2];
@@ -576,8 +576,8 @@ NetPad host_take(Peer& p) {
     p.last = out;
     return out;
   }
-  // Nessun comando nuovo: si ripete l'ultimo (senza lo START breve). Un buco (comando perso) che
-  // dura si salta.
+  // No new input: the last one is repeated (without the short START). A gap (lost input) that
+  // persists is skipped.
   if ((int32_t)(p.top - p.next) >= 0 && ++p.gap_t > 3) {
     for (int k = 0; k <= IN_RING && (int32_t)(p.top - p.next) >= 0; ++k) {
       const int s = (int)(p.next % IN_RING);
@@ -626,13 +626,13 @@ void host_input(Rd& r, const sockaddr_in& from) {
     if (r.bad) return;
     const uint32_t no = first + (uint32_t)k;
     if (!p.any) {
-      if (no >= FIRST_MAX) return;                 // un messaggio sbagliato
+      if (no >= FIRST_MAX) return;                 // a bad message
       p.any = true;
       p.next = p.top = no;
     }
     const int32_t ahead = (int32_t)(no - p.next);
-    if (ahead < 0 || ahead >= AHEAD_MAX) continue; // gia' usato, o un messaggio sbagliato
-    if (ahead >= IN_RING) {                        // molto avanti (chi ha creato la partita si era fermato): si va li'
+    if (ahead < 0 || ahead >= AHEAD_MAX) continue; // already used, or a bad message
+    if (ahead >= IN_RING) {                        // far ahead (the host had stopped): jump there
       p.skips += (uint32_t)(ahead - (IN_RING - 1));
       p.next = no - (uint32_t)(IN_RING - 1);
     }
@@ -672,7 +672,7 @@ void host_start(void) {
   st.local = 0;
   st.consoles = present_mask();
   for (int p = 1; p < MAX_PLAYERS; ++p) st.aim[p] = S.peer[p].used ? (uint8_t)S.peer[p].aim : (uint8_t)0;
-  // I progressi come sono adesso: le altre console giocano con questi (anche se START arriva tardi).
+  // The progress as it is now: the other consoles play with this (even if START arrives late).
   const SaveData* sd = save_data();
   for (int k = 0; k < SAVE_WORLDS; ++k) {
     S.st_open[k] = sd->maps_open[k];
@@ -701,16 +701,16 @@ void host_start(void) {
   game_net_begin(*g_game, &st);
 }
 
-// Fotogrammi per la console p: da quello che le manca fin dove si e' arrivati (al massimo WIN per
-// messaggio, MAX_PKTS messaggi).
+// Frames for console p: from the one it is missing up to where the game has got (at most WIN per
+// message, MAX_PKTS messages).
 void host_send_frames(Peer& p) {
   uint32_t from = p.want;
-  const uint32_t end = S.frame;              // escluso
+  const uint32_t end = S.frame;              // excluded
   for (int k = 0; k < MAX_PKTS && from < end; ++k) {
     Wr w;
     w.head(T_BUNDLE);
     w.u32(S.session);
-    w.u32(p.next);                           // comandi usati fin qui (esclusi)
+    w.u32(p.next);                           // inputs used so far (excluded)
     w.u32(p.echo);
     const double hold = p.echo_rx > 0.0 ? S.now - p.echo_rx : 0.0;
     w.u16(hold < 0.0 ? 0u : (hold > 60000.0 ? 60000u : (uint32_t)hold));
@@ -736,8 +736,8 @@ void host_send_frames(Peer& p) {
   }
 }
 
-// La partita e' tornata al titolo (anche le altre console ci arrivano, allo stesso fotogramma): chi
-// crea gioca gia' da solo, ma per un po' manda ancora i fotogrammi a chi e' indietro.
+// The game went back to the title (the other consoles get there too, at the same frame): the host
+// already plays alone, but for a while it still sends the frames to those behind.
 void host_closing(void) {
   S.role = R_HOST_CLOSING;
   S.close_frame = S.frame;
@@ -795,7 +795,7 @@ void host_tick(void) {
   }
 }
 
-// --- chi si unisce ------------------------------------------------------------------------
+// --- joining console ----------------------------------------------------------------------
 
 bool client_open(void) {
   close_socket();
@@ -828,7 +828,8 @@ void discover(void) {
   Wr w;
   w.head(T_DISCOVER);
   w.u32(S.my_id);
-  // A tutta la rete (e a ogni rete della console), e a questa macchina (prove con piu' copie).
+  // To the whole network (and to each network of the console), and to this machine
+  // (tests with several copies).
   in_addr_t dest[12];
   int nd = 0;
   dest[nd++] = htonl(INADDR_BROADCAST);
@@ -903,7 +904,7 @@ void join_send(void) {
   send_to(S.host, w);
 }
 
-// k: posto nella lista dei menu (le partite trovate, in ordine, senza i posti vuoti).
+// k: position in the menu list (the games found, in order, without the empty slots).
 void join(int k) {
   if (S.role != R_SEARCH || k < 0) return;
   int idx = -1;
@@ -935,7 +936,7 @@ void client_lobby(Rd& r, const sockaddr_in& from) {
   gm.giro = (int)r.u8();
   r.str(gm.name, NET_NAME_LEN);
   if (r.bad || id != S.my_id || !same_addr(from, S.host) || player < 1 || player >= MAX_PLAYERS) return;
-  if (S.role == R_JOINING) {                   // il WELCOME si e' perso
+  if (S.role == R_JOINING) {                   // the WELCOME got lost
     S.role = R_JOINED;
     S.join_t = 0.0;
     plat_log("rete: nella sala d'attesa come giocatore %d", player + 1);
@@ -979,7 +980,7 @@ void client_begin(Rd& r) {
   char name[NET_NAME_LEN];
   r.str(name, NET_NAME_LEN);
   if (r.bad || id != S.my_id || player < 1 || player >= MAX_PLAYERS || !((st.consoles >> player) & 1)) return;
-  if (S.role != R_JOINED && S.role != R_JOINING) return;     // START ripetuto: gia' cominciata
+  if (S.role != R_JOINED && S.role != R_JOINING) return;     // repeated START: already started
   if (nm != maps_count()) {
     plat_log("rete: la partita ha %d mappe, qui %d: non si puo' giocare", nm, maps_count());
     return;
@@ -987,7 +988,7 @@ void client_begin(Rd& r) {
   S.session = session;
   S.player = player;
   st.local = player;
-  // I progressi di chi ha creato la partita, solo in memoria (save_guest_begin).
+  // The host's progress, only in memory (save_guest_begin).
   save_guest_begin();
   SaveData* sd = save_data();
   for (int k = 0; k < SAVE_WORLDS; ++k) {
@@ -1041,7 +1042,7 @@ void client_bundle(Rd& r) {
     for (int i = 0; i < MAX_PLAYERS; ++i) f.pad[i] = (f.consoles >> i) & 1 ? r.pad() : neutral();
     if (r.bad) return;
     f.ok = true;
-    if (f.no < S.contig || f.no >= S.next + (uint32_t)HIST) continue;     // gia' arrivato, o troppo avanti
+    if (f.no < S.contig || f.no >= S.next + (uint32_t)HIST) continue;     // already arrived, or too far ahead
     Frame& slot = S.hist[f.no % HIST];
     if (slot.ok && slot.no == f.no) continue;
     slot = f;
@@ -1058,7 +1059,7 @@ void client_send_input(void) {
   w.head(T_INPUT);
   w.u32(S.session);
   w.u32(S.my_id);
-  w.u32(S.contig);                               // il primo fotogramma che manca
+  w.u32(S.contig);                               // the first missing frame
   const uint32_t t = (uint32_t)S.now;
   w.u32(t ? t : 1u);
   w.u16(S.rtt > 0.0f ? (uint32_t)(S.rtt + 0.5f) : 0u);
@@ -1070,9 +1071,9 @@ void client_send_input(void) {
   send_to(S.host, w);
 }
 
-// Quanti fotogrammi della partita fare adesso: uno, due se la scorta e' piu' di quella voluta,
-// fino a MAX_STEPS se si e' molto indietro; nessuno se non c'e' il prossimo. Restare senza fa
-// crescere la scorta voluta; 6 secondi con sempre almeno 2 fotogrammi di scorta la fanno calare.
+// How many game frames to run now: one, two if the buffer is more than the target, up to
+// MAX_STEPS if far behind; none if the next one is not there. Running out makes the target
+// buffer grow; 6 seconds with always at least 2 buffered frames make it shrink.
 void client_budget(void) {
   const int avail = (int)(S.contig - S.next);
   S.avail = avail;
@@ -1115,7 +1116,7 @@ void client_tick(void) {
       }
       for (int k = 0; k < NET_MAX_GAMES; ++k)
         if (S.found[k].used && S.now - S.found[k].seen > GAME_EXPIRE_MS) S.found[k].used = false;
-      if (S.auto_mode == 2 && S.now - S.join_first > JOIN_GIVEUP_MS) {   // dopo un rifiuto si riprova fra un po'
+      if (S.auto_mode == 2 && S.now - S.join_first > JOIN_GIVEUP_MS) {   // after a refusal, retry in a while
         for (int k = 0, n = 0; k < NET_MAX_GAMES && S.role == R_SEARCH; ++k) {
           if (!S.found[k].used) continue;
           if (S.found[k].game.state == NG_OPEN || S.force) join(n);
@@ -1150,7 +1151,7 @@ void client_tick(void) {
       break;
     case R_CLIENT_PLAY:
       if (S.host_over && S.contig == S.next && S.now - S.host_rx > 2000.0) {
-        end_session(NE_OVER);                    // finita per chi l'ha creata, e qui non arriva altro
+        end_session(NE_OVER);                    // over for the host, and nothing else arrives here
       } else if (S.now - S.host_rx > S.drop_ms) {
         plat_log("rete: nessun messaggio dalla console che ha creato la partita da %.0f s", (S.now - S.host_rx) / 1000.0);
         end_session(NE_LOST);
@@ -1160,7 +1161,7 @@ void client_tick(void) {
   }
 }
 
-// --- arrivi -------------------------------------------------------------------------------
+// --- incoming -----------------------------------------------------------------------------
 
 void handle(const uint8_t* b, int n, const sockaddr_in& from) {
   if (n < 6 || b[0] != 'P' || b[1] != 'U' || b[2] != 'P' || b[3] != 'Z' || b[4] != PROTO) return;
@@ -1235,7 +1236,7 @@ void handle(const uint8_t* b, int n, const sockaddr_in& from) {
           error(NE_HOST_LEFT);
           search_reset();
         } else if (S.role == R_CLIENT_PLAY) {
-          if (reason == NE_OVER) S.host_over = true;     // si arriva in fondo da soli (game_net_over)
+          if (reason == NE_OVER) S.host_over = true;     // this console reaches the end by itself (game_net_over)
           else end_session(reason == NE_SLOW || reason == NE_DESYNC ? reason : (reason == NE_LOST ? NE_KICKED : NE_HOST_LEFT));
         }
       }
@@ -1267,18 +1268,18 @@ void receive(void) {
       break;
     }
     handle(b, (int)got, from);
-    if (S.fd < 0) break;                       // la partita e' finita mentre si leggeva
+    if (S.fd < 0) break;                       // the game ended while reading
   }
 }
 
-// --- fine ----------------------------------------------------------------------------------
+// --- end -----------------------------------------------------------------------------------
 
 void log_client_stats(const char* why) {
   plat_log("rete: %s al fotogramma %u: andata e ritorno %.0f ms (al massimo %d), scorta %d, rimasta senza fotogrammi %u volte, recuperi %u",
            why, S.next, (double)S.rtt, S.rtt_max, S.target, S.stalls, S.catchup);
 }
 
-// Fine della partita in rete su questa console (non quella da sola al titolo di chi crea: host_closing).
+// End of the LAN game on this console (not the host going back to the title alone: host_closing).
 void end_session(int reason) {
   const bool host = S.role == R_HOST_PLAY || S.role == R_HOST_CLOSING;
   const bool playing = S.role == R_CLIENT_PLAY || S.role == R_HOST_PLAY;
@@ -1338,9 +1339,9 @@ void parse_env(void) {
 
 }  // namespace
 
-// --- interfaccia ---------------------------------------------------------------------------------
+// --- interface -----------------------------------------------------------------------------------
 
-// Prove (PUPAZZI_RETE): crea la partita o cerca, subito o dopo PUPAZZI_RETE_DOPO fotogrammi.
+// Tests (PUPAZZI_RETE): create the game or search, right away or after PUPAZZI_RETE_DOPO frames.
 static void auto_start(void) {
   if (S.auto_mode == 1) {
     if (save_slot() < 0 && !save_slot_load(0)) save_slot_new(0);
@@ -1402,8 +1403,8 @@ void net_frame_begin(void) {
   S.budget = 0;
   if (S.role == R_HOST_PLAY) S.budget = 1;
   else if (S.role == R_CLIENT_PLAY) client_budget();
-  // Cosa vedono i menu.
-  if (!net_session() && S.now - S.ip_t > IP_MS) read_ip();   // per le pagine della rete (fuori dalla partita)
+  // What the menus see.
+  if (!net_session() && S.now - S.ip_t > IP_MS) read_ip();   // for the network pages (outside the game)
   NetView& v = S.view;
   v.mode = S.role == R_HOST_LOBBY ? NV_HOST
          : (S.role == R_SEARCH ? NV_SEARCH : (S.role == R_JOINING ? NV_JOINING : (S.role == R_JOINED ? NV_JOINED : NV_OFF)));
@@ -1448,7 +1449,7 @@ bool net_step(Pad pads[MAX_PLAYERS], bool taps[MAX_PLAYERS], uint8_t* consoles, 
     h.ok = true;
     h.consoles = S.consoles;
     h.pad[0] = S.host_pad;
-    S.host_pad.flags = 0;                      // uno START breve vale una volta
+    S.host_pad.flags = 0;                      // a short START counts once
     for (int p = 1; p < MAX_PLAYERS; ++p) {
       if (!((h.consoles >> p) & 1)) continue;
       Peer& q = S.peer[p];

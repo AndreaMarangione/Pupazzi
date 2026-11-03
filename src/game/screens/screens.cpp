@@ -48,7 +48,7 @@ void screens_update(Game& g) {
 
 void screens_hud(const Game& g, Hud* h) {
   if (SCREENS[g.screen].hud) SCREENS[g.screen].hud(g, h);
-  // La batteria della console in alto a destra (0.5.4), sopra i titoli.
+  // The console battery at the top right (0.5.4), above the titles.
   const SysBattery bat = sys_battery(plat_now_ms());
   if (bat.present) ui::battery(h, 640.0f - ui::SAFE_X, 17.0f, bat.percent, bat.charging, g.ui_tick);
 }

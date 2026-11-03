@@ -1,78 +1,79 @@
-// Salvataggi sulla console, file di testo con righe chiave=valore (dalla 0.5.3 piu' file):
+// Saves on the console, text files with key=value lines (several files since 0.5.3):
 //
-//   pupazzi.sav             impostazioni di questa console: mira di ogni posto, antialias, volumi, lingua
-//   partita1.sav .. partita4.sav    le partite (i quattro salvataggi della prima schermata)
+//   pupazzi.sav             settings of this console: aim of each slot, antialiasing, volumes, language
+//   partita1.sav .. partita4.sav    the games (the four saves of the first screen)
 //
-//   save_open(cartella)     una volta all'avvio (il core la chiama in retro_load_game): legge le
-//                           impostazioni; nessuna partita e' attiva finche' il gioco non ne crea o
-//                           ne carica una (save_slot_new, save_slot_load)
-//   save_data()             i dati in memoria (impostazioni e partita attiva): il gioco li legge e
-//                           li cambia direttamente
-//   save_write()            quando c'e' qualcosa da tenere (fine mappa, impostazioni cambiate); il
-//                           core la chiama anche all'uscita (retro_deinit) per cio' che non e' ancora
-//                           scritto. Scrive le impostazioni e la partita attiva, ognuna solo se cambiata
+//   save_open(directory)    once at startup (the core calls it in retro_load_game): reads the
+//                           settings; no game is active until the game creates or loads one
+//                           (save_slot_new, save_slot_load)
+//   save_data()             the data in memory (settings and active game): the game reads and
+//                           changes it directly
+//   save_write()            when there is something to keep (end of map, settings changed); the
+//                           core also calls it on exit (retro_deinit) for what is not written yet.
+//                           Writes the settings and the active game, each only if changed
 //
-// Ogni file si scrive in modo atomico: prima NOME.tmp (fflush + fsync), poi lo si rinomina sopra
-// NOME, che quindi e' sempre quello vecchio o quello nuovo intero (funziona anche sulla FAT della
-// scheda SD). Una scrittura costa un fsync, sulla scheda anche decine di millisecondi: va fatta per
-// un evento, non a ogni fotogramma. Se non riesce lo scrive una volta nel registro e restituisce
-// false: il gioco va avanti con i dati in memoria e riprova alla chiamata dopo.
+// Each file is written atomically: first NAME.tmp (fflush + fsync), then it is renamed over NAME,
+// which is therefore always the whole old one or the whole new one (it works on the FAT of the SD
+// card too). A write costs an fsync, on the card even tens of milliseconds: do it for an event, not
+// every frame. If it fails it writes that once to the log and returns false: the game carries on
+// with the data in memory and retries on the next call.
 //
-// pupazzi.sav (le righe che cominciano con # si ignorano, l'ordine non conta):
-//   versione=2             formato di chi l'ha scritto per ultimo (1: fino alla 0.5.2, tutto in un file)
-//   mira.1=1 .. mira.4=1   mira di ogni posto giocatore: 0 extra morbida, 1 morbida, 2 media, 3 rapida
-//   antialias=1            0 spento, 1 il migliore che la GPU regge, 4 o 8 campioni (dalla 0.5.4; prima
-//                          0 o 1: le versioni di prima leggono ogni numero diverso da 0 come acceso)
-//   volume_musica=6        da 0 a 10 (fino alla 0.4 predefinito 7)
-//   volume_effetti=8       da 0 a 10
-//   lingua=it              it, en, es, pt, zh, ja, hi (dalla 0.5.3)
-//   salvataggi=1           (dalla 0.5.3) niente da prendere dal file della 0.5.2 (gia' diventato
-//                          partita1.sav, o non c'era); 0 se non ci si e' riusciti: si riprova all'avvio
+// pupazzi.sav (lines starting with # are ignored, the order does not matter):
+//   versione=2             format of whoever wrote it last (1: up to 0.5.2, everything in one file)
+//   mira.1=1 .. mira.4=1   aim of each player slot: 0 extra soft, 1 soft, 2 medium, 3 fast
+//   antialias=1            0 off, 1 the best the GPU can handle, 4 or 8 samples (since 0.5.4; before,
+//                          0 or 1: earlier versions read any number other than 0 as on)
+//   volume_musica=6        from 0 to 10 (up to 0.4 default 7)
+//   volume_effetti=8       from 0 to 10
+//   lingua=it              it, en, es, pt, zh, ja, hi (since 0.5.3)
+//   salvataggi=1           (since 0.5.3) nothing to take from the 0.5.2 file (already turned into
+//                          partita1.sav, or there was none); 0 if that failed: retried at startup
 // partitaN.sav:
 //   versione=2
-//   nome=ANDREA            (dalla 0.5.4) nome della partita: fino a 12 tra A-Z 0-9 spazio - ' ! ? .
-//                          (le minuscole diventano maiuscole); senza, si mostra "PARTITA N"
-//   mappe.terra=1          mappe aperte del pianeta, in ordine di campagna: finire una mappa apre la
-//                          successiva (anche nei giri dopo restano aperte); la Terra ne ha almeno 1, un
-//                          altro pianeta si apre (1) battendo il boss di quello prima. Da 0 a 99.
-//   giro.terra=1           giro del pianeta, da 1 a 99: battuto il boss con almeno 10 stelle del giro in
-//                          corso si passa al giro dopo (mostri piu' forti) e le stelle ripartono da zero
-//   stelle.terra1=5        stelle della mappa nel giro in corso del suo pianeta (nome del file senza
-//                          .txt): somma di 1 (finita), 2 (esploratore salvato), 4 (senza ricominciare
-//                          la mappa da capo); 0 dopo un giro nuovo
-//   tempo=3600             secondi di gioco (dalla 0.5.3)
-// I pianeti si scrivono in minuscolo, nell'ordine di WORLD_* in level.h: terra, luna, marte, venere,
-// mercurio, giove, saturno, urano, nettuno; nel file ci sono la Terra e i pianeti gia' raggiunti.
+//   nome=ANDREA            (since 0.5.4) name of the game: up to 12 of A-Z 0-9 space - ' ! ? .
+//                          (lowercase becomes uppercase); without it, "PARTITA N" is shown
+//   mappe.terra=1          open maps of the planet, in campaign order: finishing a map opens the
+//                          next one (they stay open in later rounds too); Earth has at least 1, another
+//                          planet opens (1) by beating the boss of the previous one. From 0 to 99.
+//   giro.terra=1           round of the planet, from 1 to 99: beating the boss with at least 10 stars
+//                          of the current round moves on to the next round (stronger monsters) and the
+//                          stars start again from zero
+//   stelle.terra1=5        stars of the map in the current round of its planet (file name without
+//                          .txt): sum of 1 (finished), 2 (explorer rescued), 4 (without restarting
+//                          the map from the start); 0 after a new round
+//   tempo=3600             seconds of play (since 0.5.3)
+// Planets are written in lowercase, in the order of WORLD_* in level.h: terra, luna, marte, venere,
+// mercurio, giove, saturno, urano, nettuno; the file holds Earth and the planets already reached.
 //
-// Dalla 0.5.2 alla 0.5.3: se pupazzi.sav ha ancora i progressi (mappe.*, giro.*, stelle.*,
-// storia_pianeti) e non c'e' nessuna partita, diventano partita1.sav; in pupazzi.sav restano (una
-// 0.5.2 rimessa sulla console li ritrova) e la riga salvataggi=1 dice che sono gia' stati presi.
-// Se c'e' gia' una partita i progressi vecchi non si prendono piu'.
-// Dalla 0.4: mappe_sbloccate, storia_vista e le stelle della prateria restano dove sono, come le
-// chiavi sconosciute; dalla 0.5.4 anche storia_pianeti (la storia non c'e' piu').
+// From 0.5.2 to 0.5.3: if pupazzi.sav still has the progress (mappe.*, giro.*, stelle.*,
+// storia_pianeti) and there is no game, it becomes partita1.sav; it stays in pupazzi.sav (a 0.5.2
+// put back on the console finds it again) and the line salvataggi=1 says it was already taken.
+// If there is already a game, the old progress is no longer taken.
+// From 0.4: mappe_sbloccate, storia_vista and the prateria stars stay where they are, like the
+// unknown keys; since 0.5.4 storia_pianeti too (the story no longer exists).
 //
-// Un file che non si legge tutto (rovinato, errore della scheda, troppo grande) alla prima scrittura
-// resta come NOME.illeggibile; se non lo si riesce a mettere da parte non lo si sostituisce.
-// In ogni file: valori fuori dai limiti si riportano nei limiti, righe non valide si ignorano. Le
-// chiavi che questa versione non conosce si riscrivono uguali in fondo al file: versioni diverse del
-// gioco non si cancellano i dati a vicenda (regola: una chiave non cambia mai significato, una
-// novita' usa una chiave nuova). Nel file di una partita le impostazioni non contano (si ignorano).
+// A file that cannot be read entirely (damaged, card error, too big) is kept as NAME.illeggibile on
+// the first write; if it cannot be set aside it is not replaced.
+// In every file: out-of-range values are brought back into range, invalid lines are ignored. Keys
+// that this version does not know are written back unchanged at the end of the file: different
+// versions of the game do not erase each other's data (rule: a key never changes meaning, something
+// new uses a new key). In a game file the settings do not count (they are ignored).
 #pragma once
 #include <stdint.h>
 
 #define SAVE_VERSION 2
 #define SAVE_PLAYERS 4
 #define SAVE_MAX_MAPS 64
-#define SAVE_ID_LEN 24              // come Level::id: al massimo 23 caratteri tra a-z A-Z 0-9 _ -
-#define SAVE_WORLDS 9               // pianeti, come NWORLDS in level.h
+#define SAVE_ID_LEN 24              // like Level::id: at most 23 characters among a-z A-Z 0-9 _ -
+#define SAVE_WORLDS 9               // planets, like NWORLDS in level.h
 #define SAVE_GIRO_MAX 99
-#define SAVE_SLOTS 4                // partite
-#define SAVE_LANGS 7                // lingue (lang.h)
-#define SAVE_NAME_LEN 13            // nome di una partita: al massimo 12 caratteri (save_name_char)
+#define SAVE_SLOTS 4                // games
+#define SAVE_LANGS 7                // languages (lang.h)
+#define SAVE_NAME_LEN 13            // name of a game: at most 12 characters (save_name_char)
 
-// Stelle di una mappa: finita, esploratore salvato, senza ricominciare la mappa da capo.
+// Stars of a map: finished, explorer rescued, without restarting the map from the start.
 enum { SAVE_STAR_DONE = 1, SAVE_STAR_EXPLORER = 2, SAVE_STAR_NO_WIPE = 4 };
-enum { SAVE_NUOVO = 0, SAVE_LETTO, SAVE_ILLEGGIBILE };   // esito di una lettura
+enum { SAVE_NUOVO = 0, SAVE_LETTO, SAVE_ILLEGGIBILE };   // outcome of a read
 
 struct SaveMap {
   char id[SAVE_ID_LEN];
@@ -80,79 +81,79 @@ struct SaveMap {
 };
 
 struct SaveData {
-  int version;                      // formato del file letto per ultimo (0: nessun file)
-  // Impostazioni (pupazzi.sav).
-  uint8_t aim[SAVE_PLAYERS];        // da 0 a 3 (predefinita 1, morbida)
-  uint8_t antialias;                // 0, 1 (il migliore, predefinito), 4 o 8 campioni
-  uint8_t music_vol, sfx_vol;       // da 0 a 10 (predefiniti 6 e 8)
-  uint8_t lang;                     // LANG_* (lang.h), predefinita l'italiano
-  // Partita (partitaN.sav).
-  char name[SAVE_NAME_LEN];         // nome=: "" finche' non gliene si da' uno (si mostra PARTITA N)
-  uint8_t maps_open[SAVE_WORLDS];   // mappe.<pianeta>: mappe aperte in ordine (Terra da 1, gli altri da 0)
-  uint8_t giro[SAVE_WORLDS];        // giro.<pianeta>: da 1 a SAVE_GIRO_MAX
-  int nmaps;                        // mappe con le stelle (quelle che non ci sono hanno 0 stelle)
+  int version;                      // format of the file read last (0: no file)
+  // Settings (pupazzi.sav).
+  uint8_t aim[SAVE_PLAYERS];        // from 0 to 3 (default 1, soft)
+  uint8_t antialias;                // 0, 1 (the best, default), 4 or 8 samples
+  uint8_t music_vol, sfx_vol;       // from 0 to 10 (defaults 6 and 8)
+  uint8_t lang;                     // LANG_* (lang.h), default Italian
+  // Game (partitaN.sav).
+  char name[SAVE_NAME_LEN];         // nome=: "" until it is given one (PARTITA N is shown)
+  uint8_t maps_open[SAVE_WORLDS];   // mappe.<planet>: open maps in order (Earth from 1, the others from 0)
+  uint8_t giro[SAVE_WORLDS];        // giro.<planet>: from 1 to SAVE_GIRO_MAX
+  int nmaps;                        // maps with stars (those not listed have 0 stars)
   SaveMap maps[SAVE_MAX_MAPS];
-  uint32_t seconds;                 // tempo di gioco
+  uint32_t seconds;                 // play time
 };
 
-// Ricorda la cartella e legge pupazzi.sav se c'e': manca -> valori predefiniti (SAVE_NUOVO);
-// illeggibile -> valori predefiniti (SAVE_ILLEGGIBILE) e alla prima scrittura il file vecchio resta
-// come pupazzi.sav.illeggibile. dir NULL o vuota: solo valori predefiniti, niente file. Nessuna
-// partita attiva (i suoi dati sono quelli predefiniti). Si puo' richiamare: riparte da zero.
+// Remembers the directory and reads pupazzi.sav if present: missing -> default values (SAVE_NUOVO);
+// unreadable -> default values (SAVE_ILLEGGIBILE) and on the first write the old file is kept as
+// pupazzi.sav.illeggibile. dir NULL or empty: only default values, no file. No active game (its
+// data are the default ones). It can be called again: it starts from scratch.
 int save_open(const char* dir);
-// Com'e' andata la lettura delle impostazioni, per il registro: "nuovo", "letto" o "illeggibile: ...".
+// How reading the settings went, for the log: "nuovo", "letto" or "illeggibile: ...".
 const char* save_status(void);
-// Percorso di pupazzi.sav; "" prima di save_open (e allora save_write non fa nulla).
+// Path of pupazzi.sav; "" before save_open (and then save_write does nothing).
 const char* save_path(void);
-// Sempre valido: prima di save_open contiene i valori predefiniti.
+// Always valid: before save_open it holds the default values.
 SaveData* save_data(void);
-// Stelle della mappa nella partita attiva (0 se non c'e' o se il nome non e' valido).
+// Stars of the map in the active game (0 if it is not there or if the name is not valid).
 uint8_t save_stars(const char* map_id);
-// Stelle della mappa in dati letti a parte (save_slot_peek).
+// Stars of the map in data read separately (save_slot_peek).
 uint8_t save_stars_in(const SaveData* d, const char* map_id);
-// Aggiunge le stelle (OR con quelle che ci sono gia'): solo in memoria, poi serve save_write.
+// Adds the stars (OR with those already there): only in memory, then save_write is needed.
 void save_add_stars(const char* map_id, uint8_t bits);
-// Mette le stelle della mappa a bits (giro nuovo: 0), solo in memoria come save_add_stars.
+// Sets the stars of the map to bits (new round: 0), only in memory like save_add_stars.
 void save_set_stars(const char* map_id, uint8_t bits);
-// Nome del pianeta w nel file ("terra", "luna"...; "" fuori dai limiti).
+// Name of planet w in the file ("terra", "luna"...; "" out of range).
 const char* save_world_id(int w);
-// Scrive le impostazioni e la partita attiva (riporta nei limiti i valori in memoria). true se i
-// file sono aggiornati.
+// Writes the settings and the active game (brings the values in memory back into range). true if
+// the files are up to date.
 bool save_write(void);
 
-// --- partite (da 0 a SAVE_SLOTS - 1) ---
-// Partita attiva, -1 nessuna.
+// --- games (from 0 to SAVE_SLOTS - 1) ---
+// Active game, -1 none.
 int save_slot(void);
-// Percorso del file della partita i ("" prima di save_open).
+// Path of the file of game i ("" before save_open).
 const char* save_slot_path(int i);
-// Legge la partita i in out (solo i dati della partita; le impostazioni di out restano quelle
-// predefinite) senza toccare quella attiva. SAVE_NUOVO: il file non c'e' (posto libero).
+// Reads game i into out (only the game data; the settings of out stay at the default ones)
+// without touching the active one. SAVE_NUOVO: the file does not exist (free slot).
 int save_slot_peek(int i, SaveData* out);
-// La partita i diventa quella attiva, letta dal suo file. false se il file non c'e'. Se e'
-// illeggibile si parte dai valori predefiniti (e il file vecchio, alla prima scrittura, resta come
+// Game i becomes the active one, read from its file. false if the file does not exist. If it is
+// unreadable it starts from the default values (and the old file, on the first write, is kept as
 // partitaN.sav.illeggibile): true.
 bool save_slot_load(int i);
-// Partita nuova (valori predefiniti, con il nome name se c'e') al posto i, attiva e subito scritta
-// (anche se non riesce a scriverla resta attiva in memoria). false se i e' fuori dai limiti o se la
-// scrittura non riesce.
+// New game (default values, with the name name if given) in slot i, active and written right away
+// (even if it cannot be written it stays active in memory). false if i is out of range or if the
+// write fails.
 bool save_slot_new(int i, const char* name = 0);
-// Cambia il nome della partita i (attiva o no) e la scrive; il resto del file resta com'e'. false se
-// il posto e' libero, il file non si legge o non si scrive, o il nome non e' valido.
+// Changes the name of game i (active or not) and writes it; the rest of the file stays as it is.
+// false if the slot is free, the file cannot be read or written, or the name is not valid.
 bool save_slot_rename(int i, const char* name);
-// Il carattere c puo' stare nel nome di una partita (A-Z, 0-9, spazio, - ' ! ? .).
+// Character c can be part of a game name (A-Z, 0-9, space, - ' ! ? .).
 bool save_name_char(char c);
-// Copia la partita from al posto to (prima si scrive quella attiva, se e' from). false se non riesce.
+// Copies game from into slot to (first the active one is written, if it is from). false if it fails.
 bool save_slot_copy(int from, int to);
-// Toglie il file della partita i; se era quella attiva non c'e' piu' una partita attiva.
+// Removes the file of game i; if it was the active one, there is no active game anymore.
 bool save_slot_delete(int i);
-// Gioco in rete (0.5.4), sulle console che si uniscono a una partita creata da un'altra: la
-// partita attiva (se c'e') si scrive e si stacca, e i progressi in memoria ripartono da quelli
-// predefiniti; chi chiama ci mette quelli di chi ha creato la partita. Si gioca con quelli, ma non
-// si scrivono da nessuna parte (le impostazioni si', come sempre). save_guest_end: di nuovo
-// nessuna partita attiva e progressi predefiniti (si sceglie dal titolo).
+// LAN game (0.5.4), on the consoles that join a game created by another one: the active game (if
+// any) is written and detached, and the progress in memory starts again from the default one; the
+// caller puts the host's progress there. Play goes on with that, but it is not written anywhere
+// (the settings are, as always). save_guest_end: again no active game and default progress (a game
+// is chosen from the title).
 void save_guest_begin(void);
 void save_guest_end(void);
-// Com'e' andata l'ultima lettura di una partita, per il registro.
+// How the last read of a game went, for the log.
 const char* save_slot_status(void);
-// Codice della lingua l nel file ("it", "en"...; "" fuori dai limiti).
+// Code of language l in the file ("it", "en"...; "" out of range).
 const char* save_lang_id(int l);

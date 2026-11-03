@@ -13,7 +13,7 @@ namespace {
 
 inline uint32_t A(uint32_t rgb, float a) { return hud_a(rgb, a); }
 inline uint32_t O(uint32_t rgb) { return HUD_OPAQUE(rgb); }
-inline uint32_t clear_of(uint32_t argb) { return argb & 0xFFFFFFu; }   // stesso colore, trasparente
+inline uint32_t clear_of(uint32_t argb) { return argb & 0xFFFFFFu; }   // same color, transparent
 
 uint32_t mix(uint32_t a, uint32_t b, float t) {
   uint32_t out = 0;
@@ -24,7 +24,7 @@ uint32_t mix(uint32_t a, uint32_t b, float t) {
   return out;
 }
 
-// Grigio con la stessa luminosita' (un po' schiacciata verso il mezzo), come le facce di chi e' fuori.
+// Gray of the same brightness (squeezed a bit toward the middle), like the faces of whoever is out.
 uint32_t gray(uint32_t c) {
   const unsigned r = (c >> 16) & 255u, g = (c >> 8) & 255u, b = c & 255u;
   const unsigned v = 60u + (r * 77u + g * 150u + b * 29u) / 256u * 100u / 255u;
@@ -36,7 +36,7 @@ uint32_t alpha_mul(uint32_t argb, float a) {
   return ((uint32_t)(al + 0.5f) << 24) | (argb & 0xFFFFFFu);
 }
 
-const float SKEW = 0.2679f;   // tan(15 gradi): le tacche inclinate dei mockup (skewX(-15deg))
+const float SKEW = 0.2679f;   // tan(15 degrees): the slanted notches of the mockups (skewX(-15deg))
 
 }  // namespace
 
@@ -46,7 +46,7 @@ void overlay(Hud* h, float a) { hud_box(h, 0, 0, 640, 480, 0, A(SCRIM, a)); }
 
 namespace {
 
-// Punto di codice che finisce in s[len - 1] (e dove comincia).
+// Code point that ends at s[len - 1] (and where it starts).
 uint32_t cp_before(const char* s, int len, int* start) {
   int i = len - 1;
   while (i > 0 && ((unsigned char)s[i] & 0xC0u) == 0x80u) --i;
@@ -55,8 +55,8 @@ uint32_t cp_before(const char* s, int len, int* start) {
   return hud_utf8_next(p);
 }
 
-// Cinese e giapponese: non si va a capo prima della punteggiatura di chiusura e dei piccoli kana,
-// ne' dopo quella di apertura.
+// Chinese and Japanese: no line break before closing punctuation and small kana,
+// nor after opening punctuation.
 bool no_start(uint32_t c) {
   static const uint32_t L[] = { 0x3001, 0x3002, 0xFF0C, 0xFF0E, 0xFF01, 0xFF1F, 0xFF1A, 0xFF1B, 0xFF09, 0x300D, 0x300F, 0x3011,
                                 0x3015, 0x3009, 0x300B, 0x30FC, 0x3005, 0x3041, 0x3043, 0x3045, 0x3047, 0x3049, 0x3063, 0x3083,
@@ -84,7 +84,7 @@ const char* fit(char* dst, int n, const char* s, int face, float track, float w,
   const int el = (int)strlen(ell);
   int len = (int)strlen(dst);
   while (len > 0) {
-    // Via un carattere intero; una parola hindi va via tutta (a meta' non si sa comporre).
+    // Remove a whole character; a Hindi word goes away entirely (half of it cannot be composed).
     int start;
     const bool deva = hud_is_deva(cp_before(dst, len, &start));
     len = start;
@@ -107,8 +107,8 @@ int wrap(const char* s, float w, int face, float track, char (*out)[WRAP_LEN], i
   if (cut) *cut = false;
   while (*s == ' ') ++s;
   while (*s && n < max) {
-    // Dove si puo' andare a capo: agli spazi e tra due caratteri cinesi o giapponesi. La riga e'
-    // la piu' lunga che sta in w; la riga dopo comincia dopo gli spazi.
+    // Where a line can break: at spaces and between two Chinese or Japanese characters. The line
+    // is the longest that fits in w; the next line starts after the spaces.
     int best = 0, best_next = 0;
     uint32_t prev = 0;
     for (const char* p = s;;) {
@@ -129,7 +129,7 @@ int wrap(const char* s, float w, int face, float track, char (*out)[WRAP_LEN], i
         if (end >= WRAP_LEN - 1 || (best > 0 && width_of(s, end, face, track) > w)) break;
         best = end;
         best_next = next;
-        if (best > 0 && width_of(s, end, face, track) > w) break;      // la prima e' gia' troppo lunga
+        if (best > 0 && width_of(s, end, face, track) > w) break;      // the first one is already too long
       }
       if (!c) break;
       if (c == ' ') {
@@ -141,9 +141,9 @@ int wrap(const char* s, float w, int face, float track, char (*out)[WRAP_LEN], i
       p = q;
     }
     if (best == 0 || width_of(s, best, face, track) > w) {
-      // Gia' il primo pezzo e' piu' largo della riga: lo si spezza dove arriva la riga e il resto va
-      // sotto (nulla si perde); una parola hindi, composta tutta intera, non si spezza: i puntini.
-      // In ogni caso cut lo dice (nelle prove e' un testo da accorciare).
+      // Already the first piece is wider than the line: it is split where the line ends and the rest
+      // goes below (nothing is lost); a Hindi word, composed as a whole, is not split: the dots.
+      // In any case cut says so (in the tests it is a text to shorten).
       if (cut) *cut = true;
       int run = 0;
       bool deva = false;
@@ -170,7 +170,7 @@ int wrap(const char* s, float w, int face, float track, char (*out)[WRAP_LEN], i
       best_next = best;
       while (s[best_next] == ' ') ++best_next;
     }
-    if (s[best_next] && n == max - 1) {             // non ci sta tutto: l'ultima riga con i puntini
+    if (s[best_next] && n == max - 1) {             // not everything fits: the last line with the dots
       fit(out[n], WRAP_LEN, s, face, track, w);
       if (cut) *cut = true;
       return n + 1;
@@ -213,9 +213,10 @@ void title(Hud* h, float cx, float top, int face, const char* s, float track, bo
   hud_text(h, tx, base, face, A(0xFFFFFF, alpha), s, track);
 }
 
-// Pannelli come nei mockup (fondo quasi opaco sopra il bordo sfumato, che traspare appena), ma in
-// due passate sole: il fondo gia' mescolato con il bordo, opaco, che arriva un pixel sotto la
-// cornice, poi la cornice. Lo stesso risultato senza disegnare due volte tutto l'interno.
+// Panels as in the mockups (almost opaque background over the gradient border, which barely shows
+// through), but in only two passes: the background already blended with the border, opaque,
+// reaching one pixel under the frame, then the frame. The same result without drawing the whole
+// inside twice.
 void panel(Hud* h, float x, float y, float w, float hh, float cut, uint32_t fill, bool glow, float bw) {
   if (glow) hud_glow(h, x, y, w, hh, cut, 10.0f, GLOW);
   const float fa = (float)(fill >> 24) / 255.0f;
@@ -266,7 +267,7 @@ void footer(Hud* h, const char* const* items, int n) {
   float x = SAFE_X;
   for (int i = 0; i + 1 < n; i += 2) {
     if (i > 0) x += 8.0f;
-    x += (items[i][1] ? keycap(h, x, cy, items[i], true) : key(h, x, cy, items[i])) + 7.0f;   // START: tasto rettangolare
+    x += (items[i][1] ? keycap(h, x, cy, items[i], true) : key(h, x, cy, items[i])) + 7.0f;   // START: rectangular button
     text(h, x, cy, HF_S14, O(FTX), items[i + 1], 0.5f);
     x += hud_text_w(HF_S14, items[i + 1], 0.5f) + 7.0f;
   }
@@ -291,7 +292,7 @@ float gp_w(int player, int face) {
 
 float gp(Hud* h, float x, float cy, int player, int face) {
   char buf[16];
-  snprintf(buf, sizeof(buf), tr("G%d"), (player & 3) + 1);     // G1 in italiano, P1 in inglese...
+  snprintf(buf, sizeof(buf), tr("G%d"), (player & 3) + 1);     // G1 in Italian, P1 in English...
   const float w = gp_w(player, face);
   hud_box(h, x, cy - 9.0f, w, 18.0f, 4.0f, O(PLAYER[player & 3]));
   text(h, x + w * 0.5f, cy, face, O((player & 3) == 3 ? 0x06102E : 0xFFFFFF), buf, 0.5f, 0);
@@ -312,14 +313,14 @@ float battery(Hud* h, float right, float cy, int percent, bool charging, unsigne
   const float k = (float)(percent < 0 ? 0 : (percent > 100 ? 100 : percent)) / 100.0f;
   const bool low = percent < 15 && !charging;
   const uint32_t fill = low ? 0xFF4A3A : (percent < 30 && !charging ? L1 : 0x7CF29A);
-  // Ombra, corpo, polo e carica.
+  // Shadow, body, terminal and charge.
   hud_box(h, x - 1.0f, y - 1.0f, BW + 5.0f, BH + 2.0f, 3.0f, A(SCRIM, 0.55f));
   hud_frame(h, x, y, BW, BH, 2.5f, 1.5f, O(FTX));
   hud_box(h, x + BW, cy - 3.0f, 2.0f, 6.0f, 0.0f, O(FTX));
   const float fw = floorf((BW - 5.0f) * k + 0.5f);
   if (fw > 0.0f && (!low || ((tick / 20u) & 1u) == 0u)) hud_box(h, x + 2.5f, y + 2.5f, fw, BH - 5.0f, 1.0f, O(fill));
   if (charging) {
-    // Fulmine: due parallelogrammi storti, contornati di scuro.
+    // Lightning bolt: two skewed parallelograms, outlined in dark.
     hud_para(h, x + 8.0f, y - 1.0f, 6.0f, 7.5f, -0.45f, O(SCRIM));
     hud_para(h, x + 8.5f, y + 6.5f, 6.0f, 6.5f, -0.45f, O(SCRIM));
     hud_para(h, x + 9.0f, y + 0.0f, 4.0f, 6.5f, -0.45f, O(0xFFE14D));
@@ -342,10 +343,10 @@ float stick(Hud* h, float x, float cy, const char* s) {
 
 void face(Hud* h, float x, float y, int px, int ch, int look, float a) {
   static const uint32_t RGB[4][3] = {
-    { 0xE9EEF5, 0x24324A, 0x9ED8FF },   // Astro: casco, visiera, riflesso
-    { 0xE4E0F4, 0xF59AB8, 0x2A2230 },   // Mochi: testa e orecchie, rosa, occhi e naso
-    { 0xE8673C, 0xFFFFFF, 0x1E1A28 },   // Marzio: testa e antenne, occhio, pupilla e bocca
-    { 0xFF7A2A, 0xFFE14D, 0x5A1A08 },   // Zolfo: fiamma, cuore della fiamma, occhi di brace
+    { 0xE9EEF5, 0x24324A, 0x9ED8FF },   // Astro: helmet, visor, reflection
+    { 0xE4E0F4, 0xF59AB8, 0x2A2230 },   // Mochi: head and ears, pink, eyes and nose
+    { 0xE8673C, 0xFFFFFF, 0x1E1A28 },   // Marzio: head and antennae, eye, pupil and mouth
+    { 0xFF7A2A, 0xFFE14D, 0x5A1A08 },   // Zolfo: flame, heart of the flame, ember eyes
   };
   if (ch < 0 || ch > 3) return;
   const int base = px <= 20 ? HI_FACE20_0 : (px <= 24 ? HI_FACE24_0 : (px <= 30 ? HI_FACE30_0 : HI_FACE40_0));
@@ -368,7 +369,7 @@ void star(Hud* h, int icon, float x, float y, bool on, uint32_t off_color) {
   if (on) {
     hud_icon(h, icon, x, y, O(STAR));
   } else {
-    // vuote: il contorno (alle misure piccole) o la stella spenta
+    // empty: the outline (at small sizes) or the unlit star
     const int outline = icon == HI_STAR16 ? HI_STAR16O : icon;
     hud_icon(h, outline, x, y, (off_color >> 24) ? off_color : O(off_color));
   }

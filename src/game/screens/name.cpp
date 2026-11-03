@@ -5,8 +5,8 @@
 
 namespace screens {
 
-// Tastiera del nome (0.5.4): per una partita nuova (che si crea solo quando si conferma il nome) o
-// per cambiare il nome di una che c'e'.
+// Name keyboard (0.5.4): for a new game (which is created only when the name is confirmed) or to
+// change the name of an existing one.
 void enter_name(Game& g, int mode, int slot, int who, bool overwrite) {
   g.name_mode = mode;
   g.name_slot = slot;
@@ -16,13 +16,13 @@ void enter_name(Game& g, int mode, int slot, int who, bool overwrite) {
   g.name_buf[0] = 0;
   if (mode == NM_RENAME) memcpy(g.name_buf, g.session.slot_view[slot].name, sizeof(g.name_buf));
   g.name_buf[SAVE_NAME_LEN - 1] = 0;
-  g.name_row = 2;                    // sulla A
+  g.name_row = 2;                    // on the A
   g.name_col = 0;
   go_screen(g, SC_NAME);
 }
 
-// Tastiera a schermo: quattro righe da dieci caratteri e la riga dei comandi (SPAZIO sulle prime
-// quattro colonne, CANCELLA sulle tre dopo, OK sulle ultime tre).
+// On-screen keyboard: four rows of ten characters and the command row (SPAZIO on the first four
+// columns, CANCELLA on the next three, OK on the last three).
 const char KB_KEYS[4][11] = { "1234567890", "QWERTYUIOP", "ASDFGHJKL'", "ZXCVBNM-.!" };
 
 const int KB_ROWS = 5, KB_COLS = 10, KB_NAME_MAX = SAVE_NAME_LEN - 1;
@@ -36,7 +36,7 @@ int kb_action(int col) { return col < 4 ? KA_SPACE : (col < 7 ? KA_DEL : KA_OK);
 void name_type(Game& g, char c) {
   const int len = (int)strlen(g.name_buf);
   if (len >= KB_NAME_MAX || (c == ' ' && (len == 0 || g.name_buf[len - 1] == ' '))) {
-    ev_sound_ui(g, SND_UI_BACK);                         // pieno, o spazio all'inizio o doppio
+    ev_sound_ui(g, SND_UI_BACK);                         // full, or a space at the start or a double one
     return;
   }
   g.name_buf[len] = c;
@@ -59,8 +59,8 @@ void name_done(Game& g) {
   ev_sound_ui(g, SND_UI_OK);
   const int slot = g.name_slot;
   if (g.name_mode == NM_NEW || g.name_mode == NM_NET) {
-    save_slot_new(slot, g.name_buf);             // la partita nasce adesso, con il suo nome
-    if (g.name_mode == NM_NET) {                 // ... e si crea la partita in rete
+    save_slot_new(slot, g.name_buf);             // the game is born now, with its name
+    if (g.name_mode == NM_NET) {                 // ... and the LAN game is created
       net_req(g, NR_HOST, slot);
       go_screen(g, SC_LOBBY);
       g.session.lobby_join = false;
@@ -106,7 +106,7 @@ void name_update(Game& g) {
       name_done(g);
       return;
     } else {
-      b = true;                                  // CANCELLA come B, ma senza uscire
+      b = true;                                  // CANCELLA like B, but without leaving
       if (!g.name_buf[0]) {
         ev_sound_ui(g, SND_UI_BACK);
         return;
@@ -124,8 +124,8 @@ void name_update(Game& g) {
   }
 }
 
-// Tastiera del nome: il campo con il nome (o "PARTITA N" in grigio finche' e' vuoto) e il cursore che
-// lampeggia, sotto la tastiera.
+// Name keyboard: the field with the name (or "PARTITA N" in gray while it is empty) and the
+// blinking cursor; below, the keyboard.
 void name_hud(const Game& g, Hud* h) {
   ui::scrim_top(h);
   ui::scrim_bottom(h);
@@ -136,7 +136,7 @@ void name_hud(const Game& g, Hud* h) {
   const int len = (int)strlen(g.name_buf);
   float cx = FX + 20.0f;
   if (len == 0) {
-    snprintf(buf, sizeof(buf), tr("PARTITA %d"), g.name_slot + 1);   // finche' e' vuoto, in grigio dopo il cursore
+    snprintf(buf, sizeof(buf), tr("PARTITA %d"), g.name_slot + 1);   // while it is empty, in gray after the cursor
     ui::text(h, cx + 9.0f, fcy, HF_B22, O(ui::DIS), buf, 3.0f);
   } else {
     ui::text(h, cx, fcy, HF_B22, O(ui::TX), g.name_buf, 3.0f);
@@ -145,7 +145,7 @@ void name_hud(const Game& g, Hud* h) {
   if (blinking(g, 16)) hud_box(h, cx, fcy - 12.0f, 3.0f, 24.0f, 0.0f, O(ui::L1));
   snprintf(buf, sizeof(buf), "%d/%d", len, KB_NAME_MAX);
   ui::text(h, FX + FW - 16.0f, fcy, HF_S13, O(ui::MU), buf, 0.5f, 1);
-  // La tastiera.
+  // The keyboard.
   const float KW = 44.0f, KH = 38.0f, KG = 4.0f, PX = 70.0f, PY = 146.0f;
   const float PW = 24.0f + KW * (float)KB_COLS + KG * (float)(KB_COLS - 1), PH = 24.0f + KH * (float)KB_ROWS + KG * (float)(KB_ROWS - 1);
   ui::panel(h, PX, PY, PW, PH);

@@ -1,8 +1,8 @@
-// Stato interno del gioco, condiviso tra i moduli: regole e flusso (game.cpp), personaggi
-// (player.cpp), colpi, bombe ed effetti (combat.cpp), mostri e boss (monsters.cpp), percorsi
-// (flow.cpp), menu (menu.cpp), disegno (game_draw.cpp) e giocatori automatici (bot.cpp).
-// Tutto avanza a passi fissi di 1/60 di secondo e usa solo la matematica di dmath.h: stessa
-// partita, bit per bit, su ogni processore.
+// Internal state of the game, shared between the modules: rules and flow (game.cpp), characters
+// (player.cpp), shots, bombs and effects (combat.cpp), monsters and bosses (monsters.cpp), paths
+// (flow.cpp), menus (menu.cpp), drawing (game_draw.cpp) and bots (bot.cpp).
+// Everything advances in fixed steps of 1/60 of a second and uses only the math of dmath.h: the
+// same game, bit for bit, on every processor.
 #pragma once
 #include "game/game.h"
 #include "engine/lang.h"
@@ -11,7 +11,7 @@
 #include "engine/audio.h"
 #include "game/save.h"
 
-#define MAX_MONSTERS 56          // <= 64: i colpi che attraversano ricordano i colpiti in un uint64_t
+#define MAX_MONSTERS 56          // <= 64: shots that pass through remember the ones they hit in a uint64_t
 #define MAX_SHOTS 256
 #define MAX_PARTICLES 420
 #define MAX_FLOATS 40
@@ -21,79 +21,82 @@
 
 const float DT = 1.0f / 60.0f;
 const float GRAVITY = 22.0f;
-const float AIM_FORESHORTEN = 0.83f;    // sin dell'inclinazione della telecamera: mira "come sullo schermo"
+const float AIM_FORESHORTEN = 0.83f;    // sin of the camera's tilt: aim "as on the screen"
 
-// --- personaggi ---------------------------------------------------------------
+// --- characters ---------------------------------------------------------------
 
 const float PL_R = 0.32f, PL_H = 1.4f, PL_STEP = 0.36f;
 const float PL_ACCEL = 0.40f, PL_JUMP_V = 7.1f, PL_TURN = 20.0f;
 const float HEAL_KILL = 8.0f, HEAL_TALISMAN = 35.0f;
 const int RESPAWN_FRAMES = 300, INVULN_FRAMES = 90;
 const float RESPAWN_HP = 0.6f;
-// Vite (17/10): 3 a testa per mappa (VITA EXTRA: una in piu'). Da soli ogni caduta fa rifare la
-// zona e l'ultima la mappa da capo; in piu' giocatori chi cade rientra dopo RESPAWN_FRAMES finche'
-// ha vite, poi resta fuori (out) fino alla fine della mappa; tutti a terra insieme: mappa da capo.
+// Lives (17/10): 3 each per map (VITA EXTRA: one more). Playing alone, every fall replays the
+// zone and the last one restarts the map from the start; with more players whoever falls comes
+// back after RESPAWN_FRAMES while they have lives, then stays out (out) until the end of the map;
+// everyone down at once: map restarted from the start.
 const int START_LIVES = 3;
-const int OUT_VANISH = 100;       // chi resta senza vite sparisce in uno sbuffo dopo cosi' tanti fotogrammi a terra
-const int WIPE_ZONE_FRAMES = 150, WIPE_MAP_FRAMES = 180;   // dopo "a terra": zona rifatta / mappa da capo
-// Giri (17/10): ogni pianeta ha il suo giro (save.h); battuto il boss con almeno GIRO_STARS stelle
-// del giro in corso si apre il giro dopo, piu' difficile, e le stelle ripartono da zero.
+const int OUT_VANISH = 100;       // whoever is left out of lives vanishes in a puff after this many frames down
+const int WIPE_ZONE_FRAMES = 150, WIPE_MAP_FRAMES = 180;   // after "down": zone replayed / map restarted from the start
+// Rounds (17/10): every planet has its own round (save.h); beating the boss with at least
+// GIRO_STARS stars of the current round opens the next round, harder, and the stars start again
+// from zero.
 const int GIRO_STARS = 10;
-const float SPAN_X = 31.0f, SPAN_Z = 21.0f;   // quanto si possono allontanare i giocatori: quanto inquadra la telecamera a 30 m (17/10)
-// Bonus nelle casse 'x' (0.5.4, deciso con Andrea il 29/10): rompendo una cassa ne salta fuori uno a
-// caso, e lo prende chi ci passa sopra. VELOCITA' (+40% per 10 s), FURIA (danni doppi per 10 s),
-// INVINCIBILE (niente danni per 6 s; non SCUDO, che e' una carta), CARICA (speciale subito pronto).
+const float SPAN_X = 31.0f, SPAN_Z = 21.0f;   // how far apart the players can get: what the camera frames at 30 m (17/10)
+// Power-ups in the 'x' crates (0.5.4, decided with Andrea on 29/10): breaking a crate makes a
+// random one pop out, and whoever walks over it takes it. VELOCITA' (+40% for 10 s), FURIA (double
+// damage for 10 s), INVINCIBILE (no damage for 6 s; not SCUDO, which is a card), CARICA (special
+// ready at once).
 enum { PW_SPEED = 0, PW_FURY, PW_INVINCIBLE, PW_CHARGE, NPOWERS };
-const int NPW_TIMED = 3;                      // i primi tre durano (Player::pw_t); CARICA e' subito
+const int NPW_TIMED = 3;                      // the first three have a duration (Player::pw_t); CARICA is instant
 const int PW_FRAMES[NPW_TIMED] = { 600, 600, 360 };
 const float PW_SPEED_K = 1.4f, PW_FURY_K = 2.0f;
-const int PW_WARN = 120;                      // gli ultimi 2 secondi il bonus lampeggia
-extern const char* const PW_NAME[NPOWERS];    // "VELOCITA'!"... (N_, per add_float_text)
-const int FROZEN_FRAMES = 30 * 60;            // controller fermo sullo stesso stato: il personaggio si ferma
+const int PW_WARN = 120;                      // in the last 2 seconds the power-up blinks
+extern const char* const PW_NAME[NPOWERS];    // "VELOCITA'!"... (N_, for add_float_text)
+const int FROZEN_FRAMES = 30 * 60;            // controller stuck in the same state: the character stops
 
 enum { AIM_LINE = 0, AIM_FAN, AIM_LOB, AIM_AREA };
 
-// Mira con la levetta destra (player.cpp). Ogni giocatore sceglie nella pausa quanto e' pronta:
-//  - on: inclinazione oltre la quale si mira (zona morta circolare);
-//  - min_cut, beta: filtro sulla direzione (sul modello del filtro "1 euro"). Quando la levetta
-//    punta dove gia' si mira il taglio e' min_cut Hz (spariscono i tremolii); piu' la levetta e'
-//    lontana dalla mira, piu' il taglio sale: beta Hz per ogni radiante al secondo con cui la mira
-//    dovrebbe muoversi per raggiungerla (gli scatti ampi restano rapidi).
+// Aim with the right stick (player.cpp). Every player chooses in the pause how responsive it is:
+//  - on: tilt beyond which the player aims (circular dead zone);
+//  - min_cut, beta: filter on the direction (modelled on the "1 euro" filter). When the stick
+//    points where the aim already is, the cutoff is min_cut Hz (the jitter goes away); the farther
+//    the stick is from the aim, the higher the cutoff: beta Hz for every radian per second at which
+//    the aim would have to move to reach it (wide flicks stay fast).
 enum { AIM_XSOFT = 0, AIM_SOFT, AIM_MEDIUM, AIM_QUICK, NAIMLEVELS };
-const int AIM_DEFAULT = AIM_SOFT;   // scelta da Andrea il 15/10
+const int AIM_DEFAULT = AIM_SOFT;   // chosen by Andrea on 15/10
 struct AimTune { const char* name; const char* label; float on, min_cut, beta; };
 extern const AimTune AIM_TUNE[NAIMLEVELS];
-const float AIM_FULL = 0.95f;     // inclinazione che conta come "tutta" (gittata piena per i colpi a parabola)
-const float AIM_DROP = 0.10f;     // l'inclinazione cala di piu' in un fotogramma: forse la levetta e' stata lasciata
-const float AIM_RELEASE = 0.3f;   // ...e se negli ultimi AIM_HIST fotogrammi e' calata di piu', lo era davvero
+const float AIM_FULL = 0.95f;     // tilt that counts as "full" (full range for lobbed shots)
+const float AIM_DROP = 0.10f;     // the tilt drops by more than this in one frame: maybe the stick was let go
+const float AIM_RELEASE = 0.3f;   // ...and if over the last AIM_HIST frames it dropped by more than this, it really was
 const int AIM_HIST = 4;
-const float AIM_D_CUT = 5.0f;     // filtro sulla velocita' della mira (Hz)
-const int AIM_REARM = 12;         // dopo averla lasciata, per cosi' tanti fotogrammi servono 2 letture di fila
+const float AIM_D_CUT = 5.0f;     // filter on the aim's speed (Hz)
+const int AIM_REARM = 12;         // after letting it go, for this many frames 2 readings in a row are needed
 static inline float aim_k_of(float m, float on) { return clampf((m - on) / (AIM_FULL - on), 0.15f, 1.0f); }
 
 struct CharDef {
-  const char* name;        // nome in maiuscolo per i menu
-  const char* who;         // chi e'
-  const char* role;        // ruolo nella squadra
-  const char* normal;      // colpo normale, in breve
-  const char* special;     // speciale, in breve
+  const char* name;        // name in capitals for the menus
+  const char* who;         // who they are
+  const char* role;        // role in the team
+  const char* normal;      // normal shot, in short
+  const char* special;     // special, in short
   uint32_t color;
   float hp, speed;
-  float ammo_max;          // tacche della barra (Zolfo: carburante)
-  float ammo_cost;         // quanto costa un attacco
-  int fire_frames;         // tra un attacco e il successivo tenendo R1
-  int reload_wait;         // la barra riparte cosi' tanti fotogrammi dopo l'ultimo attacco
-  int reload_frames;       // da vuota a piena
-  float range;             // gittata del colpo normale
-  uint8_t aim;             // forma della striscia di mira del colpo normale
-  float aim_w;             // larghezza della striscia o apertura del ventaglio
-  float special_cost;      // danni da fare con il colpo normale per caricare lo speciale
-  uint8_t aim_sp;          // forma della mira dello speciale
+  float ammo_max;          // notches of the bar (Zolfo: fuel)
+  float ammo_cost;         // what one attack costs
+  int fire_frames;         // between one attack and the next while holding R1
+  int reload_wait;         // the bar starts refilling this many frames after the last attack
+  int reload_frames;       // from empty to full
+  float range;             // range of the normal shot
+  uint8_t aim;             // shape of the aim strip of the normal shot
+  float aim_w;             // width of the strip or opening of the fan
+  float special_cost;      // damage to deal with the normal shot to charge the special
+  uint8_t aim_sp;          // shape of the special's aim
   float sp_range, sp_w;
 };
 extern const CharDef CHARS[NCHARS];
 
-// --- mostri -------------------------------------------------------------------
+// --- monsters -----------------------------------------------------------------
 
 struct MonDef {
   const char* name;
@@ -102,88 +105,88 @@ struct MonDef {
 };
 extern const MonDef MONS[MO_NTYPES];
 
-// --- colpi --------------------------------------------------------------------
+// --- shots --------------------------------------------------------------------
 
 enum ShotKind {
-  SK_BULLET = 0,   // Astro: colpo del fucilone
-  SK_ROCKET,       // Astro, speciale: razzo che insegue i mostri
-  SK_SHARD,        // Mochi: scheggia di luna (anche quelle dello speciale)
-  SK_FROST,        // Marzio: palla di ghiaccio secco che rallenta
-  SK_FLAME,        // Zolfo: fiamma che attraversa i mostri
-  SK_LAVA,         // Zolfo, speciale: bolla di lava a parabola
-  SK_ARROW,         // arciere di terracotta: freccia lenta a parabola
-  SK_JAVELIN,      // gladiatore gigante: giavellotto a parabola
+  SK_BULLET = 0,   // Astro: shot of the big rifle
+  SK_ROCKET,       // Astro, special: rocket that homes in on the monsters
+  SK_SHARD,        // Mochi: moon shard (also those of the special)
+  SK_FROST,        // Marzio: slowing ball of dry ice
+  SK_FLAME,        // Zolfo: flame that passes through the monsters
+  SK_LAVA,         // Zolfo, special: lobbed lava bubble
+  SK_ARROW,         // terracotta archer: slow lobbed arrow
+  SK_JAVELIN,      // giant gladiator: lobbed javelin
   NSHOTKINDS
 };
 
 enum { PH_FIGHT = 0, PH_ENTER, PH_CLEAR, PH_MAP_DONE, PH_WIPE };
-// SC_NET: GIOCO IN RETE (crea o unisciti); SC_LOBBY: sala d'attesa (0.5.4, solo su questa console:
-// la partita in rete comincia dopo, da COME SI GIOCA?).
+// SC_NET: GIOCO IN RETE (create or join); SC_LOBBY: waiting room (0.5.4, only on this console:
+// the LAN game starts afterwards, from COME SI GIOCA?).
 enum { SC_TITLE = 0, SC_MODE, SC_MAPS, SC_CHARS, SC_PLAY, SC_STATS, SC_SLOTS, SC_LANG, SC_NAME, SC_NET, SC_LOBBY, NSCREENS };
-// Prima schermata (0.5.3): nuova partita, carica, gioco in rete (0.5.4), gestisci i salvataggi, lingua, esci.
+// First screen (0.5.3): new game, load, LAN game (0.5.4), manage saves, language, quit.
 enum { TI_NEW = 0, TI_LOAD, TI_NET, TI_MANAGE, TI_LANG, TI_QUIT, TITLE_ITEMS };
-// Schermata dei salvataggi: per caricarne uno, per gestirli (duplica, elimina) o, con la nuova partita
-// e i posti pieni, per scegliere quale sovrascrivere; in rete (0.5.4) con quale creare la partita.
-// Finestre sopra: azioni, conferma.
+// Saves screen: to load one, to manage them (duplicate, delete) or, with a new game and the slots
+// full, to choose which one to overwrite; on the network (0.5.4), which one to host the game with.
+// Popups on top: actions, confirmation.
 enum { SL_LOAD = 0, SL_MANAGE, SL_OVERWRITE, SL_NET };
 enum { SP_NONE = 0, SP_ACTIONS, SP_DELETE, SP_OVERWRITE };
-// Voci della finestra delle azioni (0.5.4: anche RINOMINA).
+// Items of the actions popup (0.5.4: also RINOMINA).
 enum { SA_COPY = 0, SA_RENAME, SA_DELETE, SA_COUNT };
-// Tastiera per il nome della partita (0.5.4): partita nuova (prima di crearla), nome nuovo, partita
-// nuova da creare in rete.
+// Keyboard for the game's name (0.5.4): new game (before creating it), new name, new game to be
+// created on the network.
 enum { NM_NEW = 0, NM_RENAME, NM_NET };
-// Voci della pausa: riprendi, comandi (0.5.2: apre il riquadro con i tasti), mira, antialias, musica,
-// effetti, lascia la partita, torna al menu.
+// Pause items: resume, controls (0.5.2: opens the box with the buttons), aim, antialiasing, music,
+// sound effects, leave the game, back to the menu.
 enum { PS_RESUME = 0, PS_CONTROLS, PS_AIM, PS_AA, PS_MUSIC, PS_SFX, PS_LEAVE, PS_MENU, PAUSE_ITEMS };
 
 struct Player {
   bool active, alive, grounded, frozen, hidden;
   uint8_t ch;
-  Vec3 pos;                   // punto a terra tra i piedi
+  Vec3 pos;                   // point on the ground between the feet
   float vx, vz, vy, yaw;
   float hp, hp_max, speed;
   float ammo; bool locked;
   int fire_cd, reload_wait;
-  float charge;               // danni fatti con il colpo normale dall'ultimo speciale
-  int burst_left, burst_cd;   // Astro: colpi della raffica ancora da sparare
+  float charge;               // damage dealt with the normal shot since the last special
+  int burst_left, burst_cd;   // Astro: shots of the burst still to be fired
   float burst_yaw;
-  bool aiming;                // levetta destra inclinata
-  float aim_yaw, aim_k;       // dove si mira (per girarsi, sparare e disegnare) e quanto e' inclinata (0..1)
-  float aim_f, aim_dx;        // stato del filtro: direzione filtrata e sua velocita' (rad/s)
-  float aim_m;                // inclinazione della levetta al fotogramma prima
-  float aim_hy[AIM_HIST], aim_hm[AIM_HIST];   // ultimi fotogrammi di mira: direzione e inclinazione
+  bool aiming;                // right stick tilted
+  float aim_yaw, aim_k;       // where the aim points (to turn, shoot and draw) and how far the stick is tilted (0..1)
+  float aim_f, aim_dx;        // filter state: filtered direction and its speed (rad/s)
+  float aim_m;                // stick tilt in the previous frame
+  float aim_hy[AIM_HIST], aim_hm[AIM_HIST];   // last frames of aim: direction and tilt
   int aim_nh;
-  int aim_on_n;               // letture di fila oltre la soglia
-  int aim_off_t;              // fotogrammi da quando si e' smesso di mirare
-  unsigned aim_tick;          // ultimo fotogramma in cui si e' letta la levetta
-  int aim_hold;               // resta girato verso dove ha attaccato
+  int aim_on_n;               // readings in a row beyond the threshold
+  int aim_off_t;              // frames since aiming stopped
+  unsigned aim_tick;          // last frame in which the stick was read
+  int aim_hold;               // stays turned towards where it attacked
   int bombs;
   int respawn, invuln, hurt, recoil, down, reveal, land;
-  float phase, amp;           // camminata
-  float sq, sq_v;             // squash & stretch: 0 = forma normale
-  int leap_t, leap_n;         // Mochi: salto dello speciale (fotogrammi passati / totali)
+  float phase, amp;           // walk
+  float sq, sq_v;             // squash & stretch: 0 = normal shape
+  int leap_t, leap_n;         // Mochi: leap of the special (frames elapsed / total)
   Vec3 leap_a, leap_b;
-  int blizzard_t;             // Marzio: tempesta attiva
-  int flame_t;                // Zolfo: sta sputando fuoco
-  int tramp_t;                // lanciato da un trampolino
+  int blizzard_t;             // Marzio: storm active
+  int flame_t;                // Zolfo: is spitting fire
+  int tramp_t;                // launched by a trampoline
   float tvx, tvz;
-  float kx, kz;               // spinta di un'esplosione o di un colpo forte (si smorza)
+  float kx, kz;               // push from an explosion or a strong hit (it fades)
   uint16_t prev_btn;
   Pad last_pad;
   int same_t;
-  // Statistiche della mappa in corso.
+  // Stats of the current map.
   int kills, deaths;
   float dmg_done;
-  // Finestra per entrare a partita iniziata.
+  // Popup to join a game that has already started.
   bool joining;
   int join_pick;
-  // Carte della mappa in corso (cards.cpp).
-  uint32_t cards;             // carte prese (bit CA_*)
-  bool shield;                // SCUDO carico: il prossimo colpo si ferma
-  // Vite della mappa in corso.
-  int lives;                  // vite rimaste (cadere ne toglie una)
-  bool out;                   // senza vite: a terra fino alla fine della mappa (o finche' non ricomincia)
-  // Bonus delle casse (0.5.4): fotogrammi che restano di VELOCITA', FURIA, INVINCIBILE (0: niente).
+  // Cards of the current map (cards.cpp).
+  uint32_t cards;             // cards taken (CA_* bits)
+  bool shield;                // SCUDO charged: the next hit is stopped
+  // Lives of the current map.
+  int lives;                  // lives left (falling takes one away)
+  bool out;                   // out of lives: down until the end of the map (or until it restarts)
+  // Crate power-ups (0.5.4): frames left of VELOCITA', FURIA, INVINCIBILE (0: none).
   int pw_t[NPW_TIMED];
 };
 
@@ -191,27 +194,27 @@ struct Monster {
   bool alive, direct, los, summoned;
   uint8_t type;
   int8_t target;
-  Vec3 pos;                   // piedi (per chi vola, il punto a terra sotto)
+  Vec3 pos;                   // feet (for those who fly, the point on the ground below)
   float vx, vz, kx, kz, yaw, fly;
   float hp, hp_max, speed, dmg;
   int rise, cd, windup, hurt, shown, repath, state, state_t, strafe_t, reveal, slow_t, los_t;
   float strafe, phase, slow_k, sq, sq_v;
-  float cdx, cdz;             // scorpione: direzione della carica; arciere: dove mira (x, z)
-  uint8_t hitmask;            // giocatori gia' colpiti in questa carica o zampata; arciere: bit 0, il prossimo tiro e' una raffica
+  float cdx, cdz;             // scorpion: direction of the charge; archer: where it aims (x, z)
+  uint8_t hitmask;            // players already hit in this charge or swipe; archer: bit 0, the next shot is a burst
   Vec3 last_seen;
-  int burn_t;                 // carte combo: brucia ancora per cosi' tanti fotogrammi
-  int8_t burn_by;             // ...acceso da questo giocatore
-  int vapor_t;                // VAPORE: fotogrammi prima che possa scoppiare di nuovo
-  int8_t push_by;             // giocatore dell'ultima spinta, piu' uno (0 nessuno): sua la vittoria se cade nel cenote
+  int burn_t;                 // combo cards: keeps burning for this many frames
+  int8_t burn_by;             // ...set alight by this player
+  int vapor_t;                // VAPORE: frames before it can burst again
+  int8_t push_by;             // player of the last push, plus one (0 none): the kill is theirs if it falls into the cenote
 };
 
-// Gladiatore gigante (0.5.1): insegue il bersaglio e combatte. Azioni (monsters.cpp; le pose sono in
-// game_draw.cpp): giavellotti a parabola, spaccaterra (la crepa in linea), rinforzi dalle botole,
-// fendente davanti a se', carica con lo scudo, stordito dopo una carica contro un ostacolo.
+// Giant gladiator (0.5.1): chases the target and fights. Actions (monsters.cpp; the poses are in
+// game_draw.cpp): lobbed javelins, ground slam (the crack along a line), reinforcements from the
+// trapdoors, slash in front of itself, shield charge, stunned after a charge into an obstacle.
 enum { BA_NONE = -1, BA_JAVELIN = 0, BA_SLAM, BA_SUMMON, BA_SWEEP, BA_RUSH, BA_STUN, BA_COUNT };
-const float BOSS_SWEEP_R = 4.0f;                            // fendente: settore di 4 m davanti (BOSS_SWEEP_HALF in models.h)
-const float BOSS_LANE_HW = 1.25f;                           // carica: mezza larghezza della corsia (il suo raggio)
-const float BOSS_STUN_DMG = 1.5f;                           // stordito: i colpi fanno il 50% in piu'
+const float BOSS_SWEEP_R = 4.0f;                            // slash: 4 m sector in front (BOSS_SWEEP_HALF in models.h)
+const float BOSS_LANE_HW = 1.25f;                           // charge: half width of the lane (its radius)
+const float BOSS_STUN_DMG = 1.5f;                           // stunned: hits deal 50% more
 const int BOSS_STUN_FRAMES = 90;
 
 struct Boss {
@@ -219,34 +222,34 @@ struct Boss {
   int type;
   Vec3 pos;
   float hp, hp_max;
-  int stage;                  // 0, 1, 2: sempre piu' rapido
-  int cd, act, act_t, hurt, shown, roar;   // cd: pausa prima del prossimo attacco
+  int stage;                  // 0, 1, 2: faster and faster
+  int cd, act, act_t, hurt, shown, roar;   // cd: pause before the next attack
   float sq, sq_v, sway;
-  int target;                 // giocatore che insegue (-1 nessuno)
-  int target_t;               // fotogrammi con lo stesso bersaglio
-  float aggro[MAX_PLAYERS];   // danni recenti di ogni giocatore (si smorzano): chi picchia forte si fa inseguire
-  float face;                 // dove guarda: fendente e carica partono da questa parte
-  float vx, vz;               // velocita' della camminata
-  // Azione in corso: preparazione (piu' corta a ogni fase), direzione, carica.
-  int wind;                   // fotogrammi di preparazione (fino al colpo)
-  float act_yaw;              // direzione dell'attacco
-  float lane, run;            // carica: metri della corsia, metri gia' fatti
-  int end_t;                  // carica: act_t a cui la corsa e' finita (poi la ripresa)
-  bool crash;                 // carica: la corsia finisce contro un ostacolo
-  uint8_t hitmask;            // giocatori gia' colpiti da questo attacco
-  unsigned crack_t[MAX_PLAYERS];   // quando una crepa ha colpito ognuno l'ultima volta (una sola volta per spaccaterra)
-  int last[2];                // ultimi due attacchi (niente ripetizioni lunghe)
-  int alt;                    // scelte da media e lunga distanza: a turno la carica e l'altro attacco
-  int idle_t;                 // fotogrammi pronto ad attaccare senza un attacco adatto alla distanza
-  int queued;                 // attacco subito dopo questo (giavellotti dopo una carica), BA_NONE nessuno
-  // Camminata: dritto o verso il punto del percorso, controllo di "bloccato" e passo di lato.
+  int target;                 // player it chases (-1 none)
+  int target_t;               // frames with the same target
+  float aggro[MAX_PLAYERS];   // recent damage of each player (it fades): whoever hits hard gets chased
+  float face;                 // where it faces: slash and charge start on this side
+  float vx, vz;               // walking velocity
+  // Current action: wind-up (shorter at every stage), direction, charge.
+  int wind;                   // wind-up frames (until the hit)
+  float act_yaw;              // direction of the attack
+  float lane, run;            // charge: metres of the lane, metres already covered
+  int end_t;                  // charge: act_t at which the run ended (then the recovery)
+  bool crash;                 // charge: the lane ends against an obstacle
+  uint8_t hitmask;            // players already hit by this attack
+  unsigned crack_t[MAX_PLAYERS];   // when a crack last hit each one (only once per ground slam)
+  int last[2];                // last two attacks (no long repetitions)
+  int alt;                    // mid and long range choices: the charge and the other attack in turn
+  int idle_t;                 // frames ready to attack without an attack suited to the distance
+  int queued;                 // attack right after this one (javelins after a charge), BA_NONE none
+  // Walk: straight or towards the path's waypoint, "stuck" check and side step.
   Vec3 way, check;
   int check_t, side_t, stuck_n;
   float side;
   int repath;
   bool direct;
-  // Disegno (cambiano solo con la partita): passo della camminata, fotogrammi dalla sconfitta
-  // (cade e sparisce nella polvere).
+  // Drawing (they change only with the game): walking step, frames since the defeat (it falls
+  // and vanishes in the dust).
   float phase, amp;
   int dead_t;
 };
@@ -254,24 +257,24 @@ struct Boss {
 struct Shot {
   bool alive;
   uint8_t kind;
-  int8_t owner;               // 0..3 giocatori, -1 mostri, -2 boss
+  int8_t owner;               // 0..3 players, -1 monsters, -2 boss
   Vec3 pos, vel;
-  float left;                 // metri che restano (colpi dritti)
+  float left;                 // metres left (straight shots)
   float dmg, r, yaw;
   int life, target;
-  Vec3 dest;                  // colpi a parabola: punto di arrivo
-  uint64_t hit;               // mostri gia' colpiti (colpi che attraversano)
+  Vec3 dest;                  // lobbed shots: landing point
+  uint64_t hit;               // monsters already hit (shots that pass through)
   bool hit_boss;
-  bool special;               // colpo di uno speciale: non carica lo speciale
-  uint8_t fx;                 // carte combo: SFX_BURN incendia, SFX_SLOW rallenta
-  uint8_t pierce, bounce;     // PERFORANTE: mostri che puo' ancora attraversare; RIMBALZO: rimbalzi rimasti
+  bool special;               // shot of a special: does not charge the special
+  uint8_t fx;                 // combo cards: SFX_BURN sets on fire, SFX_SLOW slows
+  uint8_t pierce, bounce;     // PERFORANTE: monsters it can still pass through; RIMBALZO: bounces left
 };
 enum { SFX_BURN = 1, SFX_SLOW = 2 };
 
 struct Bomb {
   bool alive, lit;
-  int8_t owner;               // chi l'ha lasciata o accesa (-1 nessuno)
-  int8_t item;                // bomba della mappa: indice dell'oggetto, -1 lasciata da un giocatore
+  int8_t owner;               // who dropped or lit it (-1 none)
+  int8_t item;                // bomb of the map: index of the item, -1 dropped by a player
   Vec3 pos;
   float vy;
   int fuse;
@@ -286,35 +289,35 @@ struct Particle {
   float size, spin;
 };
 
-// Segni a terra: dove cade un colpo a parabola, dove sta per spuntare un attacco del boss, esplosioni...
-// Gladiatore (0.5.1): MK_SWEEP il settore del fendente (centro pos, raggio r, verso yaw), MK_LANE la
-// corsia della carica (da pos verso yaw, lunga len, mezza larghezza r); si riempiono fino a fire_at.
+// Ground marks: where a lobbed shot lands, where a boss attack is about to spring up, explosions...
+// Gladiator (0.5.1): MK_SWEEP the slash sector (centre pos, radius r, direction yaw), MK_LANE the
+// charge lane (from pos towards yaw, len long, half width r); they fill up until fire_at.
 enum { MK_LOB = 0, MK_ROOT, MK_RING, MK_BLAST, MK_SWEEP, MK_LANE };
 struct Marker {
   bool alive;
   uint8_t kind;
   Vec3 pos;
   float r;
-  int t, life;                // t: fotogrammi passati
-  int fire_at;                // crepe: quando spuntano le pietre; fendente e carica: quando parte il colpo
-  int open_at;                // crepe: quando si apre la crepa
+  int t, life;                // t: frames elapsed
+  int fire_at;                // cracks: when the stones spring up; slash and charge: when the hit starts
+  int open_at;                // cracks: when the crack opens
   bool done;
-  bool crash;                 // carica: la corsia finisce contro un ostacolo (li' sbatte)
-  float yaw, len;             // crepe, fendente, carica: direzione; carica: lunghezza (m)
+  bool crash;                 // charge: the lane ends against an obstacle (it crashes there)
+  float yaw, len;             // cracks, slash, charge: direction; charge: length (m)
 };
 
-// Numeri dei danni e delle cure: i colpi ravvicinati sullo stesso bersaglio si sommano.
+// Damage and healing numbers: hits close together on the same target add up.
 struct FloatText { bool alive; int life, key, value; uint32_t rgb; Vec3 pos; char txt[16]; };
 
-// Tasti del giocatore per i menu: nav e' la direzione appena scelta (0 nessuna, 1 su, 2 giu',
-// 3 sinistra, 4 destra), con la ripetizione automatica tenendo premuto.
+// Player buttons for the menus: nav is the direction just chosen (0 none, 1 up, 2 down,
+// 3 left, 4 right), with auto-repeat while held down.
 enum { NAV_NONE = 0, NAV_UP, NAV_DOWN, NAV_LEFT, NAV_RIGHT };
 struct PadState { uint16_t btn, prev; float lx, ly; int nav, nav_t, navdir; };
 
-// --- carte (cards.cpp) ----------------------------------------------------------
-// All'inizio di ogni mappa e dopo ogni zona ripulita (se ne segue un'altra) ogni giocatore sceglie
-// 1 carta su 3; valgono fino alla fine della mappa. Le combo vanno a un personaggio solo se un
-// altro giocatore usa il compagno indicato.
+// --- cards (cards.cpp) ----------------------------------------------------------
+// At the start of every map and after every cleared zone (if another one follows) every player
+// chooses 1 card out of 3; they last until the end of the map. The combos go to a character only
+// if another player uses the given teammate.
 enum CardId {
   CA_NONE = 0,
   CA_BOMBAROLO, CA_PASSO, CA_PELLE, CA_RICARICA, CA_SUPER, CA_PESANTI, CA_GITTATA, CA_MERENDA,
@@ -323,23 +326,23 @@ enum CardId {
   NCARDS
 };
 struct CardDef {
-  const char* name;        // come si vede (maiuscolo)
-  const char* desc;        // descrizione (ASCII)
-  const char* brief;       // piu' corta per i riquadri stretti dei 4 giocatori (NULL: desc)
+  const char* name;        // as it is shown (capitals)
+  const char* desc;        // description (ASCII)
+  const char* brief;       // shorter, for the narrow boxes of 4 players (NULL: desc)
   bool combo;
 };
 extern const CardDef CARDS[NCARDS];
 struct CardOffer {
   uint8_t card[3];
-  int8_t n, sel;           // carte proposte, voce su cui sta il cursore
-  bool on, done;           // ha una proposta (era in partita all'apertura) / ha gia' scelto
-  bool shown;              // (0.5.4) ha premuto A sul banner "RITIRA LE TUE CARTE": vede le sue carte
+  int8_t n, sel;           // cards offered, item the cursor is on
+  bool on, done;           // has an offer (was in the game when it opened) / has already chosen
+  bool shown;              // (0.5.4) pressed A on the "RITIRA LE TUE CARTE" banner: sees their cards
 };
-const int CARDS_CLOSE_FRAMES = 20;   // quando hanno scelto tutti, si chiude dopo cosi'
-const int CARDS_CLEAR_DELAY = 40;    // zona ripulita: si vede "ZONA LIBERA!", poi le carte
-const int CARDS_TIMEOUT = 60 * 60;   // chi non sceglie in un minuto (pad spento?) prende quella col cursore
-const int CARDS_BANNER_MIN = 15;     // (0.5.4) il banner c'e' da cosi' prima che A conti: niente scelte per sbaglio
-enum { EL_NONE = 0, EL_FIRE, EL_SNOW };   // colpi di fuoco o di neve (per VAPORE)
+const int CARDS_CLOSE_FRAMES = 20;   // when everyone has chosen, it closes after this long
+const int CARDS_CLEAR_DELAY = 40;    // zone cleared: "ZONA LIBERA!" is shown, then the cards
+const int CARDS_TIMEOUT = 60 * 60;   // whoever does not choose within a minute (pad off?) takes the one under the cursor
+const int CARDS_BANNER_MIN = 15;     // (0.5.4) the banner has been up this long before A counts: no choices by mistake
+enum { EL_NONE = 0, EL_FIRE, EL_SNOW };   // fire or snow shots (for VAPORE)
 
 // Grid of the distance fields (flow.cpp): half-metre cells over the whole map.
 #define FLOW_W (LV_MAX_W * 2)
@@ -351,13 +354,13 @@ struct Bot {
   Vec3 last, goal;
   int check_t, side_t, jump_t, strafe_t, field_t, menu_t;
   float side, strafe;
-  int orbit_t;                        // gladiatore: fotogrammi prima di poter cambiare verso del giro attorno
-  float orbit;                        // ...e il verso (+1 / -1)
+  int orbit_t;                        // gladiator: frames before the direction of circling around it can change
+  float orbit;                        // ...and the direction (+1 / -1)
   bool l1_prev, a_prev, field_ok;
-  unsigned card_seq;                  // scelta delle carte gia' vista
+  unsigned card_seq;                  // card choice already seen
   int card_t, card_want, card_wait;
-  int cage_t;                         // da quanto cercano di aprire la capsula dell'esploratore
-  int heal_t, heal_off;               // da quanto inseguono un talismano / per quanto lasciarli stare
+  int cage_t;                         // how long they have been trying to open the explorer's capsule
+  int heal_t, heal_off;               // how long they have been chasing a talisman / for how long to leave them alone
   uint16_t field[FLOW_W * FLOW_H];
 };
 
@@ -407,7 +410,7 @@ struct GameSession {
 };
 
 struct Game {
-  // Schermate e menu.
+  // Screens and menus.
   int screen, screen_t;
   int menu_sel, menu_owner;
   bool joined[MAX_PLAYERS], ready[MAX_PLAYERS];
@@ -415,25 +418,25 @@ struct Game {
   int chars_t;
   int map_sel, map_shown, map_load_t;
   char map_note[120];
-  int slots_mode, slots_sel, slots_pop, slots_pop_sel;   // salvataggi (SL_*, posto col cursore, SP_*, voce della finestra)
+  int slots_mode, slots_sel, slots_pop, slots_pop_sel;   // saves (SL_*, slot under the cursor, SP_*, popup item)
   int lang_sel;
-  int name_mode, name_slot, name_row, name_col;          // tastiera del nome (NM_*, posto, tasto col cursore)
-  bool name_overwrite;                                   // partita nuova al posto di un'altra (B torna ai posti)
+  int name_mode, name_slot, name_row, name_col;          // name keyboard (NM_*, slot, key under the cursor)
+  bool name_overwrite;                                   // new game in place of another one (B goes back to the slots)
   char name_buf[SAVE_NAME_LEN];
   int pause_owner, pause_sel;
   bool paused;
-  // Gioco in rete (0.5.4): partita in rete (uguale su tutte le console), posti con una console
-  // collegata, finestra "finire la partita in rete?"; partita trovata col cursore (sala d'attesa).
+  // LAN play (0.5.4): LAN game (the same on all the consoles), slots with a console connected,
+  // "finire la partita in rete?" popup; game found under the cursor (waiting room).
   bool net;
   uint8_t net_consoles;
   bool net_pop;
   int lobby_sel;
-  bool pause_help;            // nella pausa e' aperto il riquadro dei comandi
-  uint8_t aim_level[MAX_PLAYERS];   // mira scelta da ogni giocatore nella pausa (AIM_XSOFT...)
-  int aa_max, aa_level, aa_cap;     // antialias (solo grafica): campioni al massimo del renderer (0: niente) /
-                                    // scelta della pausa (0, 1 il migliore, 4, 8) / tetto della sessione (8 o 4)
-  // Campagna. loop: giro del pianeta della mappa in corso, da 0 (preso dal salvataggio quando la
-  // mappa comincia; i mostri hanno piu' vita, danni e velocita' a ogni giro).
+  bool pause_help;            // the controls box is open in the pause
+  uint8_t aim_level[MAX_PLAYERS];   // aim chosen by each player in the pause (AIM_XSOFT...)
+  int aa_max, aa_level, aa_cap;     // antialiasing (graphics only): the renderer's maximum samples (0: none) /
+                                    // pause choice (0, 1 the best, 4, 8) / session cap (8 or 4)
+  // Campaign. loop: round of the current map's planet, from 0 (taken from the save when the map
+  // starts; the monsters have more health, damage and speed at every round).
   int map_idx, loop;
   bool level_ok;
   Level L;
@@ -447,57 +450,57 @@ struct Game {
   Marker mk[MAX_MARKERS];
   bool item_on[LV_MAX_ITEMS];
   int item_t[LV_MAX_ITEMS];
-  uint8_t item_pw[LV_MAX_ITEMS];  // bonus uscito da quella cassa (PW_*), deciso quando si rompe
-  float squash[LV_MAX_DYN];     // cespugli ed erba schiacciati da chi ci passa
-  int crate_hit[LV_MAX_DYN];    // casse appena colpite (traballano)
-  int tramp_t[LV_MAX_DYN];      // trampolini appena usati
-  bool start_tap[MAX_PLAYERS];  // START premuto e lasciato subito (dal core)
-  int bots;                     // i primi "bots" giocatori li guida il computer (prove)
-  Vec3 last_vis[MAX_PLAYERS];   // dove i mostri hanno visto ogni giocatore l'ultima volta
-  int boss_seq;                 // attacchi del boss fatti finora (per l'alternanza)
+  uint8_t item_pw[LV_MAX_ITEMS];  // power-up that came out of that crate (PW_*), decided when it breaks
+  float squash[LV_MAX_DYN];     // bushes and grass flattened by whoever walks through them
+  int crate_hit[LV_MAX_DYN];    // crates just hit (they wobble)
+  int tramp_t[LV_MAX_DYN];      // trampolines just used
+  bool start_tap[MAX_PLAYERS];  // START pressed and released at once (from the core)
+  int bots;                     // the first "bots" players are driven by the computer (tests)
+  Vec3 last_vis[MAX_PLAYERS];   // where the monsters last saw each player
+  int boss_seq;                 // boss attacks made so far (for the alternation)
   int zone, phase, phase_t;
   int wave, spawn_left[MO_NTYPES], spawn_cd, spawn_wait, enemies_left;
   uint32_t rng;
-  unsigned tick, ui_tick;       // ui_tick va avanti anche in pausa e nei menu
+  unsigned tick, ui_tick;       // ui_tick advances also in the pause and in the menus
   int time_frames;              // frames towards the next second of play time of the active save
   PadState in[MAX_PLAYERS];
   float shake;                  // screen shake (explosions, slams): the view adds it to its camera
   float gate_want[LV_MAX_GATES];
-  char msg[160], msg2[224];        // gia' nella lingua scelta (tr al momento del messaggio)
+  char msg[160], msg2[224];        // already in the chosen language (tr when the message is made)
   int msg_t, msg_size;
   uint32_t msg_rgb;
   int kills, deaths, wipes, maps_done;
-  int restarts;                 // mappe ricominciate da capo in questa sessione
+  int restarts;                 // maps restarted from the start in this session
   bool wipe_cleared;
-  bool wipe_map;                // PH_WIPE: alla fine si ricomincia la mappa da capo (altrimenti solo la zona)
+  bool wipe_map;                // PH_WIPE: at the end the map restarts from the start (otherwise only the zone)
   int mvp;
-  int lives_kept[MAX_PLAYERS];  // vite di chi ha lasciato la partita in questo tentativo (-1: nessuno)
-  bool vita_kept[MAX_PLAYERS];  // ...e se aveva preso VITA EXTRA (rientrando non la riprende)
-  // Statistiche di chi ha lasciato la partita in questa mappa (anche prima di una mappa da capo):
-  // rientrando le ritrova.
+  int lives_kept[MAX_PLAYERS];  // lives of whoever left the game in this attempt (-1: nobody)
+  bool vita_kept[MAX_PLAYERS];  // ...and whether they had taken VITA EXTRA (rejoining does not give it back)
+  // Stats of whoever left the game in this map (also before a map restart): they get them back
+  // when rejoining.
   bool stats_kept[MAX_PLAYERS];
   int kills_kept[MAX_PLAYERS], deaths_kept[MAX_PLAYERS];
   float dmg_kept[MAX_PLAYERS];
-  // Carte: mentre la scelta e' aperta il gioco resta fermo come nella pausa (ui_tick va avanti).
+  // Cards: while the choice is open the game stays still as in the pause (ui_tick advances).
   bool cards_open;
-  int cards_t;                  // fotogrammi da quando hanno scelto tutti
-  int cards_age;                // fotogrammi da quando la scelta e' aperta
-  int cards_due;                // zona appena ripulita: fotogrammi prima che si apra la scelta
-  unsigned cards_seq;           // scelte aperte finora (per i giocatori automatici)
+  int cards_t;                  // frames since everyone chose
+  int cards_age;                // frames since the choice opened
+  int cards_due;                // zone just cleared: frames before the choice opens
+  unsigned cards_seq;           // choices opened so far (for the bots)
   CardOffer offer[MAX_PLAYERS];
-  // Capsula nascosta con l'esploratore e stelle della mappa in corso.
-  bool explorer_free;           // capsula aperta in questa mappa
-  int expl_t;                   // fotogrammi da quando e' uscito (-1: ancora nella capsula)
+  // Hidden capsule with the explorer, and stars of the current map.
+  bool explorer_free;           // capsule opened in this map
+  int expl_t;                   // frames since they came out (-1: still in the capsule)
   Vec3 expl_pos;
   float expl_yaw;
-  int help_t;                   // tra quanto chiama di nuovo "aiuto!"
-  int map_wipes;                // volte che la mappa e' ricominciata da capo in questa visita (stella 3)
-  uint8_t stars_got, stars_new; // stelle prese alla fine della mappa / quelle nuove per il salvataggio
-  uint8_t stars_had;            // stelle della mappa nel salvataggio prima di questa volta
-  // Boss del pianeta battuto: esito del giro, per la schermata di fine mappa.
-  bool giro_done;               // si e' guardato il giro (fine dell'arena)
-  bool giro_up;                 // aperto il giro dopo (le stelle del pianeta ripartono da zero)
-  int giro_stars, giro_was;     // stelle del pianeta nel giro appena finito; quel giro
+  int help_t;                   // how long until they call "aiuto!" again
+  int map_wipes;                // times the map restarted from the start in this visit (star 3)
+  uint8_t stars_got, stars_new; // stars won at the end of the map / the new ones for the save
+  uint8_t stars_had;            // stars of the map in the save before this time
+  // Planet boss beaten: outcome of the round, for the end-of-map screen.
+  bool giro_done;               // the round has been checked (end of the arena)
+  bool giro_up;                 // next round opened (the planet's stars start again from zero)
+  int giro_stars, giro_was;     // stars of the planet in the round just finished; that round
   GameSession session;          // keep it last: game_init clears everything before it
 };
 
@@ -517,11 +520,11 @@ static inline void ev_camera(const Game& g, int how) {
 }
 
 static inline bool has_card(const Player& p, int c) { return ((p.cards >> c) & 1u) != 0u; }
-// Valori del personaggio con le carte: li usano il gioco, il disegno (mira, barre) e i giocatori
-// automatici. Senza la carta restano esattamente quelli di CHARS.
+// Character values with the cards: used by the game, the drawing (aim, bars) and the bots.
+// Without the card they stay exactly those of CHARS.
 static inline float pl_speed(const Player& p) {
   const float s = has_card(p, CA_PASSO) ? CHARS[p.ch].speed * 1.15f : CHARS[p.ch].speed;
-  return p.pw_t[PW_SPEED] > 0 ? s * PW_SPEED_K : s;   // VELOCITA' (bonus delle casse)
+  return p.pw_t[PW_SPEED] > 0 ? s * PW_SPEED_K : s;   // VELOCITA' (crate power-up)
 }
 static inline float pl_range(const Player& p) { return has_card(p, CA_GITTATA) ? CHARS[p.ch].range * 1.25f : CHARS[p.ch].range; }
 static inline float pl_special_cost(const Player& p) {
@@ -545,9 +548,9 @@ static inline uint32_t rng_next(Game& g) {
 }
 static inline float rng_f(Game& g) { return (float)(rng_next(g) >> 8) * (1.0f / 16777216.0f); }   // [0, 1)
 static inline float rng_s(Game& g) { return rng_f(g) * 2.0f - 1.0f; }                             // [-1, 1)
-// Vettore casuale (x e z in [-sx, sx) e [-sz, sz), y in [y0, y0 + sy)). Le chiamate al generatore
-// vanno sempre in istruzioni separate: l'ordine di valutazione degli argomenti di una funzione
-// non e' fissato dal C++ e due compilatori darebbero partite diverse.
+// Random vector (x and z in [-sx, sx) and [-sz, sz), y in [y0, y0 + sy)). The calls to the
+// generator always go in separate statements: the evaluation order of a function's arguments is
+// not fixed by C++ and two compilers would give different games.
 static inline Vec3 rng_vec(Game& g, float sx, float y0, float sy, float sz) {
   const float x = rng_s(g) * sx;
   const float y = y0 + rng_f(g) * sy;
@@ -566,32 +569,32 @@ static inline bool pad_pressed(Game& g, int i, int b) { return ((g.in[i].btn & ~
 // --- game.cpp ---
 int count_active(Game& g);
 int count_alive(Game& g);
-int count_in_play(Game& g);      // attivi e non ancora senza vite
+int count_in_play(Game& g);      // active and not yet out of lives
 int count_monsters(const Game& g);
 void show_msg(Game& g, const char* big, const char* small, uint32_t rgb, int size, int frames);
-float diff_hp(Game& g);          // moltiplicatori dei mostri secondo il giro della campagna
+float diff_hp(Game& g);          // monster multipliers according to the campaign round
 float diff_dmg(Game& g);
 float diff_speed(Game& g);
-void start_map(Game& g, int idx);      // carica la mappa e comincia dalla zona 1
+void start_map(Game& g, int idx);      // loads the map and starts from zone 1
 void game_request_quit(Game& g);
 bool load_map_preview(Game& g, int idx);
-Vec3 menu_spot(const Game& g, int i);        // dove sta il personaggio del giocatore i nei menu
-void settings_changed(Game& g);  // mira, antialias o volumi cambiati (gia' in save_data): si scrivono alla chiusura della pausa
-void stars_late_explorer(Game& g);   // esploratore salvato a mappa gia' finita (festa di fine mappa)
-// Pianeti e giri (dati nel salvataggio, mappe da maps.h).
-int world_giro(int w);            // giro del pianeta w, da 1
-int world_maps(int w);            // mappe del pianeta w nella campagna
-int world_stars(int w);           // stelle del pianeta w nel giro in corso
-int giro_need(int w);             // stelle che servono per il giro dopo del pianeta w (GIRO_STARS con 4 mappe)
-int world_first_map(int w);       // indice della prima mappa del pianeta (-1 se non ne ha)
-int map_in_world(int i);          // posizione della mappa i nel suo pianeta (0 = la prima)
-bool map_unlocked(int i);         // la mappa i si puo' giocare?
-int star_count(uint8_t s);        // quante stelle in una maschera SAVE_STAR_*
+Vec3 menu_spot(const Game& g, int i);        // where player i's character stands in the menus
+void settings_changed(Game& g);  // aim, antialiasing or volumes changed (already in save_data): written when the pause closes
+void stars_late_explorer(Game& g);   // explorer rescued when the map was already finished (end-of-map party)
+// Planets and rounds (data in the save, maps from maps.h).
+int world_giro(int w);            // round of planet w, from 1
+int world_maps(int w);            // maps of planet w in the campaign
+int world_stars(int w);           // stars of planet w in the current round
+int giro_need(int w);             // stars needed for the next round of planet w (GIRO_STARS with 4 maps)
+int world_first_map(int w);       // index of the planet's first map (-1 if it has none)
+int map_in_world(int i);          // position of map i in its planet (0 = the first)
+bool map_unlocked(int i);         // can map i be played?
+int star_count(uint8_t s);        // how many stars in a SAVE_STAR_* mask
 extern const char* const WORLD_NAMES[NWORLDS];   // "TERRA", "LUNA"...
 // --- player.cpp ---
 void player_join(Game& g, int i, int ch, bool mid_game);
 void player_leave(Game& g, int i);
-void players_gather(Game& g);    // fine mappa: chi e' a terra (o senza vite) raggiunge i compagni per la festa
+void players_gather(Game& g);    // end of map: whoever is down (or out of lives) joins the teammates for the party
 void player_update(Game& g, int i, const Pad& pad);
 void place_players(Game& g, int z);
 Vec3 player_chest(const Player& p);
@@ -604,20 +607,20 @@ Shot* shot_new(Game& g, int kind, int owner, Vec3 pos, Vec3 vel);
 void shots_update(Game& g);
 void damage_monster(Game& g, int k, float dmg, int owner, Vec3 dir, float knock, bool charges);
 void damage_boss(Game& g, float dmg, int owner, bool charges);
-// elem: EL_FIRE per la lava di Zolfo (VAPORE sui mostri rallentati), EL_NONE per il resto.
+// elem: EL_FIRE for Zolfo's lava (VAPORE on slowed monsters), EL_NONE for the rest.
 void explode(Game& g, Vec3 p, float radius, float dmg, int owner, float knock, bool big, int elem = EL_NONE);
 bool bomb_drop(Game& g, int i);
 void bombs_update(Game& g);
-void items_reset(Game& g, int zone);   // zona < 0: tutta la mappa
+void items_reset(Game& g, int zone);   // zone < 0: the whole map
 void items_update(Game& g);
 void crate_damage(Game& g, int d, float dmg, Vec3 from);
-bool power_take(Game& g, int player, int pw);   // bonus PW_* al giocatore (false: CARICA che non gli serve)
+bool power_take(Game& g, int player, int pw);   // PW_* power-up to the player (false: CARICA they do not need)
 void burst(Game& g, Vec3 p, int n, int col, float speed);
 void puff(Game& g, Vec3 p, int kind, int col, Vec3 vel, float size, int life);
 void add_float(Game& g, Vec3 p, uint32_t rgb, int key, int value, char sign);
-void add_float_text(Game& g, Vec3 p, uint32_t rgb, const char* txt);   // scritta che sale (al massimo 15 byte: il testo italiano, tradotto nel disegno)
-void explorer_update(Game& g);   // l'esploratore chiama aiuto; poi, salvato, festeggia e se ne va
-void explorer_rescue(Game& g, Vec3 c); // capsula aperta: stella dell'esploratore
+void add_float_text(Game& g, Vec3 p, uint32_t rgb, const char* txt);   // rising text (at most 15 bytes: the Italian text, translated when drawn)
+void explorer_update(Game& g);   // the explorer calls for help; then, once rescued, celebrates and leaves
+void explorer_rescue(Game& g, Vec3 c); // capsule opened: the explorer's star
 void add_shake(Game& g, float a);
 Marker* marker_new(Game& g, int kind, Vec3 pos, float r, int life);
 void effects_update(Game& g);
@@ -628,58 +631,58 @@ void monsters_clear(Game& g);
 float monster_r(const Monster& m);
 float monster_h(const Monster& m);
 Vec3 monster_center(const Monster& m);
-bool monster_drawn(const Game& g, const Monster& m);   // nascosto nell'erba alta lontano dai giocatori?
+bool monster_drawn(const Game& g, const Monster& m);   // hidden in the tall grass far from the players?
 void boss_start(Game& g);
 void boss_update(Game& g);
 float boss_r(void);
-float boss_speed(Game& g);                 // camminata del gladiatore nella fase in corso (m/s)
-Vec3 boss_javelin_start(const Boss& b); // da dove partono i giavellotti (il disegno parte dalla mano)
-bool boss_force_act(Game& g, int act);           // prove: comincia subito l'azione act verso il bersaglio
+float boss_speed(Game& g);                 // the gladiator's walking speed in the current stage (m/s)
+Vec3 boss_javelin_start(const Boss& b); // where the javelins start from (the drawing starts from the hand)
+bool boss_force_act(Game& g, int act);           // tests: starts action act towards the target right away
 // --- flow.cpp ---
-// Campo di distanze su una griglia di celle da mezzo metro: i mostri lo seguono per arrivare ai
-// giocatori girando attorno agli ostacoli, i giocatori automatici per andare dove vogliono.
-void flow_build(Game& g, uint16_t* field, const Vec3* goals, int ngoals, int zone);   // zone < 0: tutta la mappa
+// Distance field on a grid of half-metre cells: the monsters follow it to reach the players
+// going around the obstacles, the bots to go where they want.
+void flow_build(Game& g, uint16_t* field, const Vec3* goals, int ngoals, int zone);   // zone < 0: the whole map
 bool flow_dir(Game& g, const uint16_t* field, float x, float z, float* dx, float* dz);
 bool walk_clear(Game& g, Vec3 a, Vec3 b, float r, bool flying);
-// --- gioco in rete (game.cpp; vedi net.h) ---
-const NetView& net_view(const Game& g);   // cosa c'e' in rete (dal core, solo per le pagine della rete)
-void net_req(Game& g, int req, int arg);  // richiesta al core (NR_*): la prende dopo game_update
-int net_local(const Game& g);             // giocatore di questa console in una partita in rete, -1 fuori
-// In rete conta solo chi ha una console collegata (per gli avvisi "premete un tasto").
+// --- LAN play (game.cpp; see net.h) ---
+const NetView& net_view(const Game& g);   // what is on the network (from the core, only for the network pages)
+void net_req(Game& g, int req, int arg);  // request to the core (NR_*): it picks it up after game_update
+int net_local(const Game& g);             // player of this console in a LAN game, -1 outside one
+// On the network only those with a console connected count (for the "premete un tasto" notices).
 static inline bool net_console(const Game& g, int i) { return !g.net || ((g.net_consoles >> i) & 1u) != 0u; }
-int net_wait_frames(const Game& g);       // da quanti fotogrammi questa console aspetta la rete (solo HUD)
-uint8_t net_silent(const Game& g);        // console che non rispondono da un po' (solo HUD)
+int net_wait_frames(const Game& g);       // how many frames this console has been waiting for the network (HUD only)
+uint8_t net_silent(const Game& g);        // consoles that have not answered for a while (HUD only)
 // --- screens (game/screens: the menus as states, the pause, the card choice) ---
 void go_screen(Game& g, int s);           // change screen (SC_*)
 void screens_update(Game& g);             // a step of the current screen (not SC_PLAY)
 void screens_hud(const Game& g, Hud* h);  // what the current screen draws (not SC_PLAY)
-void menu_info(Game& g, const char* s);   // avviso nei menu al posto del piede (2 secondi)
-const char* net_error_text(Game& g, int e, char* buf, int n);   // cosa dire per un errore della rete (NE_*)
-void play_menus_update(Game& g);  // pausa e finestre per entrare, durante la partita
+void menu_info(Game& g, const char* s);   // notice in the menus in place of the footer (2 seconds)
+const char* net_error_text(Game& g, int e, char* buf, int n);   // what to say for a network error (NE_*)
+void play_menus_update(Game& g);  // pause and join popups, during the game
 void play_menus_hud(const Game& g, Hud* h);
 // --- game_draw.cpp ---
 bool to_screen(const Camera& c, Vec3 p, int* sx, int* sy);
-// Faccia dell'eroe ch (disegni di tools/make_font.py) in un quadrato di lato 8 * size da (x, y):
-// colori veri, spenti (a terra) o grigi (senza vite).
-enum { FACE_NORMAL = 0, FACE_DOWN, FACE_OUT };   // aspetto delle facce (ui::face)
+// Face of hero ch (drawings from tools/make_font.py) in a square of side 8 * size from (x, y):
+// true colours, dimmed (down) or grey (out of lives).
+enum { FACE_NORMAL = 0, FACE_DOWN, FACE_OUT };   // look of the faces (ui::face)
 // --- bot.cpp ---
 void bot_reset(Game& g);
-void bot_set_lag(Game& g, int frames);   // prove: i giocatori automatici reagiscono ai segni a terra in ritardo, come una persona
+void bot_set_lag(Game& g, int frames);   // tests: the bots react late to the marks on the ground, like a person
 // --- cards.cpp ---
 bool cards_enabled(Game& g);
-void cards_map_start(Game& g);           // nuova mappa (o mappa da capo): via tutte le carte
-void cards_offer(Game& g);               // apre la scelta (se le carte sono attive) per chi ha ancora vite
-void cards_zone_cleared(Game& g);        // zona ripulita e ne segue un'altra: la scelta si apre tra poco
-void cards_zone_start(Game& g);          // inizio (o nuovo inizio) di una zona: si ricaricano gli scudi
+void cards_map_start(Game& g);           // new map (or map restarted from the start): all the cards go away
+void cards_offer(Game& g);               // opens the choice (if the cards are enabled) for whoever still has lives
+void cards_zone_cleared(Game& g);        // zone cleared and another one follows: the choice opens shortly
+void cards_zone_start(Game& g);          // start (or new start) of a zone: the shields recharge
 void card_take(Game& g, int i, int c);   // the player i takes the card c
-void cards_update(Game& g);              // scelta aperta: cursori e conferme di tutti, poi si chiude
-void cards_hud(const Game& g, Hud* h);               // riquadri della scelta (al posto della pausa)
-void card_lose_all(Game& g, int i);            // chi lascia la partita perde le sue carte
-uint8_t card_shot_fx(Game& g, int i, int kind);       // SFX_* dei colpi di questo tipo del giocatore i
-void card_shot_mods(Game& g, int i, Shot* s);         // colpo normale appena sparato: danni, PERFORANTE, RIMBALZO, combo
-void card_shot_hit(Game& g, int k, const Shot& s);    // un colpo di un giocatore ha preso il mostro k (ancora vivo)
-void card_elem_hit(Game& g, int k, int owner, int elem);   // fuoco o neve sul mostro k: forse VAPORE
-void card_burn_tick(Game& g, int k);                  // mostro che brucia: danni e fiammelle
-bool card_shield_hit(Game& g, int i);                 // SCUDO: true se il colpo si ferma
+void cards_update(Game& g);              // choice open: everyone's cursors and confirmations, then it closes
+void cards_hud(const Game& g, Hud* h);               // boxes of the choice (in place of the pause)
+void card_lose_all(Game& g, int i);            // whoever leaves the game loses their cards
+uint8_t card_shot_fx(Game& g, int i, int kind);       // SFX_* of player i's shots of this kind
+void card_shot_mods(Game& g, int i, Shot* s);         // normal shot just fired: damage, PERFORANTE, RIMBALZO, combo
+void card_shot_hit(Game& g, int k, const Shot& s);    // a player's shot hit monster k (still alive)
+void card_elem_hit(Game& g, int k, int owner, int elem);   // fire or snow on monster k: maybe VAPORE
+void card_burn_tick(Game& g, int k);                  // burning monster: damage and little flames
+bool card_shield_hit(Game& g, int i);                 // SCUDO: true if the hit is stopped
 void card_special_used(Game& g, int i);               // SPECIALE GENEROSO
-bool cards_layout_ok(Game& g, char* why, int n, bool all = false);   // prove: nomi e descrizioni stanno nei riquadri (all: li scrive tutti)
+bool cards_layout_ok(Game& g, char* why, int n, bool all = false);   // tests: names and descriptions fit in the boxes (all: writes them all)

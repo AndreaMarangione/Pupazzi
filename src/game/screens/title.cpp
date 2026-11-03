@@ -51,7 +51,7 @@ void title_update(Game& g) {
 void title_hud(const Game& g, Hud* h) {
   ui::scrim_top(h);
   ui::scrim_bottom(h);
-  // L'orbita intorno al nome, con il pianetino ciano.
+  // The orbit around the name, with the little cyan planet.
   HudShape r;
   memset(&r, 0, sizeof(r));
   r.type = HS_RING; r.x = 40; r.y = 22; r.w = 560; r.h = 132; r.ring = 2.0f; r.soft = 12.0f; r.c0 = r.c1 = A(0xFF785A, 0.45f);
@@ -68,7 +68,7 @@ void title_hud(const Game& g, Hud* h) {
   ui::fit(tag, sizeof(tag), tr("DA 1 A 4 AMICI CONTRO I MOSTRI"), HF_S15, 2.0f, 576.0f);
   ui::text(h, 320, cy + 1.0f, HF_S15, A(ui::SCRIM, 0.9f), tag, 2.0f, 0);
   ui::text(h, 320, cy, HF_S15, O(ui::FTX), tag, 2.0f, 0);
-  // Le voci a destra (gli eroi stanno a sinistra: la telecamera del titolo e' spostata).
+  // The items on the right (the heroes are on the left: the title camera is shifted).
   const float PX = 372.0f, PW = 236.0f, PY = 196.0f, RH = 34.0f, IX = PX + 10.0f, IW = PW - 20.0f;
   ui::panel(h, PX, PY, PW, 16.0f + RH * (float)TITLE_ITEMS);
   static const char* const LABEL[TITLE_ITEMS] = { N_("NUOVA PARTITA"), N_("CARICA SALVATAGGIO"), N_("GIOCO IN RETE"), N_("GESTISCI SALVATAGGI"),
@@ -80,7 +80,7 @@ void title_hud(const Game& g, Hud* h) {
     if (sel) ui::bar_sel(h, IX, y + 2.0f, IW, RH - 4.0f);
     const uint32_t c = O(sel ? ui::ON : (off ? ui::DIS : (k == TI_QUIT ? ui::A2 : ui::TX)));
     float tx = IX + 14.0f, room = IW - 28.0f;
-    if (k == TI_LANG) {                        // il mappamondo: si trova anche senza capire la lingua
+    if (k == TI_LANG) {                        // the globe: it can be found even without understanding the language
       ui::globe(h, tx + 7.5f, cy2, sel ? ui::ON : ui::L1);
       tx += 23.0f;
       room -= 23.0f;

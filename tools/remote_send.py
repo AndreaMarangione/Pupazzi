@@ -1,22 +1,22 @@
 #!/usr/bin/env python3
-# Pupazzi - fa da Remote RetroPad: manda a una console i comandi di un controller come il core
-# "Remote RetroPad" di RetroArch su un'altra console (stesso messaggio UDP di 20 byte), per provare
-# i comandi dalla rete senza una seconda console (dal PC alla console, o al frontend di prova).
+# Pupazzi - acts as a Remote RetroPad: sends a console a controller's commands the way RetroArch's
+# "Remote RetroPad" core does from another console (same 20-byte UDP message), to test the commands
+# from the network without a second console (from the PC to the console, or to the test frontend).
 #
-#   python3 tools/remote_send.py IP GIOCATORE [EVENTO ...] [--porta 55400] [--tremolio N] [--raffica N]
+#   python3 tools/remote_send.py IP PLAYER [EVENT ...] [--porta 55400] [--tremolio N] [--raffica N]
 #
-# EVENTO come nel frontend di prova (tools/host.cpp), ma con i tempi in secondi:
-#   NOME@inizio-fine          un tasto: B Y SELECT START UP DOWN LEFT RIGHT A X L R L2 R2 L3 R3
-#   asse=valore@inizio-fine   una levetta: lx ly rx ry, valore tra -1 e 1 (y positivo = in basso)
-# Esempio, giocatore 2 sulla console 192.168.1.228: levetta sinistra a destra per 2 secondi, poi
-# un salto (R2):
+# EVENT as in the test frontend (tools/host.cpp), but with the times in seconds:
+#   NAME@start-end            a button: B Y SELECT START UP DOWN LEFT RIGHT A X L R L2 R2 L3 R3
+#   axis=value@start-end      a stick: lx ly rx ry, value between -1 and 1 (positive y = down)
+# Example, player 2 on the console 192.168.1.228: left stick to the right for 2 seconds, then
+# a jump (R2):
 #   python3 tools/remote_send.py 192.168.1.228 2 "lx=1@0-2" "R2@2.5-2.6"
 #
-# Come il vero Remote RetroPad, 60 volte al secondo manda solo cio' che e' cambiato, prima i 16
-# tasti e poi le levette. --tremolio N aggiunge a ogni invio un tremolio casuale fino a N (su 32767)
-# a tutte e quattro le levette, come una levetta vera che non sta mai ferma: fino a 4 messaggi a
-# fotogramma, le condizioni in cui RetroArch restava indietro. --raffica N all'inizio manda N
-# messaggi delle levette tutti insieme (gli ultimi quattro le rimettono al centro).
+# Like the real Remote RetroPad, 60 times per second it sends only what has changed, first the 16
+# buttons and then the sticks. --tremolio N adds to every send a random jitter of up to N (out of
+# 32767) to all four sticks, like a real stick that never stays still: up to 4 messages per
+# frame, the conditions in which RetroArch fell behind. --raffica N at the start sends N stick
+# messages all at once (the last four put the sticks back in the center).
 import argparse
 import random
 import socket
@@ -26,12 +26,12 @@ import time
 
 JOYPAD, ANALOG = 1, 5      # RETRO_DEVICE_JOYPAD, RETRO_DEVICE_ANALOG
 BUTTONS = ("B", "Y", "SELECT", "START", "UP", "DOWN", "LEFT", "RIGHT", "A", "X", "L", "R", "L2", "R2", "L3", "R3")
-AXES = ("lx", "ly", "rx", "ry")    # (index, id): sinistra x y = (0, 0) (0, 1), destra x y = (1, 0) (1, 1)
+AXES = ("lx", "ly", "rx", "ry")    # (index, id): left x y = (0, 0) (0, 1), right x y = (1, 0) (1, 1)
 BASE_PORT = 55400
 
 
 def message(device, index, id_, state, port=0, pad=b"\0\0"):
-    """struct remote_joypad_message { int port, device, index, id; uint16_t state; }: 20 byte."""
+    """struct remote_joypad_message { int port, device, index, id; uint16_t state; }: 20 bytes."""
     return struct.pack("<iiiiH", port, device, index, id_, state & 0xFFFF) + pad
 
 
@@ -40,14 +40,14 @@ def f32(x):
 
 
 def axis_value(v):
-    """Valore della levetta in [-1, 1] -> intero a 16 bit, come il frontend di prova."""
+    """Stick value in [-1, 1] -> 16-bit integer, like the test frontend."""
     a = int(f32(f32(v) * 32767.0))
     return max(-32768, min(32767, a))
 
 
 def parse_event(tok):
-    """'[porta:]NOME@inizio-fine' o '[porta:]asse=valore@inizio-fine' -> dizionario.
-    Senza porta: None. inizio e fine sono numeri (secondi qui, fotogrammi nel frontend di prova)."""
+    """'[port:]NAME@start-end' or '[port:]axis=value@start-end' -> dictionary.
+    Without port: None. start and end are numbers (seconds here, frames in the test frontend)."""
     port = None
     head, sep, span = tok.strip().partition("@")
     if not sep:
@@ -73,7 +73,7 @@ def parse_event(tok):
 
 
 def state_at(events, t, port=None):
-    """Tasti (maschera) e levette (interi) in t: tasti in OR, per ogni asse l'ultimo evento che vale."""
+    """Buttons (mask) and sticks (integers) at t: buttons ORed, for each axis the last event in effect."""
     mask, vals = 0, [0.0] * 4
     for e in events:
         if (port is not None and e["port"] != port) or not (e["t0"] <= t <= e["t1"]):
@@ -86,8 +86,8 @@ def state_at(events, t, port=None):
 
 
 class RemotePad:
-    """Un controller come lo vede il Remote RetroPad: ricorda l'ultimo stato mandato e manda solo
-    cio' che cambia, nello stesso ordine (i 16 tasti, poi levetta sinistra x y, destra x y)."""
+    """A controller as the Remote RetroPad sees it: remembers the last state sent and sends only
+    what changes, in the same order (the 16 buttons, then left stick x y, right x y)."""
 
     def __init__(self, ip, port, sock=None):
         self.sock = sock or socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -101,7 +101,7 @@ class RemotePad:
         self.sent += 1
 
     def set(self, btn=None, axes=None):
-        """Nuovo stato (None: com'era); restituisce quanti messaggi ha mandato."""
+        """New state (None: as it was); returns how many messages it sent."""
         n = self.sent
         if btn is not None:
             for i in range(16):
@@ -153,7 +153,7 @@ def main():
             ax = [max(-32768, min(32767, v + random.randint(-args.tremolio, args.tremolio))) for v in ax]
         pad.set(btn, ax)
         tick += 1
-    pad.set(0, [0, 0, 0, 0])      # alla fine tutto lasciato e al centro
+    pad.set(0, [0, 0, 0, 0])      # at the end everything released and centered
     print("mandati %d messaggi in %.1f s a %s:%d (giocatore %d)" % (pad.sent, time.monotonic() - t_start, args.ip, port, args.giocatore))
 
 

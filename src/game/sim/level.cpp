@@ -1,5 +1,5 @@
-// Mappa: lettura del file di testo, zone e cancelli, collisioni, linea di vista.
-// La geometria da disegnare e' in level_mesh.cpp.
+// Map: reading of the text file, zones and gates, collisions, line of sight.
+// The geometry to draw is in level_mesh.cpp.
 #include "game/sim/level.h"
 #include <ctype.h>
 #include <stdarg.h>
@@ -30,8 +30,8 @@ void lower(char* s) {
   for (; *s; ++s) *s = (char)tolower((unsigned char)*s);
 }
 
-// Dalla 0.5.1 il corridore e' lo scorpione e il tiratore l'arciere di terracotta; i nomi di prima
-// (sciacallo, lama) valgono ancora per le mappe fatte a mano.
+// Since 0.5.1 the runner is the scorpion and the shooter the terracotta archer; the old names
+// (sciacallo, lama) still work for hand-made maps.
 int monster_by_name(const char* s) {
   static const struct { const char* name; int type; } N[] = {
     { "scorpione", MO_SCORPIONE }, { "scorpioni", MO_SCORPIONE }, { "arciere", MO_ARCIERE }, { "arcieri", MO_ARCIERE },
@@ -42,7 +42,7 @@ int monster_by_name(const char* s) {
   return -1;
 }
 
-// "sciacallo 3, scarabei 4 | guerriero 1": ondate separate da |, gruppi separati da virgole.
+// "sciacallo 3, scarabei 4 | guerriero 1": waves separated by |, groups separated by commas.
 bool parse_waves(ZoneDef* z, char* s, int line, char* err, int errlen) {
   z->nwaves = 0;
   for (char* w = s; w;) {
@@ -91,10 +91,10 @@ bool parse_waves(ZoneDef* z, char* s, int line, char* err, int errlen) {
 
 bool passable_for_zones(uint8_t c) { return c != C_VOID && c != C_WALL && c != C_TREE && c != C_ROCK && c != C_GATE; }
 bool walkable_floor(uint8_t c) { return c == C_FLOOR || c == C_PATH; }
-// Caselle su cui si sta e da cui si va avanti a piedi (saltando sopra blocchi, piattaforme e
-// muretti): tutte quelle delle zone tranne l'acqua e il cenote.
+// Cells one can stand on and move on from on foot (jumping onto blocks, platforms and low walls):
+// all those of the zones except the water and the cenote.
 bool standable(uint8_t c) { return passable_for_zones(c) && c != C_WATER && c != C_PIT; }
-// Sempre libere a terra (niente da scavalcare, niente da rompere).
+// Always free on the ground (nothing to climb over, nothing to break).
 bool free_ground(uint8_t c) { return c == C_FLOOR || c == C_PATH || c == C_BUSH || c == C_GRASS || c == C_TRAMP; }
 
 const int D4[4][2] = { { 1, 0 }, { -1, 0 }, { 0, 1 }, { 0, -1 } };
@@ -105,7 +105,7 @@ inline int cell_at(const Level* L, int cx, int cz) {
 }
 inline int zone_of(const Level* L, int cx, int cz) { return cx < 0 || cz < 0 || cx >= L->W || cz >= L->H ? -1 : L->zone[cz][cx]; }
 
-// Il cenote arriva a meno di d caselle (in tutte le direzioni, diagonali comprese)?
+// Does the cenote come within d cells (in all directions, diagonals included)?
 bool pit_within(const Level* L, int cx, int cz, int d) {
   for (int z = cz - d; z <= cz + d; ++z)
     for (int x = cx - d; x <= cx + d; ++x)
@@ -113,16 +113,16 @@ bool pit_within(const Level* L, int cx, int cz, int d) {
   return false;
 }
 
-// Controlli delle fughe (0.5.1), dopo zone e cancelli: tutto quello che e' disegnato dentro la
-// griglia sta nelle zone; il bordo e il fuori (spazi) sono chiusi dai muri; due zone si toccano
-// solo attraverso un cancello, anche in diagonale; in ogni zona si arriva a piedi dappertutto
-// (l'acqua e il cenote non si attraversano) e si arriva al cancello di uscita; i muretti hanno
-// un lato libero (chi ci atterra sopra ne esce); il cenote sta lontano da cancelli e partenze e
-// non tocca la capsula; alla capsula ci si avvicina a terra.
+// Leak checks (0.5.1), after zones and gates: everything drawn inside the grid is in the zones;
+// the border and the outside (spaces) are closed off by walls; two zones touch only through a
+// gate, diagonally too; in every zone every place can be reached on foot (water and the cenote
+// cannot be crossed) and so can the exit gate; the low walls have a free side (whoever lands on
+// them gets off); the cenote stays away from gates and starts and does not touch the capsule;
+// the capsule can be approached on the ground.
 bool check_leaks(const Level* L, const char (*grid)[LV_MAX_W + 1], const int* grid_line, const int* start1, char* err, int errlen) {
   const int W = L->W, H = L->H;
-  // Alberi e massi vanno bene anche a boschetti (3x3 e piu'): basta che il boschetto tocchi una
-  // zona. Si allarga dalle caselle accanto a una zona attraverso alberi e massi vicini.
+  // Trees and boulders are fine in groves too (3x3 and more): the grove just has to touch a
+  // zone. It spreads from the cells next to a zone through nearby trees and boulders.
   static uint8_t grove[LV_MAX_H][LV_MAX_W];
   static int16_t qx[LV_MAX_W * LV_MAX_H], qz[LV_MAX_W * LV_MAX_H];
   memset(grove, 0, sizeof(grove));
@@ -224,8 +224,8 @@ bool check_leaks(const Level* L, const char (*grid)[LV_MAX_W + 1], const int* gr
             }
       }
     }
-  // A piedi: da dove si entra nella zona (partenza 1 o cancello d'ingresso) si arriva a tutte le
-  // caselle su cui si sta e al cancello di uscita.
+  // On foot: from where one enters the zone (start 1 or entry gate) one reaches all the cells
+  // one can stand on and the exit gate.
   static uint8_t seen[LV_MAX_H][LV_MAX_W];
   static int16_t q[LV_MAX_W * LV_MAX_H][2];
   for (int k = 0; k < L->nzones; ++k) {
@@ -288,7 +288,7 @@ bool check_leaks(const Level* L, const char (*grid)[LV_MAX_W + 1], const int* gr
   return true;
 }
 
-// Riempie la zona z partendo dalle caselle in coda (4 vicini, non attraversa muri e cancelli).
+// Fills zone z starting from the cells in the queue (4 neighbours, does not cross walls and gates).
 int flood_zone(Level* L, int z, int16_t (*queue)[2], int qn) {
   int head = 0, n = 0;
   while (head < qn) {
@@ -321,7 +321,7 @@ bool level_parse(Level* L, const char* text, char* err, int errlen) {
   snprintf(L->name, sizeof(L->name), "senza nome");
   if (err && errlen > 0) err[0] = 0;
 
-  // --- intestazione e griglia ---
+  // --- header and grid ---
   static char grid[LV_MAX_H][LV_MAX_W + 1];
   int grid_line[LV_MAX_H];
   int H = 0, W = 0, line = 0;
@@ -413,7 +413,7 @@ bool level_parse(Level* L, const char* text, char* err, int errlen) {
     H++;
     if (n > W) W = n;
   }
-  while (H > 0 && grid[H - 1][0] == 0) H--;    // righe vuote in fondo
+  while (H > 0 && grid[H - 1][0] == 0) H--;    // empty rows at the bottom
   if (!in_grid) {
     fail(err, errlen, "manca la riga --- che separa l'intestazione dalla griglia");
     return false;
@@ -425,7 +425,7 @@ bool level_parse(Level* L, const char* text, char* err, int errlen) {
   L->W = W;
   L->H = H;
 
-  // --- caselle ---
+  // --- cells ---
   bool have_start[4] = { false, false, false, false };
   int start_c[4][2];
   int nboss = 0;
@@ -458,7 +458,7 @@ bool level_parse(Level* L, const char* text, char* err, int errlen) {
         case 'P': case 'Q': t = C_PLATFORM; break;
         case 'G': t = C_GATE; break;
         case '+': case 'b': case 'm': case 'B': t = C_FLOOR; break;
-        case '1': case '2': case '3': case '4': t = C_PATH; break;     // partenze: piazzola di terra
+        case '1': case '2': case '3': case '4': t = C_PATH; break;     // starts: a patch of ground
         default:
           fail(err, errlen, "riga %d, colonna %d: carattere sconosciuto '%c'", grid_line[cz], cx + 1, ch);
           return false;
@@ -497,7 +497,7 @@ bool level_parse(Level* L, const char* text, char* err, int errlen) {
         }
         DynCell& d = L->dyn[L->ndyn];
         d.type = t;
-        d.capsule = ch == 'p';                    // la capsula e' una cassa 'x' piu' robusta
+        d.capsule = ch == 'p';                    // the capsule is a sturdier 'x' crate
         d.cx = (int16_t)cx;
         d.cz = (int16_t)cz;
         d.hp = dyn_hp_max(d);
@@ -520,7 +520,7 @@ bool level_parse(Level* L, const char* text, char* err, int errlen) {
     return false;
   }
 
-  // --- zone e cancelli ---
+  // --- zones and gates ---
   static int16_t queue[LV_MAX_W * LV_MAX_H][2];
   int qn = 0;
   L->zone[start_c[0][1]][start_c[0][0]] = 0;
@@ -533,7 +533,7 @@ bool level_parse(Level* L, const char* text, char* err, int errlen) {
       return false;
     }
   L->nzones = 1;
-  // Componenti dei cancelli.
+  // Gate components.
   for (int cz = 0; cz < H; ++cz)
     for (int cx = 0; cx < W; ++cx) {
       if (L->cell[cz][cx] != C_GATE || L->gate_at[cz][cx] >= 0) continue;
@@ -571,7 +571,7 @@ bool level_parse(Level* L, const char* text, char* err, int errlen) {
       }
     }
   for (int z = 0; z < LV_MAX_ZONES; ++z) L->zones[z].entry_gate = L->zones[z].exit_gate = -1;
-  // Dalla zona k, il cancello che la tocca e non e' ancora assegnato porta alla zona k+1.
+  // From zone k, the gate that touches it and is not assigned yet leads to zone k+1.
   for (int k = 0; k < L->nzones; ++k) {
     for (int gi = 0; gi < L->ngates; ++gi) {
       Gate& gt = L->gates[gi];
@@ -581,7 +581,7 @@ bool level_parse(Level* L, const char* text, char* err, int errlen) {
       for (int y = gt.z0 - 1; y <= gt.z1 + 1; ++y)
         for (int x = gt.x0 - 1; x <= gt.x1 + 1; ++x) {
           if (x < 0 || y < 0 || x >= W || y >= H) continue;
-          if ((x < gt.x0 || x > gt.x1) && (y < gt.z0 || y > gt.z1)) continue;   // niente diagonali
+          if ((x < gt.x0 || x > gt.x1) && (y < gt.z0 || y > gt.z1)) continue;   // no diagonals
           if (L->zone[y][x] == k) touches = true;
         }
       if (!touches) continue;
@@ -594,9 +594,9 @@ bool level_parse(Level* L, const char* text, char* err, int errlen) {
         return false;
       }
       const int nz = L->nzones;
-      // La zona nuova si riempie da una sola casella oltre il cancello; tutte le altre caselle
-      // oltre il cancello devono essere raggiunte, altrimenti la zona e' divisa in pezzi separati
-      // (i mostri potrebbero comparire dove i giocatori non arrivano).
+      // The new zone is filled from a single cell beyond the gate; all the other cells beyond
+      // the gate must be reached, otherwise the zone is split into separate pieces (monsters
+      // could appear where the players cannot get to).
       int seeds[2 * (LV_MAX_W + LV_MAX_H)][2], ns = 0;
       for (int y = gt.z0 - 1; y <= gt.z1 + 1; ++y)
         for (int x = gt.x0 - 1; x <= gt.x1 + 1; ++x) {
@@ -654,7 +654,7 @@ bool level_parse(Level* L, const char* text, char* err, int errlen) {
       return false;
     }
 
-  // Estensione delle zone.
+  // Extent of the zones.
   for (int k = 0; k < L->nzones; ++k) {
     ZoneDef& zd = L->zones[k];
     zd.x0 = W; zd.z0 = H; zd.x1 = -1; zd.z1 = -1;
@@ -680,7 +680,7 @@ bool level_parse(Level* L, const char* text, char* err, int errlen) {
     const int k = L->zone[L->dyn[i].cz][L->dyn[i].cx];
     L->dyn[i].zone = (uint8_t)(k < 0 ? 0 : k);
   }
-  // La capsula deve stare dove si arriva e non accanto a un cancello (chiuderebbe il passaggio).
+  // The capsule must be where one can get to and not next to a gate (it would block the way).
   if (L->capsule_dyn >= 0) {
     const DynCell& c = L->dyn[L->capsule_dyn];
     if (L->zone[c.cz][c.cx] < 0) {
@@ -696,9 +696,10 @@ bool level_parse(Level* L, const char* text, char* err, int errlen) {
   }
   if (!check_leaks(L, grid, grid_line, start_c[0], err, errlen)) return false;
 
-  // --- oggetti, comparse ---
-  // Due giri: prima talismani, bombe e comparse dei mostri, poi i bonus nelle casse 'x' (0.5.4), che
-  // prendono i posti che restano (una cassa fuori dalle zone, o una di troppo, resta vuota).
+  // --- items, spawns ---
+  // Two passes: first talismans, bombs and monster spawns, then the power-ups in the 'x' crates
+  // (0.5.4), which take the slots that are left (a crate outside the zones, or one too many, stays
+  // empty).
   for (int pass = 0; pass < 2; ++pass)
   for (int i = 0; i < npend; ++i) {
     const Pending& pd = pend[i];
@@ -731,8 +732,8 @@ bool level_parse(Level* L, const char* text, char* err, int errlen) {
     it.y = pd.ch == 'Q' ? PLAT_H : 0.0f;
   }
 
-  // Partenze: zona 1 dalle caselle 1-4 (quelle che mancano sulle caselle libere piu' vicine
-  // alla partenza 1), le altre zone appena dentro il cancello d'ingresso.
+  // Starts: zone 1 from cells 1-4 (the missing ones on the free cells nearest to start 1), the
+  // other zones just inside the entry gate.
   static int16_t dist[LV_MAX_H][LV_MAX_W];
   {
     ZoneDef& z0 = L->zones[0];
@@ -757,7 +758,7 @@ bool level_parse(Level* L, const char* text, char* err, int errlen) {
       while (qh < qn && !found) {
         const int x = queue[qh][0], y = queue[qh][1];
         qh++;
-        if (!taken[y][x] && walkable_floor(L->cell[y][x]) && !pit_within(L, x, y, 1)) {   // mai accanto al cenote
+        if (!taken[y][x] && walkable_floor(L->cell[y][x]) && !pit_within(L, x, y, 1)) {   // never next to the cenote
           z0.start[i] = cell_center(L, x, y);
           taken[y][x] = true;
           found = true;
@@ -791,7 +792,7 @@ bool level_parse(Level* L, const char* text, char* err, int errlen) {
       }
     int got = 0;
     for (int layer = 2; layer < 12 && got < 4; ++layer) {
-      // Caselle libere a distanza "layer" dal cancello, dalla piu' centrale.
+      // Free cells at distance "layer" from the gate, starting from the most central one.
       while (qh < qn) {
         const int x = queue[qh][0], y = queue[qh][1];
         if (dist[y][x] >= layer) break;
@@ -837,7 +838,7 @@ bool level_parse(Level* L, const char* text, char* err, int errlen) {
     for (int i = got; i < 4; ++i) zd.start[i] = zd.start[i % got];
   }
 
-  // Comparse mancanti: caselle libere lontane dall'ingresso della zona.
+  // Missing spawns: free cells far from the zone's entrance.
   for (int k = 0; k < L->nzones; ++k) {
     ZoneDef& zd = L->zones[k];
     if (zd.nspawn > 0) continue;
@@ -870,15 +871,15 @@ bool level_parse(Level* L, const char* text, char* err, int errlen) {
       zd.nspawn = 1;
     }
   }
-  if (L->style < 0) L->style = L->boss != BOSS_NONE ? STYLE_COLOSSEO : STYLE_PIRAMIDI;   // senza riga "stile:"
+  if (L->style < 0) L->style = L->boss != BOSS_NONE ? STYLE_COLOSSEO : STYLE_PIRAMIDI;   // without a "stile:" line
   for (int gi = 0; gi < L->ngates; ++gi) {
     Gate& gt = L->gates[gi];
     gt.open = gt.vel = 0.0f;
-    // Da ovest a est o da nord a sud (un cancello di una casella sola: dove sono le zone).
+    // From west to east or from north to south (a gate of a single cell: where the zones are).
     gt.horiz = gt.z0 == gt.z1 && (gt.x1 > gt.x0 || (gt.z0 > 0 && L->zone[gt.z0 - 1][gt.x0] >= 0) ||
                                   (gt.z1 + 1 < H && L->zone[gt.z1 + 1][gt.x0] >= 0));
-    // Da che parte si aprono i battenti: verso la zona che apre il cancello (le caselle lungo il
-    // cancello, da una parte e dall'altra: quella da cui si tocca piu' spesso from_zone).
+    // Which way the leaves open: towards the zone that opens the gate (the cells along the gate,
+    // on one side and on the other: the one from which from_zone is touched more often).
     int before = 0, after = 0;
     if (gt.horiz) {
       for (int x = gt.x0; x <= gt.x1; ++x) {
@@ -895,9 +896,9 @@ bool level_parse(Level* L, const char* text, char* err, int errlen) {
       gt.mz = 0.0f;
       gt.mx = after >= before ? 1.0f : -1.0f;
     }
-    // Fin dove si apre ogni battente: si ferma prima di un muro, un albero, un masso, un muretto,
-    // un blocco o una cassa davanti al cancello (mappe personalizzate: in quelle di serie davanti
-    // ai cancelli c'e' posto).
+    // How far each leaf opens: it stops before a wall, a tree, a boulder, a low wall, a block or
+    // a crate in front of the gate (custom maps: in the stock ones there is room in front of the
+    // gates).
     for (int side = 0; side < 2; ++side) {
       gt.stop[side] = 1.0f;
       for (int k = 1; k <= 30; ++k) {
@@ -939,14 +940,14 @@ void level_free(Level* L) {
 
 void level_reset_dynamic(Level* L, int z) {
   for (int i = 0; i < L->ndyn; ++i)
-    if (z < 0 || L->dyn[i].zone == z) L->dyn[i].hp = dyn_hp_max(L->dyn[i]);   // anche la capsula
+    if (z < 0 || L->dyn[i].zone == z) L->dyn[i].hp = dyn_hp_max(L->dyn[i]);   // the capsule too
   for (int i = 0; i < L->ngates; ++i)
     if (z < 0 || L->gates[i].from_zone >= z) L->gates[i].open = L->gates[i].vel = 0.0f;
 }
 
-// Dal capo del passaggio al cardine: il battente, anche aperto, resta fuori dal pilastro accanto al
-// cancello (build_gate_frame in level_mesh.cpp). La torretta della Muraglia entra di piu' nel
-// passaggio, il pilastro del Colosseo di meno.
+// From the end of the passage to the hinge: the leaf, even when open, stays clear of the pillar
+// next to the gate (build_gate_frame in level_mesh.cpp). The turret of Muraglia reaches further
+// into the passage, the pillar of Colosseo less.
 static float gate_hinge_in(const Level* L) {
   switch (L->style) {
     case STYLE_CHICHENITZA: return 0.22f;
@@ -960,20 +961,20 @@ void level_gate_leaf(const Level* L, int gi, int side, float theta, Vec3* hinge,
   const Gate& gt = L->gates[gi];
   const Vec3 a = cell_center(L, gt.x0, gt.z0), b = cell_center(L, gt.x1, gt.z1);
   const bool horiz = gt.horiz;
-  // Lungo il cancello (da u0 a u1) e i due capi.
+  // Along the gate (from u0 to u1) and the two ends.
   const Vec3 eu = horiz ? v3(1, 0, 0) : v3(0, 0, 1);
   const float in = gate_hinge_in(L);
   const Vec3 h0 = horiz ? v3(a.x - 0.5f + in, 0, a.z) : v3(a.x, 0, a.z - 0.5f + in);
   const Vec3 h1 = horiz ? v3(b.x + 0.5f - in, 0, b.z) : v3(b.x, 0, b.z + 0.5f - in);
-  const Vec3 c = side ? eu * -1.0f : eu;          // da chiuso: dal cardine verso il centro
+  const Vec3 c = side ? eu * -1.0f : eu;          // when closed: from the hinge towards the centre
   const Vec3 m = v3(gt.mx, 0.0f, gt.mz);
   *hinge = side ? h1 : h0;
   *dir = c * d_cos(theta) + m * d_sin(theta);
-  *len = 0.5f * (horiz ? h1.x - h0.x : h1.z - h0.z) - 0.012f;   // un filo d'aria in mezzo
+  *len = 0.5f * (horiz ? h1.x - h0.x : h1.z - h0.z) - 0.012f;   // a sliver of air in between
   if (closed) *closed = c;
 }
 
-// --- collisioni -------------------------------------------------------------
+// --- collisions -------------------------------------------------------------
 
 bool level_cell(const Level* L, float x, float z, int* cx, int* cz) {
   const float fx = x + (float)L->W * 0.5f, fz = z + (float)L->H;
@@ -995,9 +996,9 @@ int level_zone_at(const Level* L, float x, float z) {
   return level_cell(L, x, z, &cx, &cz) ? L->zone[cz][cx] : -1;
 }
 
-// Il passaggio si apre quando i battenti sono quasi aperti del tutto e si chiude appena cominciano a
-// chiudersi (0.5.4: si chiudono partendo piano, e nei primi fotogrammi chi tornava indietro poteva
-// restare dall'altra parte).
+// The passage opens when the leaves are almost fully open and closes as soon as they start to
+// close (0.5.4: they close starting slowly, and in the first frames whoever went back could be
+// left on the other side).
 static inline bool gate_closed(const Level* L, int cx, int cz) {
   const int gi = L->gate_at[cz][cx];
   return gi < 0 || L->gates[gi].open < 0.95f || L->gates[gi].vel < 0.0f;
@@ -1010,8 +1011,8 @@ static inline bool crate_whole(const Level* L, int cx, int cz) {
 float level_walk_top(const Level* L, int cx, int cz) {
   if (cx < 0 || cz < 0 || cx >= L->W || cz >= L->H) return BLOCK_ALL;
   switch (L->cell[cz][cx]) {
-    // L'acqua non si passa nemmeno saltando (0.5.1: prima arrivava a 0,5 m e chi saltava ci
-    // finiva dentro, e da li' le spinte lo facevano uscire dall'altra parte dei muri).
+    // Water cannot be crossed even by jumping (0.5.1: before, it reached 0.5 m and whoever jumped
+    // ended up in it, and from there the pushes made them come out on the other side of walls).
     case C_VOID: case C_WALL: case C_TREE: case C_ROCK: case C_WATER: return BLOCK_ALL;
     case C_GATE: return gate_closed(L, cx, cz) ? BLOCK_ALL : 0.0f;
     case C_LOW: return LOW_H;
@@ -1019,7 +1020,7 @@ float level_walk_top(const Level* L, int cx, int cz) {
     case C_BREAK: return crate_whole(L, cx, cz) ? CRATE_H : 0.0f;
     case C_TRAMP: return TRAMP_H;
     case C_PLATFORM: return PLAT_H;
-    default: return 0.0f;       // anche il cenote: ci si cammina sopra... e ci si cade (player.cpp)
+    default: return 0.0f;       // the cenote too: one walks onto it... and falls in (player.cpp)
   }
 }
 
@@ -1079,14 +1080,14 @@ bool level_blocks(const Level* L, int cx, int cz, float feet, float step, int bo
   const bool in = cx >= 0 && cz >= 0 && cx < L->W && cz < L->H;
   const int c = in ? (int)L->cell[cz][cx] : (int)C_VOID;
   if (body & BODY_FLY) {
-    if (c == C_WATER || c == C_PIT) return false;   // si vola sopra l'acqua e sopra il cenote
+    if (c == C_WATER || c == C_PIT) return false;   // flyers go over the water and over the cenote
     return level_walk_top(L, cx, cz) >= FLY_H;
   }
   if (c == C_PIT) return (body & BODY_PIT) != 0;
   return level_walk_top(L, cx, cz) > feet + step;
 }
 
-// Caselle toccate dal cerchio (x, z, r): la griglia va da (0, 0) a (W, H) in (fx, fz).
+// Cells touched by the circle (x, z, r): the grid goes from (0, 0) to (W, H) in (fx, fz).
 static inline void circle_cells(const Level* L, float x, float z, float r, int* x0, int* z0, int* x1, int* z1) {
   const float fx = x + (float)L->W * 0.5f, fz = z + (float)L->H;
   *x0 = (int)floorf(fx - r);
@@ -1095,7 +1096,7 @@ static inline void circle_cells(const Level* L, float x, float z, float r, int* 
   *z1 = (int)floorf(fz + r);
 }
 
-// Distanza al quadrato tra il punto (px, pz) della griglia e la casella (cx, cz).
+// Squared distance between the grid point (px, pz) and the cell (cx, cz).
 static inline float cell_d2(float px, float pz, int cx, int cz) {
   const float qx = clampf(px, (float)cx, (float)cx + 1.0f), qz = clampf(pz, (float)cz, (float)cz + 1.0f);
   return (px - qx) * (px - qx) + (pz - qz) * (pz - qz);
@@ -1119,9 +1120,10 @@ void level_push_out(const Level* L, float* x, float* z, float feet, float r, flo
           *x += dx * k;
           *z += dz * k;
         } else {
-          // Centro dentro la casella: esce dal lato piu' vicino che da' su una casella libera. Se
-          // non ce n'e' nessuno resta dov'e': mai dentro un'altra casella che lo ferma (fino alla
-          // 0.5 usciva comunque dal lato piu' vicino, anche dentro un muro, e poi dall'altra parte).
+          // Centre inside the cell: it exits from the nearest side that faces a free cell. If
+          // there is none it stays where it is: never inside another cell that stops it (up to
+          // 0.5 it exited from the nearest side anyway, even into a wall, and then out the other
+          // side).
           const float side[4] = { px - (float)cx, (float)cx + 1.0f - px, pz - (float)cz, (float)cz + 1.0f - pz };
           const int nb[4][2] = { { cx - 1, cz }, { cx + 1, cz }, { cx, cz - 1 }, { cx, cz + 1 } };
           int best = -1;
@@ -1145,7 +1147,7 @@ bool level_body_ok(const Level* L, float x, float z, float feet, float r, float 
   const float px = x + (float)L->W * 0.5f, pz = z + (float)L->H;
   int x0, z0, x1, z1;
   circle_cells(L, x, z, r, &x0, &z0, &x1, &z1);
-  // un pelo di tolleranza: chi e' appena stato spinto fuori sta proprio sul bordo
+  // a hair's breadth of tolerance: whoever has just been pushed out is right on the edge
   const float r2 = (r - 0.002f) * (r - 0.002f);
   for (int cz = z0; cz <= z1; ++cz)
     for (int cx = x0; cx <= x1; ++cx)
@@ -1177,8 +1179,8 @@ bool level_pit_near(const Level* L, float x, float z, float r) {
   return false;
 }
 
-// Attraversamento delle caselle lungo il segmento (Amanatides-Woo). Per ogni casella chiama
-// visit(cx, cz, t_ingresso, t_uscita); si ferma quando visit restituisce true.
+// Traversal of the cells along the segment (Amanatides-Woo). For every cell it calls
+// visit(cx, cz, t_entry, t_exit); it stops when visit returns true.
 template <class F> static bool walk_cells(const Level* L, Vec3 a, Vec3 b, F visit) {
   const float ax = a.x + (float)L->W * 0.5f, az = a.z + (float)L->H;
   const float dx = b.x - a.x, dz = b.z - a.z;
@@ -1207,7 +1209,7 @@ bool level_trace(const Level* L, Vec3 a, Vec3 b, float* t_hit, int* hcx, int* hc
     if (top <= 0.0f) return false;
     const float y0 = a.y + dy * t0, y1 = a.y + dy * t1;
     if (fminf(y0, y1) >= top) return false;
-    // Entra nell'ostacolo dove la quota scende sotto la cima (o subito, se e' gia' sotto).
+    // It enters the obstacle where the height drops below the top (or at once, if already below).
     float th = t0;
     if (y0 >= top && y1 < top && y0 != y1) th = t0 + (t1 - t0) * (y0 - top) / (y0 - y1);
     *t_hit = th;

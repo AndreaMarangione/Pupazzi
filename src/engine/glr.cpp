@@ -1,12 +1,12 @@
-// Renderer GPU, OpenGL ES 2.
+// GPU renderer, OpenGL ES 2.
 //
-// Stesso contenuto del renderer software: la geometria fissa viene caricata una volta in un
-// buffer statico, quella che si muove viene trasformata e illuminata sulla CPU e mandata alla
-// GPU in un unico buffer per fotogramma (una sola chiamata di disegno: su queste GPU contano
-// molto di piu' le chiamate che i triangoli).
+// Same content as the software renderer: the fixed geometry is uploaded once into a static
+// buffer, the moving geometry is transformed and lit on the CPU and sent to the GPU in a
+// single buffer per frame (a single draw call: on these GPUs the calls matter much more
+// than the triangles).
 //
-// Il contesto GL e' quello del frontend, quindi alla fine di ogni fotogramma lo stato viene
-// rimesso come RetroArch se lo aspetta.
+// The GL context is the frontend's, so at the end of every frame the state is put back
+// the way RetroArch expects it.
 #include "engine/glr.h"
 #include "platform/plat.h"
 #include <dlfcn.h>
@@ -157,10 +157,10 @@ struct GLApi {
 #undef X
 };
 
-// Funzioni per l'antialias, che non tutte le GPU hanno: se mancano si disegna senza.
-//  - EXT_multisampled_render_to_texture (Mali e altre GPU a tessere): i campioni restano nella
-//    memoria della tessera e si riducono gratis scrivendo la texture; poi una copia a schermo;
-//  - OpenGL ES 3: renderbuffer multicampione e glBlitFramebuffer (Mesa, per le prove sul PC).
+// Antialiasing functions, which not all GPUs have: if they are missing, drawing goes on without it.
+//  - EXT_multisampled_render_to_texture (Mali and other tile-based GPUs): the samples stay in the
+//    tile memory and are resolved for free when writing the texture; then a copy to the screen;
+//  - OpenGL ES 3: multisample renderbuffer and glBlitFramebuffer (Mesa, for the tests on the PC).
 struct GLOpt {
   void (*FramebufferTexture2DMultisampleEXT)(GLenum, GLenum, GLenum, GLuint, GLint, GLsizei);
   void (*RenderbufferStorageMultisampleEXT)(GLenum, GLsizei, GLenum, GLsizei, GLsizei);
@@ -170,13 +170,13 @@ struct GLOpt {
 };
 
 enum { AA_NONE = 0, AA_EXT, AA_ES3 };
-// max: campioni al massimo (da GL_MAX_SAMPLES, fino a 8); samples: quelli del bersaglio di adesso.
+// max: maximum samples (from GL_MAX_SAMPLES, up to 8); samples: those of the current target.
 struct AAState { int mode, max, samples, w, h; GLuint fbo, tex, color_rb, depth_rb; GLenum depth_fmt; bool discard; };
 
-struct WV { float x, y, z; uint8_t r, g, b, a; };          // vertice del mondo, 16 byte
-struct HV { float x, y, u, v; uint8_t r, g, b, a; };       // vertice 2D (cielo, copia dell'antialias), 20 byte
-// Vertice dell'interfaccia (0.5.2): posizione, coordinate nell'atlante, punto rispetto al centro della
-// forma, tipo e morbidezza, mezze misure, taglio, rientro, inclinazione, spessore dell'anello, colore.
+struct WV { float x, y, z; uint8_t r, g, b, a; };          // world vertex, 16 bytes
+struct HV { float x, y, u, v; uint8_t r, g, b, a; };       // 2D vertex (sky, antialiasing copy), 20 bytes
+// Interface vertex (0.5.2): position, coordinates in the atlas, point relative to the center of the
+// shape, type and softness, half sizes, cut, inset, skew, ring thickness, color.
 struct UV { float x, y, u, v, qx, qy, type, soft, hx, hy, cut, inset, skew, ring; uint8_t r, g, b, a; };
 struct StaticEntry { uint32_t id; GLuint vbo; int count; unsigned used; };
 
@@ -189,7 +189,7 @@ GLint g_u_xf_ui, g_u_tex_ui;
 UV* g_uv;
 int g_uv_n, g_uv_cap;
 GLint g_u_vp, g_u_xf, g_u_tex, g_u_xf_copy, g_u_tex_copy;
-const int MAX_STATIC = 160;  // blocchi della mappa, del menu e qualche mappa precedente
+const int MAX_STATIC = 160;  // blocks of the map, of the menu and a few previous maps
 StaticEntry g_static[MAX_STATIC];
 int g_nstatic;
 unsigned g_frame_no;
@@ -201,7 +201,7 @@ Vec3* g_tmp;
 int g_tmp_cap;
 char g_info[200];
 int g_depth_bits = -1;
-int g_nattribs = 8;       // quanti array di attributi spegnere all'inizio di ogni fotogramma
+int g_nattribs = 8;       // how many attribute arrays to disable at the start of every frame
 
 const char* VS_WORLD =
   "attribute vec3 a_pos;\n"
@@ -209,14 +209,14 @@ const char* VS_WORLD =
   "uniform mat4 u_vp;\n"
   "varying lowp vec4 v_col;\n"
   "void main() { v_col = a_col; gl_Position = u_vp * vec4(a_pos, 1.0); }\n";
-// Nei fragment shader di GLSL ES i float non hanno una precisione predefinita: la si dichiara
-// comunque, anche se ogni variabile ha gia' la sua, perche' alcuni compilatori la pretendono.
+// In GLSL ES fragment shaders floats have no default precision: it is declared anyway, even
+// though every variable already has its own, because some compilers demand it.
 const char* FS_WORLD =
   "precision mediump float;\n"
   "varying lowp vec4 v_col;\n"
   "void main() { gl_FragColor = v_col; }\n";
-// Coordinate di texture in alta precisione dove c'e': con la media (16 bit su Mali) in un atlante
-// largo 1024 si sbaglierebbe fino a un quarto di pixel e i caratteri verrebbero sfocati.
+// Texture coordinates in high precision where available: with medium (16 bits on Mali) in an atlas
+// 1024 wide the error would be up to a quarter of a pixel and the glyphs would come out blurred.
 const char* VS_HUD =
   "attribute vec2 a_pos;\n"
   "attribute vec2 a_uv;\n"
@@ -235,7 +235,7 @@ const char* FS_HUD =
   "#endif\n"
   "varying lowp vec4 v_col;\n"
   "void main() { gl_FragColor = vec4(v_col.rgb, v_col.a * texture2D(u_tex, v_uv).a); }\n";
-// Copia a schermo dell'immagine disegnata con l'antialias.
+// Copy to the screen of the image drawn with antialiasing.
 const char* FS_COPY =
   "precision mediump float;\n"
   "uniform sampler2D u_tex;\n"
@@ -246,9 +246,9 @@ const char* FS_COPY =
   "#endif\n"
   "varying lowp vec4 v_col;\n"
   "void main() { gl_FragColor = vec4(texture2D(u_tex, v_uv).rgb, 1.0); }\n";
-// Interfaccia (0.5.2): caratteri e disegni dall'atlante (tipo 0) oppure forme calcolate per pixel,
-// con la stessa matematica di hud_shape_sdf e hud_shape_cover (hud.cpp). Distanze in pixel
-// d'uscita: servono in alta precisione (con 16 bit a 300 pixel dal centro si sbaglia di un quarto).
+// Interface (0.5.2): glyphs and icons from the atlas (type 0) or shapes computed per pixel,
+// with the same math as hud_shape_sdf and hud_shape_cover (hud.cpp). Distances in output pixels:
+// they need high precision (with 16 bits, at 300 pixels from the center the error is a quarter).
 const char* VS_UI =
   "attribute vec2 a_pos;\n"
   "attribute vec2 a_uv;\n"
@@ -314,9 +314,9 @@ const char* FS_UI =
   "  gl_FragColor = vec4(v_col.rgb, v_col.a * a);\n"
   "}\n";
 
-// Cerca una funzione GL: prima nella libreria GLES gia' caricata dal frontend (lo stesso modo
-// in cui la trovano i core che si collegano direttamente a libGLESv2), poi tra i simboli
-// globali, infine chiedendola al frontend.
+// Looks up a GL function: first in the GLES library already loaded by the frontend (the same way
+// the cores that link directly against libGLESv2 find it), then among the global symbols,
+// finally by asking the frontend for it.
 void* resolve(glr_get_proc_t get_proc, const char* name, int how[3]) {
   static void* lib;
   static bool tried;
@@ -390,7 +390,7 @@ inline void wv_push(Vec3 p, uint32_t c) {
   v.r = (uint8_t)(c >> 16); v.g = (uint8_t)(c >> 8); v.b = (uint8_t)c; v.a = 255;
 }
 
-// Trasforma e illumina sulla CPU un oggetto; scarta le facce rivolte altrove se cull = true.
+// Transforms and lights an object on the CPU; discards the faces turned away if cull = true.
 void emit_item(const DrawItem& it, const FrameDesc& f, bool cull, RenderStats* st) {
   const Mesh& m = *it.mesh;
   if (m.nv > g_tmp_cap) {
@@ -412,8 +412,8 @@ void emit_item(const DrawItem& it, const FrameDesc& f, bool cull, RenderStats* s
   }
 }
 
-// Geometria fissa: caricata una volta e riconosciuta dall'identificativo della mesh. Se la
-// cache e' piena (per esempio dopo qualche cambio di mappa) si butta la meno usata di recente.
+// Fixed geometry: uploaded once and recognized by the mesh id. If the cache is full (for
+// example after a few map changes) the least recently used entry is thrown away.
 const StaticEntry* get_static(const DrawItem& it, const FrameDesc& f) {
   for (int i = 0; i < g_nstatic; ++i)
     if (g_static[i].id == it.mesh->id) {
@@ -425,7 +425,7 @@ const StaticEntry* get_static(const DrawItem& it, const FrameDesc& f) {
     slot = 0;
     for (int i = 1; i < MAX_STATIC; ++i)
       if (g_static[i].used < g_static[slot].used) slot = i;
-    if (g_static[slot].used == g_frame_no) return 0;   // tutte in uso in questo fotogramma
+    if (g_static[slot].used == g_frame_no) return 0;   // all in use in this frame
     gl.DeleteBuffers(1, &g_static[slot].vbo);
   } else {
     g_nstatic++;
@@ -462,7 +462,7 @@ inline void hv_push(float x, float y, float u, float v, uint32_t rgb, uint8_t a)
   o.r = (uint8_t)(rgb >> 16); o.g = (uint8_t)(rgb >> 8); o.b = (uint8_t)rgb; o.a = a;
 }
 
-// Rettangolo in pixel (origine in alto a sinistra), con colore diverso sopra e sotto.
+// Rectangle in pixels (origin at the top left), with different colors at the top and bottom.
 void hud_quad(float x0, float y0, float x1, float y1, float u0, float v0, float u1, float v1,
               uint32_t top, uint32_t bot, uint8_t a) {
   hv_reserve(6);
@@ -474,7 +474,7 @@ void hud_quad(float x0, float y0, float x1, float y1, float u0, float v0, float 
   hv_push(x1, y0, u1, v0, top, a);
 }
 
-float SOLID_U, SOLID_V;   // un punto del blocco pieno dell'atlante (rettangoli a tinta unita)
+float SOLID_U, SOLID_V;   // a point of the atlas's solid block (solid-color rectangles)
 
 void quads_flush(int w, int h, GLuint prog, GLint u_xf, GLint u_tex, GLuint tex) {
   if (g_hv_n == 0) return;
@@ -498,7 +498,7 @@ void quads_flush(int w, int h, GLuint prog, GLint u_xf, GLint u_tex, GLuint tex)
 
 void hud_flush(int w, int h) { quads_flush(w, h, g_prog_hud, g_u_xf, g_u_tex, g_tex_font); }
 
-// --- interfaccia ------------------------------------------------------------------------------
+// --- interface --------------------------------------------------------------------------------
 
 inline void uv_reserve(int extra) {
   if (g_uv_n + extra <= g_uv_cap) return;
@@ -506,8 +506,8 @@ inline void uv_reserve(int extra) {
   g_uv = (UV*)realloc(g_uv, sizeof(UV) * (size_t)g_uv_cap);
 }
 
-// Quadrilatero dell'interfaccia: i quattro angoli (in alto a sinistra, in basso a sinistra, in basso
-// a destra, in alto a destra) con le loro coordinate e i loro colori; il resto uguale per tutti.
+// Interface quadrilateral: the four corners (top left, bottom left, bottom right, top right) with
+// their coordinates and their colors; the rest is the same for all.
 struct UIQuad { float x[4], y[4], u[4], v[4], qx[4], qy[4]; uint32_t col[4]; float type, soft, hx, hy, cut, inset, skew, ring; };
 
 void ui_push(const UIQuad& q) {
@@ -534,8 +534,8 @@ void ui_rect(float x0, float y0, float x1, float y1, float u0, float v0, float u
   ui_push(q);
 }
 
-// Colore della sfumatura nel punto (px, py) d'uscita: la stessa retta di hud.cpp, prolungata
-// fuori dalla forma (agli angoli del riquadro) e poi limitata canale per canale.
+// Gradient color at the output point (px, py): the same line as in hud.cpp, extended outside
+// the shape (to the corners of the box) and then clamped channel by channel.
 uint32_t grad_at(const HudShape& sh, float s, float px, float py) {
   if (sh.c0 == sh.c1) return sh.c0;
   const float an = sh.ang * 0.017453292f, dx = sinf(an), dy = -cosf(an);
@@ -552,8 +552,8 @@ uint32_t grad_at(const HudShape& sh, float s, float px, float py) {
   return out;
 }
 
-// Un pezzo rettangolare della forma (in pixel d'uscita): con la distanza dal bordo (sdf) o, dove
-// la forma e' di certo piena, solo il colore (il blocco pieno dell'atlante, come i rettangoli).
+// A rectangular piece of the shape (in output pixels): with the distance from the edge (sdf) or,
+// where the shape is certainly solid, only the color (the atlas's solid block, like rectangles).
 void ui_shape_part(const HudShape& sh, float s, float x0, float y0, float x1, float y1, bool sdf) {
   if (x1 <= x0 || y1 <= y0) return;
   UIQuad q;
@@ -577,32 +577,32 @@ void ui_shape_part(const HudShape& sh, float s, float x0, float y0, float x1, fl
   ui_push(q);
 }
 
-// Forma dell'interfaccia. I rettangoli grandi (pannelli, velature, aloni) si dividono: la distanza
-// dal bordo si calcola solo nelle strisce vicino al bordo e nei due angoli tagliati, l'interno pieno
-// e' un rettangolo di colore (gli aloni "cavi" li' non si disegnano proprio). Per lo shader i
-// pixel ai bordi sono gli stessi; cambia solo quanto lavora la GPU.
+// Interface shape. Large rectangles (panels, scrims, glows) are split: the distance from the edge
+// is computed only in the strips near the edge and in the two cut corners, the solid inside is a
+// color rectangle ("hollow" glows are not drawn there at all). For the shader the pixels at the
+// edges are the same; only how much the GPU works changes.
 void ui_shape(const HudShape& sh, const HudCmd& c, float s) {
   const float bx0 = (float)c.x * s, by0 = (float)c.y * s, bx1 = (float)(c.x + c.w) * s, by1 = (float)(c.y + c.h) * s;
   if (sh.type == HS_BOX && sh.ring <= 0.0f) {
-    // Piena di sicuro dove la distanza e' sotto -m: per i bordi netti mezzo pixel, per gli aloni
-    // 2,5 volte la morbidezza (copertura 0,9998).
+    // Certainly solid where the distance is below -m: for sharp edges half a pixel, for glows
+    // 2.5 times the softness (coverage 0.9998).
     const float m = sh.soft > 0.0f ? 2.5f * sh.soft * s : 0.5f;
     const float X = sh.x * s, Y = sh.y * s, W = sh.w * s, H = sh.h * s;
-    const float e = sh.inset * s + m;                          // margine dai lati
-    const float k = sh.cut > 0.0f ? sh.cut * s + 1.41421356f * e : e;   // margine dagli angoli tagliati
+    const float e = sh.inset * s + m;                          // margin from the sides
+    const float k = sh.cut > 0.0f ? sh.cut * s + 1.41421356f * e : e;   // margin from the cut corners
     if (W >= 2.0f * k + 2.0f && H >= 2.0f * k + 2.0f && W > 2.0f * e + 8.0f && H > 2.0f * e + 8.0f) {
       const float xe0 = X + e, xe1 = X + W - e, ye0 = Y + e, ye1 = Y + H - e;
-      // Con un taglio piccolo rispetto al margine (k < 2e) i pezzi degli angoli non servono: i limiti
-      // si fermano ai lati, cosi' i pezzi restano affiancati senza sovrapporsi.
+      // With a cut small compared to the margin (k < 2e) the corner pieces are not needed: the
+      // limits stop at the sides, so the pieces stay side by side without overlapping.
       const float yk0 = Y + k, yk1 = Y + H - k, xk0 = fmaxf(X + k - e, xe0), xk1 = fminf(X + W - k + e, xe1);
-      // Strisce con la distanza: sopra, sotto, a sinistra, a destra, e i due angoli tagliati.
+      // Strips with the distance: top, bottom, left, right, and the two cut corners.
       ui_shape_part(sh, s, bx0, by0, bx1, ye0, true);
       ui_shape_part(sh, s, bx0, ye1, bx1, by1, true);
       ui_shape_part(sh, s, bx0, ye0, xe0, ye1, true);
       ui_shape_part(sh, s, xe1, ye0, bx1, ye1, true);
       ui_shape_part(sh, s, xe0, ye0, xk0, yk0, true);
       ui_shape_part(sh, s, xk1, yk1, xe1, ye1, true);
-      // L'interno pieno: la fascia in mezzo e le due accanto agli angoli tagliati.
+      // The solid inside: the middle band and the two next to the cut corners.
       if (!sh.hollow) {
         ui_shape_part(sh, s, xe0, yk0, xe1, yk1, false);
         ui_shape_part(sh, s, xk0, ye0, xe1, yk0, false);
@@ -636,9 +636,9 @@ void ui_flush(int w, int h) {
   g_uv_n = 0;
 }
 
-// Interfaccia semplificata, con il programma dell'HUD di prima (solo se manca lo shader nuovo):
-// testi, disegni e rettangoli come sempre; le forme diventano rettangoli pieni o contorni squadrati,
-// con la sfumatura dall'alto in basso; gli aloni e le ombre morbide non ci sono.
+// Simplified interface, with the old HUD program (only if the new shader is missing): texts,
+// icons and rectangles as always; shapes become solid rectangles or square outlines, with the
+// gradient from top to bottom; there are no glows or soft shadows.
 void hud_simple(const Hud* hd, float k, int w, int h) {
   g_hv_n = 0;
   for (int i = 0; i < hd->n; ++i) {
@@ -679,7 +679,7 @@ void hud_simple(const Hud* hd, float k, int w, int h) {
   hud_flush(w, h);
 }
 
-// --- antialias ------------------------------------------------------------------------
+// --- antialiasing ---------------------------------------------------------------------
 
 bool has_ext(const char* list, const char* name) {
   if (!list) return false;
@@ -700,21 +700,22 @@ void aa_free(bool gl_alive) {
   g_aa.w = g_aa.h = 0;
 }
 
-// Prova del percorso EXT dove la GPU non lo ha (PUPAZZI_AA=prova): le stesse chiamate, ma con un
-// solo campione. L'immagine deve venire identica a quella senza antialias. PUPAZZI_AA=prova8: come
-// se la GPU arrivasse a 8; =prova8no: come se dicesse 8 ma poi lo rifiutasse (si passa a 4).
+// Test of the EXT path where the GPU does not have it (PUPAZZI_AA=prova): the same calls, but with
+// a single sample. The image must come out identical to the one without antialiasing.
+// PUPAZZI_AA=prova8: as if the GPU went up to 8; =prova8no: as if it said 8 but then refused it
+// (it falls back to 4).
 bool g_fake_reject8;
 void fake_fbtex_ms(GLenum target, GLenum att, GLenum textarget, GLuint tex, GLint level, GLsizei samples) {
-  if (g_fake_reject8 && samples > 4) return;                 // niente colore: il bersaglio non e' completo
+  if (g_fake_reject8 && samples > 4) return;                 // no color: the target is not complete
   gl.FramebufferTexture2D(target, att, textarget, tex, level);
 }
 void fake_rb_ms(GLenum target, GLsizei samples, GLenum fmt, GLsizei w, GLsizei h) {
-  if (g_fake_reject8 && samples > 4) return;                 // renderbuffer senza memoria: incompleto
+  if (g_fake_reject8 && samples > 4) return;                 // renderbuffer without storage: incomplete
   gl.RenderbufferStorage(target, fmt, w, h);
 }
 
-// Sceglie il modo dell'antialias. PUPAZZI_AA=0 lo spegne; =ext o =es3 forzano un modo, =prova
-// prova il percorso EXT con un solo campione (prove sul PC).
+// Chooses the antialiasing mode. PUPAZZI_AA=0 turns it off; =ext or =es3 force a mode, =prova
+// tests the EXT path with a single sample (tests on the PC).
 void aa_init(glr_get_proc_t get_proc, const char* ext, const char* version) {
   memset(&glo, 0, sizeof(glo));
   memset(&g_aa, 0, sizeof(g_aa));
@@ -759,7 +760,7 @@ void aa_init(glr_get_proc_t get_proc, const char* ext, const char* version) {
     return;
   }
   g_aa.mode = ext_ok ? AA_EXT : AA_ES3;
-  // Dalla 0.5.4 fino a 8 campioni (il gioco chiede 4 o 8, vedi game_aa_wanted).
+  // Since 0.5.4 up to 8 samples (the game asks for 4 or 8, see game_aa_wanted).
   g_aa.max = max_samples >= 8 ? 8 : (max_samples >= 4 ? 4 : (int)max_samples);
   g_aa.depth_fmt = (major >= 3 || has_ext(ext, "GL_OES_depth24")) ? GL_DEPTH_COMPONENT24 : GL_DEPTH_COMPONENT16;
   g_aa.discard = g_aa.mode == AA_EXT && glo.DiscardFramebufferEXT && has_ext(ext, "GL_EXT_discard_framebuffer");
@@ -768,9 +769,9 @@ void aa_init(glr_get_proc_t get_proc, const char* ext, const char* version) {
            g_aa.depth_fmt == GL_DEPTH_COMPONENT24 ? 24 : 16);
 }
 
-// Bersaglio con want campioni per pixel (al massimo g_aa.max) della misura dell'immagine; se la GPU
-// lo rifiuta con 8 si riprova con 4, con 4 l'antialias si spegne per tutta la sessione; lo si scrive
-// nel registro.
+// Target with want samples per pixel (at most g_aa.max) of the size of the image; if the GPU
+// refuses it with 8 it retries with 4, with 4 antialiasing is turned off for the whole session;
+// this is written to the log.
 bool aa_ready(int w, int h, int want) {
   if (g_aa.mode == AA_NONE) return false;
   const int s = want > g_aa.max ? g_aa.max : want;
@@ -854,7 +855,7 @@ bool glr_init(glr_get_proc_t get_proc) {
   snprintf(g_info, sizeof(g_info), "%s | %s", renderer ? renderer : "?", version ? version : "?");
   plat_log("GL: vendor=%s renderer=%s version=%s", vendor ? vendor : "?", renderer ? renderer : "?", version ? version : "?");
   {
-    // Informazioni utili per le scelte future (formati, estensioni): solo nel log.
+    // Information useful for future choices (formats, extensions): only in the log.
     const char* glsl = (const char*)gl.GetString(GL_SHADING_LANGUAGE_VERSION);
     GLint max_tex = 0;
     gl.GetIntegerv(GL_MAX_TEXTURE_SIZE, &max_tex);
@@ -864,7 +865,7 @@ bool glr_init(glr_get_proc_t get_proc) {
     g_nattribs = na < 8 ? 8 : (na > 32 ? 32 : (int)na);
     const char* ext = (const char*)gl.GetString(GL_EXTENSIONS);
     if (ext) {
-      // La lista e' lunga: la si spezza in righe da circa 400 caratteri, senza tagliare i nomi.
+      // The list is long: it is split into lines of about 400 characters, without cutting names.
       size_t len = strlen(ext), pos = 0;
       while (pos < len) {
         size_t n = len - pos;
@@ -886,8 +887,8 @@ bool glr_init(glr_get_proc_t get_proc) {
   g_prog_hud = link(VS_HUD, FS_HUD, hud_attr, 3);
   g_prog_copy = link(VS_HUD, FS_COPY, hud_attr, 3);
   static const char* const ui_attr[6] = { "a_pos", "a_uv", "a_col", "a_q", "a_p", "a_e" };
-  // Senza lo shader dell'interfaccia (non dovrebbe succedere: se il driver lo rifiutasse) si gioca lo
-  // stesso, con l'interfaccia semplificata. PUPAZZI_UI_SEMPLICE=1 la forza, per provarla.
+  // Without the interface shader (it should not happen: if the driver refused it) the game is still
+  // playable, with the simplified interface. PUPAZZI_UI_SEMPLICE=1 forces it, to test it.
   const char* simple = getenv("PUPAZZI_UI_SEMPLICE");
   g_prog_ui = (simple && *simple == '1') ? 0 : link(VS_UI, FS_UI, ui_attr, 6);
   if (!g_prog_world || !g_prog_hud || !g_prog_copy) return false;
@@ -906,9 +907,9 @@ bool glr_init(glr_get_proc_t get_proc) {
   gl.GenBuffers(1, &g_vbo_hud);
   gl.GenBuffers(1, &g_vbo_ui);
 
-  // Atlante dei caratteri e dei disegni dell'interfaccia (solo alfa, bordi sfumati, aloni) con il
-  // blocco pieno per i rettangoli. Filtro lineare: a 640x480 i caratteri cadono pixel su pixel e
-  // vengono uguali al renderer software; alle altre risoluzioni (solo prove) restano lisci.
+  // Atlas of the interface glyphs and icons (alpha only, feathered edges, glows) with the solid
+  // block for rectangles. Linear filter: at 640x480 the glyphs fall pixel for pixel and come out
+  // identical to the software renderer; at other resolutions (tests only) they stay smooth.
   int aw = 0, ah = 0;
   const uint8_t* atlas = hud_atlas(&aw, &ah);
   hud_solid_uv(&SOLID_U, &SOLID_V);
@@ -936,7 +937,7 @@ void glr_context_lost(void) {
   g_aa.mode = AA_NONE;
 }
 
-// Libera la memoria di lavoro: da chiamare quando il core viene scaricato.
+// Frees the working memory: to be called when the core is unloaded.
 void glr_shutdown(void) {
   g_ok = false;
   free(g_wv); g_wv = 0; g_wv_n = g_wv_cap = 0;
@@ -953,10 +954,10 @@ void glr_render(const FrameDesc* f, unsigned fbo, RenderStats* st, bool finish) 
   g_frame_no++;
   const double t0 = plat_now_ms();
   const int w = f->w, h = f->h;
-  // Con l'antialias il mondo si disegna nel bersaglio a piu' campioni, poi lo si porta nel
-  // framebuffer del frontend; l'HUD va sempre direttamente in quello del frontend.
+  // With antialiasing the world is drawn into the multisample target, then brought into the
+  // frontend's framebuffer; the HUD always goes directly into the frontend's one.
   if (g_depth_bits < 0) {
-    // Profondita' del framebuffer del frontend (quella che conta senza antialias).
+    // Depth of the frontend's framebuffer (the one that matters without antialiasing).
     gl.BindFramebuffer(GL_FRAMEBUFFER, fbo);
     GLint bits = 0;
     gl.GetIntegerv(GL_DEPTH_BITS, &bits);
@@ -966,8 +967,8 @@ void glr_render(const FrameDesc* f, unsigned fbo, RenderStats* st, bool finish) 
   const bool aa = f->aa > 0 && aa_ready(w, h, f->aa);
   gl.BindFramebuffer(GL_FRAMEBUFFER, aa ? g_aa.fbo : fbo);
   gl.Viewport(0, 0, w, h);
-  // Lo stato ereditato dal frontend (o da un core precedente) non e' garantito: si rimette a
-  // posto tutto cio' che influisce sul disegno, non solo quello che RetroArch tocca di solito.
+  // The state inherited from the frontend (or from a previous core) is not guaranteed: everything
+  // that affects drawing is reset, not only what RetroArch usually touches.
   gl.Disable(GL_SCISSOR_TEST);
   gl.Disable(GL_STENCIL_TEST);
   gl.Disable(GL_BLEND);
@@ -976,8 +977,8 @@ void glr_render(const FrameDesc* f, unsigned fbo, RenderStats* st, bool finish) 
   gl.Disable(GL_POLYGON_OFFSET_FILL);
   gl.Disable(GL_SAMPLE_ALPHA_TO_COVERAGE);
   gl.Disable(GL_SAMPLE_COVERAGE);
-  // Array di attributi lasciati accesi dagli shader del frontend: qui servono solo 0, 1 e 2,
-  // e un array acceso che punta a un buffer piu' corto del disegno e' un rischio inutile.
+  // Attribute arrays left enabled by the frontend's shaders: only 0, 1 and 2 are needed here,
+  // and an enabled array pointing to a buffer shorter than the draw is a needless risk.
   for (int i = 0; i < g_nattribs; ++i) gl.DisableVertexAttribArray((GLuint)i);
   gl.ColorMask(1, 1, 1, 1);
   gl.DepthMask(1);
@@ -986,15 +987,15 @@ void glr_render(const FrameDesc* f, unsigned fbo, RenderStats* st, bool finish) 
   gl.ClearColor(0.0f, 0.0f, 0.0f, 1.0f);
   gl.ClearDepthf(1.0f);
   gl.ClearStencil(0);
-  // Si puliscono tutti i piani: sulle GPU a tessere evita di ricaricare il contenuto precedente.
+  // All planes are cleared: on tile-based GPUs this avoids reloading the previous content.
   gl.Clear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
 
-  // Cielo.
+  // Sky.
   g_hv_n = 0;
   hud_quad(0, 0, (float)w, (float)h, SOLID_U, SOLID_V, SOLID_U, SOLID_V, f->sky_top, f->sky_bot, 255);
   hud_flush(w, h);
 
-  // Mondo.
+  // World.
   Plane fr[5];
   frustum_planes(f->cam.vp, f->cam.znear, fr);
   gl.UseProgram(g_prog_world);
@@ -1041,7 +1042,7 @@ void glr_render(const FrameDesc* f, unsigned fbo, RenderStats* st, bool finish) 
   gl.Disable(GL_CULL_FACE);
   if (aa) {
     if (g_aa.discard) {
-      const GLenum att = GL_DEPTH_ATTACHMENT;   // la profondita' non serve piu': non la si scrive in memoria
+      const GLenum att = GL_DEPTH_ATTACHMENT;   // depth is no longer needed: it is not written to memory
       glo.DiscardFramebufferEXT(GL_FRAMEBUFFER, 1, &att);
     }
     if (g_aa.mode == AA_ES3) {
@@ -1054,19 +1055,19 @@ void glr_render(const FrameDesc* f, unsigned fbo, RenderStats* st, bool finish) 
       gl.Viewport(0, 0, w, h);
       gl.Clear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
       g_hv_n = 0;
-      hud_quad(0, 0, (float)w, (float)h, 0.0f, 1.0f, 1.0f, 0.0f, 0xFFFFFF, 0xFFFFFF, 255);   // la texture ha l'origine in basso
+      hud_quad(0, 0, (float)w, (float)h, 0.0f, 1.0f, 1.0f, 0.0f, 0xFFFFFF, 0xFFFFFF, 255);   // the texture has its origin at the bottom
       quads_flush(w, h, g_prog_copy, g_u_xf_copy, g_u_tex_copy, g_aa.tex);
       st->draw_calls++;
     }
   }
   const double t1 = plat_now_ms();
 
-  // HUD e menu (0.5.2: un solo disegno con lo shader dell'interfaccia, nell'ordine dei comandi).
+  // HUD and menus (0.5.2: a single draw with the interface shader, in the order of the commands).
   if (f->hud && !g_prog_ui) {
     hud_simple(f->hud, (float)f->hud_scale * 0.5f, w, h);
     st->draw_calls++;
   } else if (f->hud) {
-    const float k = (float)f->hud_scale * 0.5f;   // i comandi sono in pixel a 640x480
+    const float k = (float)f->hud_scale * 0.5f;   // the commands are in pixels at 640x480
     const Hud* hd = f->hud;
     g_uv_n = 0;
     for (int i = 0; i < hd->n; ++i) {
@@ -1092,7 +1093,7 @@ void glr_render(const FrameDesc* f, unsigned fbo, RenderStats* st, bool finish) 
     st->draw_calls++;
   }
 
-  // Stato pulito per il frontend.
+  // Clean state for the frontend.
   gl.Disable(GL_BLEND);
   gl.DisableVertexAttribArray(0);
   gl.DisableVertexAttribArray(1);
@@ -1103,7 +1104,7 @@ void glr_render(const FrameDesc* f, unsigned fbo, RenderStats* st, bool finish) 
   gl.BindTexture(GL_TEXTURE_2D, 0);
   gl.UseProgram(0);
   const double t2 = plat_now_ms();
-  if (finish) gl.Finish();     // aspetta la GPU: serve solo per misurarne il tempo
+  if (finish) gl.Finish();     // waits for the GPU: needed only to measure its time
   const double t3 = plat_now_ms();
   st->ms_geo += t1 - t0;
   st->ms_hud += t2 - t1;

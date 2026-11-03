@@ -1,13 +1,13 @@
 #!/bin/bash
-# Pupazzi - avvio sulla console (Anbernic RG35XX Pro con Stock OS MOD).
+# Pupazzi - launch on the console (Anbernic RG35XX Pro with Stock OS MOD).
 #
-#   run.sh         il gioco, disegnato dalla GPU (normale)
-#   run.sh sw      il gioco disegnato dalla CPU (solo per confronto, in caso di problemi con la GPU)
-#   run.sh gpu64 | sw64   lo stesso con il RetroArch a 64 bit
+#   run.sh         the game, drawn by the GPU (normal)
+#   run.sh sw      the game drawn by the CPU (only for comparison, in case of problems with the GPU)
+#   run.sh gpu64 | sw64   the same with the 64-bit RetroArch
 #
-# Usa il RetroArch della console. La configurazione di RetroArch non viene modificata: a ogni
-# avvio se ne fa una copia in /tmp con le poche voci che servono qui. I registri finiscono
-# nella cartella out/ accanto a questo script (./deploy.sh risultati li porta sul PC).
+# Uses the console's RetroArch. The RetroArch configuration is not modified: at every launch a
+# copy of it is made in /tmp with the few entries needed here. The logs end up in the out/
+# folder next to this script (./deploy.sh risultati brings them to the PC).
 
 MODE="${1:-gpu}"
 HERE="$(cd "$(dirname "$0")" && pwd)"
@@ -15,17 +15,17 @@ RA_DIR="/mnt/vendor/deep/retro"
 RA32="$RA_DIR/retroarch"
 RA64="$RA_DIR/retroarch64"
 RA_CFG="/.config/retroarch/retroarch.cfg"
-RA_CFG_FACTORY="$RA_DIR/retroarch.cfg"       # quella di fabbrica, se manca quella dell'utente
+RA_CFG_FACTORY="$RA_DIR/retroarch.cfg"       # the factory one, if the user's one is missing
 RUN_CFG=""
 CORE32="$HERE/arm32/pupazzi_libretro.so"
 CORE64="$HERE/arm64/pupazzi_libretro.so"
-# Il RetroArch a 64 bit della console ha bisogno di una SDL2 piu' recente di quella in /usr/lib.
+# The console's 64-bit RetroArch needs a newer SDL2 than the one in /usr/lib.
 SDL64="/usr/lib/aarch64-linux-gnu/libSDL2-2.0.so.0.2800.5"
 
-# Stesse librerie che il menu della console prepara per le applicazioni.
+# Same libraries that the console menu sets up for applications.
 export LD_LIBRARY_PATH="${LD_LIBRARY_PATH:-/usr/lib32:/usr/lib:/mnt/vendor/lib}"
 
-# usable CARTELLA: ci si puo' scrivere e c'e' almeno 1 MB libero?
+# usable DIR: is it writable and is there at least 1 MB free?
 usable() {
   local d="$1" free
   mkdir -p "$d" 2>/dev/null || return 1
@@ -33,12 +33,12 @@ usable() {
   rm -f "$d/.prova"
   free=$(df -Pk "$d" 2>/dev/null | awk 'NR == 2 { print $4 }')
   case "$free" in
-    ''|*[!0-9]*) return 0 ;;        # df non risponde: ci si fida della prova di scrittura
+    ''|*[!0-9]*) return 0 ;;        # df does not answer: trust the write test
   esac
   [ "$free" -ge 1024 ]
 }
 
-# Risultati accanto allo script; con la scheda piena o in sola lettura si ripiega su /tmp.
+# Results next to the script; with the SD card full or read-only, fall back to /tmp.
 OUT="$HERE/out"
 if ! usable "$OUT"; then
   OUT="/tmp/pupazzi_out"
@@ -46,21 +46,21 @@ if ! usable "$OUT"; then
 fi
 note() { echo "$(date '+%Y-%m-%d %H:%M:%S') $*" >> "$OUT/avvio.log" 2>/dev/null; }
 
-# I log crescono a ogni avvio: oltre i 300 KB si riparte, tenendo la copia precedente.
+# The logs grow at every launch: beyond 300 KB they start over, keeping the previous copy.
 rotate() {
   local f="$1" size
   size=$(stat -c %s "$f" 2>/dev/null || echo 0)
   if [ "$size" -gt 300000 ]; then mv -f "$f" "$f.vecchio"; fi
 }
 
-# Copia della configurazione di RetroArch con le voci necessarie al gioco:
-#  - SELECT+START chiude RetroArch e si torna al menu della console;
-#  - niente viene salvato nella configurazione o nella cronologia dell'utente;
-#  - il Remote RetroPad di RetroArch resta spento (network_remote_enable*): le porte da 55400 a
-#    55403, dove le altre console che fanno da controller mandano i comandi (giocatori da 1 a 4),
-#    le apre il gioco, che a ogni fotogramma legge tutti i comandi arrivati (RetroArch ne leggeva
-#    uno solo e i comandi arrivavano sempre piu' in ritardo). Sulle altre console non cambia nulla.
-# Lascia in RUN_CFG il percorso della copia; fallisce se non riesce a scriverla da nessuna parte.
+# Copy of the RetroArch configuration with the entries the game needs:
+#  - SELECT+START closes RetroArch and goes back to the console menu;
+#  - nothing is saved in the user's configuration or history;
+#  - RetroArch's Remote RetroPad stays off (network_remote_enable*): ports 55400 to 55403, where
+#    the other consoles acting as controllers send their commands (players 1 to 4), are opened by
+#    the game, which at every frame reads all the commands that have arrived (RetroArch read only
+#    one of them and the commands arrived later and later). Nothing changes on the other consoles.
+# Leaves the path of the copy in RUN_CFG; fails if it cannot write it anywhere.
 make_cfg() {
   local keys='load_dummy_on_core_shutdown|config_save_on_exit|history_list_enable|network_remote_enable|network_remote_enable_user_p[1-4]'
   local base="$RA_CFG" target
@@ -88,9 +88,9 @@ CFG
   return 1
 }
 
-# run_ra BIT RENDERER CARTELLA SECONDI NOME_LOG [VAR=valore ...]
-# Avvia RetroArch (32 o 64 bit) con il core corrispondente. SECONDI = 0: nessun limite di tempo.
-# Il log di RetroArch va in CARTELLA/NOME_LOG.
+# run_ra BITS RENDERER DIR SECONDS LOG_NAME [VAR=value ...]
+# Starts RetroArch (32 or 64 bit) with the matching core. SECONDS = 0: no time limit.
+# The RetroArch log goes to DIR/LOG_NAME.
 run_ra() {
   local bits="$1" rend="$2" out="$3" limit="$4" log="$3/$5"
   shift 5
@@ -110,7 +110,7 @@ run_ra() {
   cmd+=("$bin" -v -c "$RUN_CFG" -L "$core")
   local rc
   if [ "$limit" -gt 0 ]; then
-    # --foreground: RetroArch resta nello stesso gruppo di processi di un avvio normale.
+    # --foreground: RetroArch stays in the same process group as in a normal launch.
     timeout --foreground -k 15 "$limit" "${cmd[@]}" > /dev/null 2> "$log"
   else
     "${cmd[@]}" > /dev/null 2> "$log"
@@ -120,7 +120,7 @@ run_ra() {
   return $rc
 }
 
-# Il core scrive in pupazzi_stato.txt come e' finita la sessione (e a che punto era la partita).
+# The core writes to pupazzi_stato.txt how the session ended (and how far the game had got).
 status_of() {
   sed -n 's/^uscita=//p' "$1/pupazzi_stato.txt" 2>/dev/null | head -n 1
 }
@@ -166,9 +166,9 @@ if ! make_cfg; then
   note "ERRORE: impossibile scrivere la copia della configurazione, RetroArch non viene avviato"
   exit 1
 fi
-# Stessa cartella di lavoro da cui il menu della console avvia RetroArch.
+# Same working directory from which the console menu starts RetroArch.
 cd "$RA_DIR" 2>/dev/null
-# Com'e' messa la console a ogni avvio (CPU, memoria, HDMI, RetroArch): aiuta a leggere i registri.
+# State of the console at every launch (CPU, memory, HDMI, RetroArch): helps when reading the logs.
 system_info > "$OUT/console.txt" 2>&1
 case "$MODE" in
   gpu)   run_ra 32 gpu "$OUT" 0 retroarch.log ;;

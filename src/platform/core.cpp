@@ -1,6 +1,6 @@
-// Pupazzi - core libretro: interfaccia con il frontend (RetroArch), comandi generali (pausa,
-// uscita, riquadro delle prestazioni), comandi dalle altre console (Remote RetroPad), gioco in rete
-// con ognuno il suo schermo (net.h), registro e stato di uscita per lo script di avvio.
+// Pupazzi - libretro core: interface with the frontend (RetroArch), general controls (pause, exit,
+// performance overlay), inputs from the other consoles (Remote RetroPad), LAN game with each player
+// on their own screen (net.h), log and exit status for the launch script.
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -44,9 +44,9 @@
 #define MAX_H 720
 #define AUDIO_RATE 48000
 #define AUDIO_FRAMES (AUDIO_RATE / 60)
-#define STAT_PERIOD 600     // ogni quanti fotogrammi scrivere una riga di stato nel log
-#define TAP_FRAMES 40       // START e SELECT valgono solo se premuti per meno di cosi' (vedi handle_controls)
-#define QUIT_FRAMES 45      // SELECT+START tenuti cosi' a lungo: si esce
+#define STAT_PERIOD 600     // every how many frames a status line is written to the log
+#define TAP_FRAMES 40       // START and SELECT count only if pressed for less than this (see handle_controls)
+#define QUIT_FRAMES 45      // SELECT+START held this long: exit
 
 static retro_environment_t env_cb;
 static retro_video_refresh_t video_cb;
@@ -60,24 +60,24 @@ static int16_t g_audio[AUDIO_FRAMES * 2];
 
 static struct {
   int w, h, ncpu;
-  bool aa_adapt;               // PUPAZZI_AA_ADATTA=0: niente passaggio da solo da 8 a 4 campioni (prove)
-  bool hud_off, hud_fixed;    // PUPAZZI_HUD=0: niente HUD; =fisso: riquadro delle prestazioni senza tempi (immagini confrontabili)
+  bool aa_adapt;               // PUPAZZI_AA_ADATTA=0: no automatic switch from 8 to 4 samples (tests)
+  bool hud_off, hud_fixed;    // PUPAZZI_HUD=0: no HUD; =fisso: performance overlay without timings (comparable images)
   bool want_gl, use_gl, gl_ready;
   int gl_wait;
   bool bitmasks;
-  int bots;                   // PUPAZZI_BOT=n: i primi n giocatori li guida il computer (prove); in rete quello di questa console
-  bool net_auto;              // PUPAZZI_RETE: partita in rete automatica (prove), niente partita veloce
-  bool net_tap;               // in rete: START breve del pad di questa console, da mandare con i suoi comandi
-  unsigned max_frames;        // PUPAZZI_FRAMES=n: chiusura automatica dopo n fotogrammi (prove)
+  int bots;                   // PUPAZZI_BOT=n: the first n players are bots (tests); in a LAN game, this console's player
+  bool net_auto;              // PUPAZZI_RETE: automatic LAN game (tests), no quick game
+  bool net_tap;               // in a LAN game: short START of this console's pad, to be sent with its inputs
+  unsigned max_frames;        // PUPAZZI_FRAMES=n: automatic shutdown after n frames (tests)
   bool perf, trace, trace_m;
   bool stick_seen[MAX_PLAYERS][2];
-  // Levetta destra, per il registro: escursione, rumore a riposo, tremolio a levetta inclinata.
+  // Right stick, for the log: range of travel, noise at rest, jitter with the stick tilted.
   struct StickStats {
-    float x0, x1, y0, y1;     // valori minimi e massimi letti
-    float rest;               // inclinazione massima a levetta ferma al centro
-    int low_n, full_n;        // letture di fila vicino al centro / quasi del tutto inclinata
-    float last_a;             // direzione alla lettura prima (gradi)
-    int jit[41], jit_n;       // variazioni di direzione tra due letture, a passi di 0,25 gradi
+    float x0, x1, y0, y1;     // minimum and maximum values read
+    float rest;               // maximum tilt with the stick still at the center
+    int low_n, full_n;        // consecutive readings near the center / almost fully tilted
+    float last_a;             // direction at the previous reading (degrees)
+    int jit[41], jit_n;       // direction changes between two readings, in steps of 0.25 degrees
   } ss[MAX_PLAYERS];
   Pad pads[MAX_PLAYERS];
   int start_hold[MAX_PLAYERS];
@@ -93,14 +93,14 @@ static struct {
   RenderStats st;
   unsigned frame;
   char out_dir[256];
-  int hdmi_force;             // PUPAZZI_HDMI=0/1 (prove): schermo fisso; -1 si legge dal sistema
-  int hdmi_src;               // da dove: 0 niente (si resta come con l'HDMI), 1 extcon, 2 switch
+  int hdmi_force;             // PUPAZZI_HDMI=0/1 (tests): fixed screen; -1 read from the system
+  int hdmi_src;               // from where: 0 nothing (stays as with HDMI), 1 extcon, 2 switch
   Game* game;                 // the game (created in retro_init, destroyed in retro_deinit)
   View* view;                 // ...and how this console shows it (camera, sounds, music, drawing)
 } A;
 
-// HDMI collegato? Lo stesso file che legge il RetroArch della console ("HDMI=1"); su altri kernel
-// /sys/class/switch/hdmi/state ("1"). Se non c'e' nessuno dei due (PC) si resta come con l'HDMI.
+// HDMI connected? The same file that the console's RetroArch reads ("HDMI=1"); on other kernels
+// /sys/class/switch/hdmi/state ("1"). If neither exists (PC), it stays as with HDMI.
 static int hdmi_read(int* src) {
   char buf[64];
   FILE* f = fopen("/sys/class/extcon/hdmi/state", "r");
@@ -144,15 +144,16 @@ static void log_sink(const char* line) {
   if (log_cb) log_cb(RETRO_LOG_INFO, "[pupazzi] %s\n", line);
 }
 
-// Antialias alla prova: nei primi 3 secondi in cui e' acceso c'e' il file aa_in_prova.txt nella
-// cartella dei risultati. Se all'avvio c'e' ancora, la volta prima il gioco si e' chiuso proprio
-// li' (per esempio nel driver della GPU): si parte senza antialias, che si riaccende dalla pausa.
+// Antialiasing on trial: during the first 3 seconds it is on, the file aa_in_prova.txt exists in
+// the results directory. If it is still there at startup, the previous time the game closed right
+// there (for example in the GPU driver): start without antialiasing, which can be turned back on
+// from the pause.
 static const int AA_TRY_FRAMES = 180;
 static struct {
   char path[320];
-  int frames;    // fotogrammi con l'antialias da quando c'e' il file; -1 = nessun file
-  bool passed;   // provato per 3 secondi in questa sessione: non serve piu' il file
-  bool crashed;  // all'avvio il file c'era ancora: spento anche nel salvataggio (vedi open_save)
+  int frames;    // frames with antialiasing since the file was created; -1 = no file
+  bool passed;   // tried for 3 seconds in this session: the file is no longer needed
+  bool crashed;  // at startup the file was still there: off in the save too (see open_save)
 } g_aa_try;
 
 static void aa_try_mark(bool on) {
@@ -169,7 +170,7 @@ static void aa_try_mark(bool on) {
   }
 }
 
-// Come e' finita la sessione: lo script di avvio sulla console lo riporta nel suo registro.
+// How the session ended: the launch script on the console reports it in its log.
 static void write_status(void) {
   char path[320];
   snprintf(path, sizeof(path), "%s/pupazzi_stato.txt", A.out_dir);
@@ -184,7 +185,7 @@ static void write_status(void) {
   fclose(f);
 }
 
-// reason: giocatore, limite, gl_assente (senza richiesta resta "frontend").
+// reason: giocatore, limite, gl_assente (without a request it stays "frontend").
 static void request_shutdown(const char* why, const char* reason) {
   if (A.shutdown_sent) return;
   A.shutdown_sent = true;
@@ -194,37 +195,37 @@ static void request_shutdown(const char* why, const char* reason) {
   if (env_cb) env_cb(RETRO_ENVIRONMENT_SHUTDOWN, NULL);
 }
 
-// --- comandi dalle altre console (Remote RetroPad) ----------------------------
-// Sulle console-controller gira il core Remote RetroPad di RetroArch: per ogni tasto o asse che
-// cambia manda un messaggio UDP di 20 byte (port, device, index, id: interi a 32 bit; state: 16
-// bit; little-endian), il giocatore N alla porta 55400+N-1 (il campo port non conta). RetroArch
-// ne leggeva uno solo per giocatore a fotogramma: con le levette in movimento ne arrivano anche 4
-// o piu' a fotogramma, la coda cresceva e i comandi arrivavano sempre piu' in ritardo (il
-// personaggio continuava a muoversi da solo). Ora le porte le apre il gioco (a RetroArch run.sh
-// le fa tenere chiuse) e a ogni fotogramma legge tutto quello che e' arrivato: vale lo stato piu'
-// recente. Un tasto tenuto non manda nulla: lo stato resta finche' non arriva un cambio (se resta
-// fermo 30 secondi ci pensa il gioco, vedi FROZEN_FRAMES).
-#define REMOTE_PORT 55400        // giocatore 1; PUPAZZI_REMOTO_PORTA=n per le prove
-#define REMOTE_MSG_SIZE 20       // byte di un messaggio: gli altri si ignorano
-#define REMOTE_READ_MAX 1024     // messaggi letti al massimo per giocatore in un fotogramma
-#define REMOTE_STALL_MS 500.0    // gioco fermo cosi' a lungo (menu di RetroArch): i comandi in coda sono vecchi
-#define REMOTE_BURST 8           // tanti messaggi in un fotogramma: arrivati in ritardo tutti insieme
+// --- inputs from the other consoles (Remote RetroPad) -------------------------
+// The controller consoles run RetroArch's Remote RetroPad core: for every button or axis that
+// changes it sends a 20-byte UDP message (port, device, index, id: 32-bit integers; state: 16
+// bits; little-endian), player N to port 55400+N-1 (the port field does not matter). RetroArch
+// read only one per player per frame: with the sticks moving, even 4 or more arrive per frame, so
+// the queue grew and the inputs arrived later and later (the character kept moving on its own).
+// Now the game opens the ports (run.sh makes RetroArch keep them closed) and every frame it reads
+// everything that has arrived: the most recent state counts. A held button sends nothing: the
+// state stays until a change arrives (if it stays still for 30 seconds the game takes care of it,
+// see FROZEN_FRAMES).
+#define REMOTE_PORT 55400        // player 1; PUPAZZI_REMOTO_PORTA=n for tests
+#define REMOTE_MSG_SIZE 20       // bytes of a message: the others are ignored
+#define REMOTE_READ_MAX 1024     // max messages read per player in one frame
+#define REMOTE_STALL_MS 500.0    // game stopped this long (RetroArch menu): the queued inputs are old
+#define REMOTE_BURST 8           // this many messages in one frame: they arrived late all together
 
 struct RemotePad {
-  int fd;                        // -1: porta chiusa
-  uint16_t btn;                  // tasti premuti (bit = id RetroPad)
-  int16_t ax[4];                 // levetta sinistra x y, destra x y: valori grezzi come arrivano
-  uint32_t ip;                   // chi li manda (indirizzo e porta, come arrivano dalla rete)
+  int fd;                        // -1: port closed
+  uint16_t btn;                  // buttons pressed (bit = RetroPad id)
+  int16_t ax[4];                 // left stick x y, right x y: raw values as they arrive
+  uint32_t ip;                   // who sends them (address and port, as they come from the network)
   uint16_t sport;
   bool seen, err_logged;
-  unsigned msgs, frames, max_frame, bursts;   // per il registro di fine sessione
+  unsigned msgs, frames, max_frame, bursts;   // for the end-of-session log
   unsigned bad, stale, senders;
 };
 
 static struct {
-  bool ready;                    // remote_open fatta (anche se nessuna porta si e' aperta)
-  int nopen;                     // porte aperte
-  double last_ms;                // ultima lettura (per accorgersi delle pause del gioco)
+  bool ready;                    // remote_open done (even if no port opened)
+  int nopen;                     // open ports
+  double last_ms;                // last read (to notice the game's pauses)
   RemotePad pl[MAX_PLAYERS];
 } R;
 
@@ -241,16 +242,16 @@ static bool remote_same(const RemotePad& a, const RemotePad& b) {
   return a.btn == b.btn && a.ax[0] == b.ax[0] && a.ax[1] == b.ax[1] && a.ax[2] == b.ax[2] && a.ax[3] == b.ax[3];
 }
 
-// Porta UDP non bloccante; se non si apre restituisce -errno. Niente SO_REUSEADDR: se lo chiedono
-// due programmi (RetroArch lo chiede sempre) il sistema lascia aprire la stessa porta a entrambi e
-// i messaggi vanno solo all'ultimo arrivato, senza errori. Senza, chi arriva secondo non la apre e
-// il registro lo dice (RetroArch apre le sue dopo il caricamento del gioco: con il Remote RetroPad
-// rimasto acceso sarebbe lui a restare senza porte).
+// Non-blocking UDP port; if it does not open, returns -errno. No SO_REUSEADDR: if two programs ask
+// for it (RetroArch always does) the system lets both open the same port and the messages go only
+// to the last one that arrived, with no errors. Without it, whoever comes second does not open it
+// and the log says so (RetroArch opens its own after the game is loaded: with the Remote RetroPad
+// left on, RetroArch would be the one left without ports).
 static int remote_socket(int port) {
-  // O_NONBLOCK gia' alla creazione (con fcntl il core a 32 bit vorrebbe una glibc 2.28).
+  // O_NONBLOCK already at creation (with fcntl the 32-bit core would want glibc 2.28).
   const int fd = socket(AF_INET, SOCK_DGRAM | SOCK_NONBLOCK | SOCK_CLOEXEC, 0);
   if (fd < 0) return -errno;
-  // Coda piu' lunga (il sistema la limita e poi la raddoppia): regge meglio un fotogramma lento.
+  // Longer queue (the system caps it and then doubles it): copes better with a slow frame.
   int sz = 0;
   socklen_t sl = sizeof(sz);
   if (getsockopt(fd, SOL_SOCKET, SO_RCVBUF, &sz, &sl) == 0 && sz < 512 * 1024) {
@@ -270,7 +271,7 @@ static int remote_socket(int port) {
   return fd;
 }
 
-// Da retro_load_game: una porta per giocatore. PUPAZZI_REMOTO=0 non le apre.
+// From retro_load_game: one port per player. PUPAZZI_REMOTO=0 does not open them.
 static void remote_open(void) {
   memset(&R, 0, sizeof(R));
   for (int p = 0; p < MAX_PLAYERS; ++p) R.pl[p].fd = -1;
@@ -308,7 +309,7 @@ static void remote_open(void) {
     plat_log("comandi dalle altre console: nessuna porta aperta%s%s", bad, hint);
 }
 
-// Da retro_unload_game e retro_deinit: chiude le porte e scrive nel registro cosa e' arrivato.
+// From retro_unload_game and retro_deinit: closes the ports and logs what arrived.
 static void remote_close(void) {
   if (!R.ready) return;
   R.ready = false;
@@ -335,7 +336,7 @@ static int32_t le32(const uint8_t* b) {
   return (int32_t)((uint32_t)b[0] | (uint32_t)b[1] << 8 | (uint32_t)b[2] << 16 | (uint32_t)b[3] << 24);
 }
 
-// Un messaggio, come lo legge RetroArch (input_remote_parse_packet), ma senza indici negativi.
+// One message, as RetroArch reads it (input_remote_parse_packet), but without negative indices.
 static void remote_apply(RemotePad& r, const uint8_t* m) {
   const int32_t device = le32(m + 4), index = le32(m + 8), id = le32(m + 12);
   const uint16_t state = (uint16_t)(m[16] | m[17] << 8);
@@ -353,15 +354,15 @@ static void ip_text(uint32_t ip, char* out, size_t n) {
   if (!inet_ntop(AF_INET, &a, out, (socklen_t)n)) snprintf(out, n, "?");
 }
 
-// A ogni fotogramma, prima di leggere i pad: tutti i messaggi arrivati su ogni porta, in ordine.
+// Every frame, before reading the pads: all the messages that arrived on each port, in order.
 static void remote_poll(void) {
   if (!R.ready || R.nopen == 0) return;
   const double now = plat_now_ms();
   const double gap = R.last_ms > 0.0 ? now - R.last_ms : 0.0;
   R.last_ms = now;
-  // Gioco rimasto fermo (menu di RetroArch): la coda puo' essersi riempita e allora il sistema
-  // ha buttato i messaggi piu' recenti. Quelli rimasti sono vecchi (un tasto lasciato nel
-  // frattempo resterebbe premuto): si buttano tutti e si riparte da fermi.
+  // Game left stopped (RetroArch menu): the queue may have filled up and then the system
+  // dropped the most recent messages. The remaining ones are old (a button released in the
+  // meantime would stay pressed): they are all dropped and everything starts again from rest.
   const bool stalled = gap > REMOTE_STALL_MS;
   unsigned dropped = 0;
   char who[16] = "";
@@ -400,8 +401,8 @@ static void remote_poll(void) {
         plat_log("giocatore %d: comandi dalla rete ricevuti (da %s)", p + 1, t);
         r.seen = true;
       } else if (ip != r.ip || sport != r.sport) {
-        // Un'altra console sulla stessa porta, o il Remote RetroPad ripartito (nuova porta di
-        // partenza): chi riparte manda solo cio' che non e' a riposo, quindi si riparte da fermi.
+        // Another console on the same port, or the Remote RetroPad restarted (new source
+        // port): whoever restarts sends only what is not at rest, so start again from rest.
         if (++r.senders <= 3) {
           char t0[INET_ADDRSTRLEN], t1[INET_ADDRSTRLEN];
           ip_text(r.ip, t0, sizeof(t0));
@@ -429,8 +430,8 @@ static void remote_poll(void) {
       if (n > r.max_frame) r.max_frame = n;
       if (n >= REMOTE_BURST) r.bursts++;
     }
-    // Prove (PUPAZZI_TRACE): stato dalla rete dopo questo fotogramma, ogni volta che arriva
-    // qualcosa o che cambia (anche quando si riparte da fermi). Senza messaggi non scrive nulla.
+    // Tests (PUPAZZI_TRACE): state from the network after this frame, whenever something arrives
+    // or it changes (also when starting again from rest). Without messages it writes nothing.
     if (A.trace && (n > 0 || !remote_same(before, r)))
       plat_log("rete %u giocatore %d: %u messaggi, tasti %04x, levette %d %d %d %d", A.frame, p + 1, n, (unsigned)r.btn,
                (int)r.ax[0], (int)r.ax[1], (int)r.ax[2], (int)r.ax[3]);
@@ -442,13 +443,13 @@ static void remote_poll(void) {
 
 // --- input ----------------------------------------------------------------
 
-// Levetta: valore grezzo (pad della console o rete) in [-1, 1].
+// Stick: raw value (console pad or network) in [-1, 1].
 static float axis_raw(int raw) {
   const float v = (float)raw / 32767.0f;
   return v < -1.0f ? -1.0f : (v > 1.0f ? 1.0f : v);
 }
 
-// Levetta sinistra: zona morta per asse (muoversi lungo gli assi resta facile).
+// Left stick: per-axis dead zone (moving along the axes stays easy).
 static float axis(int raw) {
   float v = axis_raw(raw);
   const float dead = 0.20f;
@@ -465,7 +466,7 @@ static void stick_stats(int p, float x, float y) {
   if (y > s.y1) s.y1 = y;
   const float m = sqrtf(x * x + y * y);
   s.low_n = m < 0.3f ? s.low_n + 1 : 0;
-  if (s.low_n > 30 && m > s.rest) s.rest = m;     // ferma al centro da mezzo secondo
+  if (s.low_n > 30 && m > s.rest) s.rest = m;     // still at the center for half a second
   if (m < 0.85f) {
     s.full_n = 0;
     return;
@@ -481,7 +482,7 @@ static void stick_stats(int p, float x, float y) {
   s.last_a = a;
 }
 
-// Variazione di direzione sotto cui sta la frazione q delle letture (gradi, a passi di 0,25).
+// Direction change below which the fraction q of the readings falls (degrees, in steps of 0.25).
 static float jit_quantile(const int* jit, int n, float q) {
   int acc = 0;
   for (int b = 0; b < 41; ++b) {
@@ -504,9 +505,9 @@ static void log_stick_stats(void) {
   }
 }
 
-// Pad della console (frontend) e comandi dalla rete insieme: tasti premuti su uno o sull'altro;
-// per ogni asse il valore piu' lontano dal centro (un pad sulla console e una console-controller
-// possono fare da stesso giocatore). Zone morte e levette poi come per un pad solo.
+// Console pad (frontend) and network inputs together: buttons pressed on either one; for each
+// axis the value farthest from the center (a pad on the console and a controller console can act
+// as the same player). Dead zones and sticks then as for a single pad.
 static void read_input(void) {
   input_poll_cb();
   remote_poll();
@@ -531,16 +532,16 @@ static void read_input(void) {
     A.pads[p].btn = b;
     A.pads[p].lx = axis(raw[0]);
     A.pads[p].ly = axis(raw[1]);
-    // Levetta destra (mira): valori interi, la zona morta circolare la applica il gioco secondo la
-    // mira scelta; qui si azzera solo il rumore attorno al centro.
+    // Right stick (aim): full values, the game applies the circular dead zone according to the
+    // chosen aim; here only the noise around the center is zeroed.
     float rx = axis_raw(raw[2]);
     float ry = axis_raw(raw[3]);
     stick_stats((int)p, rx, ry);
     if (rx * rx + ry * ry < 0.2f * 0.2f) rx = ry = 0.0f;
     A.pads[p].rx = rx;
     A.pads[p].ry = ry;
-    // La prima volta che arriva qualcosa da una levetta lo si scrive nel registro: se la mira non
-    // funziona su un controller, dal registro si capisce se la levetta destra arriva al gioco.
+    // The first time something arrives from a stick it is written to the log: if aiming does not
+    // work on a controller, the log shows whether the right stick reaches the game.
     if (!A.stick_seen[p][0] && (A.pads[p].lx != 0.0f || A.pads[p].ly != 0.0f)) {
       A.stick_seen[p][0] = true;
       plat_log("giocatore %u: levetta sinistra ricevuta", p + 1);
@@ -552,11 +553,11 @@ static void read_input(void) {
   }
 }
 
-// START e SELECT agiscono al rilascio e solo dopo una pressione breve: sulla console tenere
-// premuto START due secondi apre il menu di RetroArch, e al ritorno non deve succedere nulla.
-//  - START breve, qualunque giocatore: pausa in partita, conferma nei menu;
-//  - SELECT breve, giocatore 1: riquadro delle prestazioni;
-//  - SELECT+START tenuti, giocatore 1: esce e torna al menu della console.
+// START and SELECT act on release and only after a short press: on the console, holding START
+// for two seconds opens the RetroArch menu, and nothing must happen on return.
+//  - short START, any player: pause during a game, confirm in the menus;
+//  - short SELECT, player 1: performance overlay;
+//  - SELECT+START held, player 1: exits and goes back to the console menu.
 static void handle_controls(void) {
   const uint16_t m_sel = 1u << PAD_SELECT, m_start = 1u << PAD_START;
   const bool sel = (A.pads[0].btn & m_sel) != 0, start0 = (A.pads[0].btn & m_start) != 0;
@@ -573,7 +574,7 @@ static void handle_controls(void) {
     }
     const bool tap = A.start_hold[p] > 0 && A.start_hold[p] <= TAP_FRAMES && !(p == 0 && A.combo);
     A.start_hold[p] = 0;
-    // In rete lo START breve del pad di questa console viaggia con i suoi comandi (vale su tutte).
+    // In a LAN game the short START of this console's pad travels with its inputs (valid on all).
     if (tap && net_session()) A.net_tap |= p == 0;
     else if (tap) game_start_tap(*A.game, p);
   }
@@ -583,12 +584,12 @@ static void handle_controls(void) {
     if (A.sel_hold > 0 && A.sel_hold <= TAP_FRAMES && !A.combo) A.perf = !A.perf;
     A.sel_hold = 0;
   }
-  if (A.combo && !sel && !start0) A.combo = false;   // i due tasti della combinazione non valgono come pressioni singole
+  if (A.combo && !sel && !start0) A.combo = false;   // the two buttons of the combination do not count as single presses
 }
 
-// 0.5.4: con l'antialias "il migliore" a 8 campioni, se in partita il gioco non sta nei 60
-// fotogrammi al secondo (meno di 55 in 3 misure di fila, mezzo secondo l'una) si scende a 4 per il
-// resto della sessione e lo si scrive nel registro; dalla pausa si puo' sempre scegliere 8X.
+// 0.5.4: with the "best" antialiasing at 8 samples, if while playing the game cannot keep up 60
+// frames per second (less than 55 in 3 measurements in a row, half a second each) it drops to 4
+// for the rest of the session and writes that to the log; 8X can always be chosen from the pause.
 static void aa_adapt(void) {
   static int slow;
   if (!A.aa_adapt || !A.use_gl || !A.gl_ready || game_aa_level(*A.game) != 1 || game_aa_wanted(*A.game) < 8 || !game_playing(*A.game)) {
@@ -603,10 +604,10 @@ static void aa_adapt(void) {
   }
 }
 
-// --- riquadro delle prestazioni (SELECT) -------------------------------------
+// --- performance overlay (SELECT) --------------------------------------------
 
-// Una riga in basso a sinistra, sotto le finestre di chi entra in partita (che finiscono a 432); dalla
-// 0.5.4 sopra una seconda riga con il carico della CPU (letto ogni mezzo secondo mentre si vede).
+// One line at the bottom left, below the windows of players joining the game (which end at 432);
+// since 0.5.4, above it a second line with the CPU load (read every half second while visible).
 static void perf_overlay(Hud* h) {
   static unsigned cpu_t;
   static SysCpu cpu;
@@ -614,7 +615,7 @@ static void perf_overlay(Hud* h) {
     const SysCpu c = sys_cpu_sample();
     if (c.valid || !cpu.valid) cpu = c;
   }
-  if (A.hud_fixed) {                 // immagini confrontabili (PUPAZZI_HUD=fisso): numeri fissi
+  if (A.hud_fixed) {                 // comparable images (PUPAZZI_HUD=fisso): fixed numbers
     memset(&cpu, 0, sizeof(cpu));
     cpu.valid = true;
     cpu.ncore = 4;
@@ -628,7 +629,7 @@ static void perf_overlay(Hud* h) {
   float w = hud_text_w(HF_S13, buf) + 24.0f;
   hud_box(h, 24, 440, w, 24, 6, hud_a(0x18081E, 0.85f));
   hud_text(h, 36, hud_mid(HF_S13, 452), HF_S13, 0xFFFFFFFFu, buf);
-  // In rete (0.5.4): tempo di andata e ritorno, scorta, volte che e' mancata (chi si e' unito).
+  // In a LAN game (0.5.4): round-trip time, buffer, times it ran out (joining console).
   NetStats ns;
   net_stats(&ns);
   if (ns.on) {
@@ -652,7 +653,7 @@ static void perf_overlay(Hud* h) {
   hud_text(h, 36, hud_mid(HF_S13, 424), HF_S13, cpu.total >= 90 ? 0xFFFF8A6Au : 0xFFFFFFFFu, buf);
 }
 
-// --- contesto hardware ----------------------------------------------------
+// --- hardware context -----------------------------------------------------
 
 static void context_reset(void) {
   plat_log("context_reset: il frontend ha creato il contesto GL");
@@ -676,17 +677,17 @@ static bool try_hw_render(void) {
   hw.context_reset = context_reset;
   hw.context_destroy = context_destroy;
   hw.depth = true;
-  hw.stencil = true;              // con RetroArch e' l'unico modo di avere 24 bit di profondita'
+  hw.stencil = true;              // with RetroArch it is the only way to get 24 bits of depth
   hw.bottom_left_origin = true;
   return env_cb(RETRO_ENVIRONMENT_SET_HW_RENDER, &hw);
 }
 
-// --- interfaccia libretro -------------------------------------------------
+// --- libretro interface ---------------------------------------------------
 
 RETRO_API unsigned retro_api_version(void) { return RETRO_API_VERSION; }
 
 RETRO_API void retro_set_environment(retro_environment_t cb) {
-  // Chiamata piu' volte, anche su un caricamento di prova senza retro_init: niente effetti collaterali.
+  // Called several times, even on a trial load without retro_init: no side effects.
   env_cb = cb;
   bool no_game = true;
   cb(RETRO_ENVIRONMENT_SET_SUPPORT_NO_GAME, &no_game);
@@ -732,8 +733,8 @@ static int env_int(const char* name, int def) {
   return (v && *v) ? atoi(v) : def;
 }
 
-// Prove: con i giocatori automatici (o con PUPAZZI_MAPPA) si parte subito dalla mappa
-// PUPAZZI_MAPPA (1 = la prima), con PUPAZZI_GIOCATORI giocatori e i personaggi PUPAZZI_PERSONAGGI.
+// Tests: with bots (or with PUPAZZI_MAPPA) the game starts right away from map PUPAZZI_MAPPA
+// (1 = the first one), with PUPAZZI_GIOCATORI players and the characters PUPAZZI_PERSONAGGI.
 static void quick_start(void) {
   const int map = env_int("PUPAZZI_MAPPA", 0);
   if (A.net_auto || (!A.bots && map <= 0)) return;
@@ -758,7 +759,7 @@ RETRO_API void retro_init(void) {
     plat_log("=== pupazzi %s (build %s) | %s | arch %s ===", PUPAZZI_VERSION, PUPAZZI_BUILD, stamp, PUPAZZI_ARCH);
   }
   {
-    // Sonoro: effetti e musica sintetizzati all'avvio (qualche decimo di secondo sulla console).
+    // Sound: sound effects and music synthesized at startup (a few tenths of a second on console).
     const double t = plat_now_ms();
     audio_init(AUDIO_RATE);
     plat_log("sonoro pronto in %.0f ms", plat_now_ms() - t);
@@ -780,7 +781,7 @@ RETRO_API void retro_init(void) {
   }
   if (!swr_init(MAX_W, MAX_H)) plat_log("ERRORE: memoria insufficiente per il renderer software");
   A.ncpu = (int)sysconf(_SC_NPROCESSORS_CONF);
-  // Risoluzione: 640x480 come lo schermo della console; PUPAZZI_RES=320 o 960 per le prove.
+  // Resolution: 640x480 like the console screen; PUPAZZI_RES=320 or 960 for tests.
   const int res = env_int("PUPAZZI_RES", 640);
   A.w = res == 320 ? 320 : (res == 960 ? 960 : 640);
   A.h = A.w * 3 / 4;
@@ -796,18 +797,18 @@ RETRO_API void retro_init(void) {
   if (A.bots > MAX_PLAYERS) A.bots = MAX_PLAYERS;
   A.max_frames = (unsigned)env_int("PUPAZZI_FRAMES", 0);
   A.perf = env_int("PUPAZZI_PERF", 0) != 0;
-  A.trace = env_int("PUPAZZI_TRACE", 0) != 0;   // stato della partita a ogni fotogramma nel registro (prove)
-  A.trace_m = env_int("PUPAZZI_TRACE", 0) >= 2;  // ... e tutti i campi dei mostri
+  A.trace = env_int("PUPAZZI_TRACE", 0) != 0;   // game state every frame in the log (tests)
+  A.trace_m = env_int("PUPAZZI_TRACE", 0) >= 2;  // ... and all the monster fields
   const char* rete = getenv("PUPAZZI_RETE");
   const char* dopo = getenv("PUPAZZI_RETE_DOPO");
-  A.net_auto = rete && *rete && !(dopo && atoi(dopo) > 0);   // con PUPAZZI_RETE_DOPO prima si gioca da soli
+  A.net_auto = rete && *rete && !(dopo && atoi(dopo) > 0);   // with PUPAZZI_RETE_DOPO you play alone first
   quick_start();
 }
 
 RETRO_API void retro_deinit(void) {
-  if (g_aa_try.frames >= 0) aa_try_mark(false);   // uscita normale: l'antialias non ha fatto danni
-  net_shutdown();    // in rete: saluta le altre console (e, se si era unita, rimette i salvataggi di questa)
-  remote_close();    // se il frontend non ha chiamato retro_unload_game
+  if (g_aa_try.frames >= 0) aa_try_mark(false);   // normal exit: antialiasing did no harm
+  net_shutdown();    // LAN game: says bye to the other consoles (and, if it joined, restores its own saves)
+  remote_close();    // if the frontend did not call retro_unload_game
   log_stick_stats();
   GameInfo gi;
   game_info(*A.game, &gi);
@@ -815,7 +816,7 @@ RETRO_API void retro_deinit(void) {
            A.frame, A.exit_reason ? A.exit_reason : "frontend", gi.map, gi.loop, gi.zone, gi.players, gi.kills, gi.deaths, gi.wipes, gi.restarts,
            gi.maps_done);
   write_status();
-  save_write();      // cio' che il gioco ha cambiato e non ha ancora scritto (se nulla e' cambiato non tocca il file)
+  save_write();      // what the game changed and has not written yet (if nothing changed it does not touch the file)
   glr_shutdown();
   swr_shutdown();
   game_shutdown(*A.game);
@@ -826,23 +827,23 @@ RETRO_API void retro_deinit(void) {
   plat_log_close();
 }
 
-// La cartella c'e' (o la si crea adesso)?
+// Does the directory exist (or is it created now)?
 static bool dir_ready(const char* d) {
   struct stat st;
   if (stat(d, &st) != 0) {
     if (mkdir(d, 0777) == 0) return true;
-    if (errno != EEXIST || stat(d, &st) != 0) return false;     // errno dice perche'
+    if (errno != EEXIST || stat(d, &st) != 0) return false;     // errno says why
   }
   if (S_ISDIR(st.st_mode)) return true;
   errno = ENOTDIR;
   return false;
 }
 
-// Salvataggio nella cartella dei salvataggi di RetroArch (un aggiornamento della MOD svuota APPS,
-// quella no), altrimenti in quella dei risultati; PUPAZZI_SALVATAGGI=<cartella> vale piu' di
-// entrambe (prove). Da retro_load_game: prima il frontend non ha ancora preparato le cartelle.
-// Il RetroArch della console la porta su /mnt/mmc/saves_RA/ (/mnt/sdcard/... con la seconda
-// scheda) e la crea all'avvio: se non c'e' e non si riesce a crearla, si salva tra i risultati.
+// Save in RetroArch's saves directory (an update of the MOD empties APPS, not that one),
+// otherwise in the results directory; PUPAZZI_SALVATAGGI=<directory> overrides both (tests).
+// From retro_load_game: before that the frontend has not prepared the directories yet.
+// The console's RetroArch puts it at /mnt/mmc/saves_RA/ (/mnt/sdcard/... with the second card)
+// and creates it at startup: if it is missing and cannot be created, saving goes to the results.
 static void open_save(void) {
   const char* dir = getenv("PUPAZZI_SALVATAGGI");
   if (!(dir && *dir)) {
@@ -857,12 +858,12 @@ static void open_save(void) {
   save_open(dir);
   plat_log("salvataggio: %s (%s)", save_path(), save_status());
   if (g_aa_try.crashed) {
-    // L'antialias ha fatto chiudere il gioco: resta spento anche le prossime volte (si riaccende dalla pausa).
+    // Antialiasing made the game close: it stays off next time too (it can be turned on again from the pause).
     save_data()->antialias = 0;
     save_write();
   }
-  // PUPAZZI_LINGUA=it|en|es|pt|zh|ja|hi: la lingua per questa volta (prove; in gioco si sceglie
-  // dalla prima schermata), al posto di quella salvata, che resta com'era nel file.
+  // PUPAZZI_LINGUA=it|en|es|pt|zh|ja|hi: the language for this time only (tests; in game it is
+  // chosen from the first screen), instead of the saved one, which stays as it was in the file.
   const uint8_t saved_lang = save_data()->lang;
   const char* lg = getenv("PUPAZZI_LINGUA");
   for (int l = 0; lg && l < SAVE_LANGS; ++l)
@@ -872,16 +873,16 @@ static void open_save(void) {
     }
   game_save_loaded(*A.game);
   save_data()->lang = saved_lang;
-  // PUPAZZI_MIRA=0..3: mira extra morbida, morbida, media o rapida per tutti (prove; in gioco si
-  // sceglie nella pausa). Vale piu' della mira salvata.
+  // PUPAZZI_MIRA=0..3: extra soft, soft, medium or fast aim for everyone (tests; in game it is
+  // chosen in the pause). It overrides the saved aim.
   const int mira = env_int("PUPAZZI_MIRA", -1);
   if (mira >= 0)
     for (int p = 0; p < MAX_PLAYERS; ++p) game_set_aim_level(*A.game, p, mira);
 }
 
-// Nomi dei tasti per il menu dei comandi di RetroArch, nella lingua del gioco; per cinese,
-// giapponese e hindi in inglese (i caratteri di RetroArch di solito non li hanno). Si rimandano
-// quando la lingua cambia.
+// Button names for RetroArch's controls menu, in the game's language; for Chinese, Japanese and
+// Hindi in English (RetroArch's glyphs usually do not cover them). They are sent again when the
+// language changes.
 static int g_desc_lang = -1;
 
 static void send_descriptors(void) {
@@ -924,7 +925,7 @@ RETRO_API bool retro_load_game(const struct retro_game_info* info) {
   }
   A.bitmasks = env_cb(RETRO_ENVIRONMENT_GET_INPUT_BITMASKS, NULL);
 
-  // Renderer: GPU salvo richiesta diversa (variabile d'ambiente, poi opzione del core).
+  // Renderer: GPU unless requested otherwise (environment variable, then core option).
   const char* want = getenv("PUPAZZI_RENDERER");
   struct retro_variable var = { "pupazzi_renderer", NULL };
   if (!(want && *want) && env_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value) want = var.value;
@@ -949,7 +950,7 @@ RETRO_API bool retro_load_game(const struct retro_game_info* info) {
   if (A.bots) plat_log("giocatori automatici: %d", A.bots);
   open_save();
   send_descriptors();
-  remote_close();    // retro_load_game di nuovo senza retro_unload_game: le porte di prima
+  remote_close();    // retro_load_game again without retro_unload_game: the previous ports
   remote_open();
   net_init(*A.game);
   return true;
@@ -1002,7 +1003,7 @@ RETRO_API void retro_run(void) {
 
   read_input();
   if (lang_get() != g_desc_lang) send_descriptors();
-  if (A.frame % 60 == 59 && A.hdmi_force < 0 && A.hdmi_src != 0) hdmi_poll(false);   // ogni secondo: si puo' staccare in partita
+  if (A.frame % 60 == 59 && A.hdmi_force < 0 && A.hdmi_src != 0) hdmi_poll(false);   // each second: it can be unplugged mid-game
   if (A.bots && !A.net_auto && !net_session()) game_bot_pads(*A.game, A.pads, A.bots);
   handle_controls();
   if (A.use_gl && !A.gl_ready && ++A.gl_wait == 600) {
@@ -1013,8 +1014,8 @@ RETRO_API void retro_run(void) {
 
   net_frame_begin();
   if (net_session()) {
-    // Partita in rete: i comandi di questa console partono, i fotogrammi si fanno quando ci sono i
-    // comandi di tutti (chi ha creato la partita: sempre uno; le altre: da nessuno a qualcuno in piu').
+    // LAN game: this console's inputs are sent, the frames are run when everyone's inputs are there
+    // (the host: always one; the others: from none to a few more).
     Pad mine = A.pads[0];
     if (A.bots) game_bot_pad(*A.game, game_net_local(*A.game), &mine);
     net_local_pad(mine, A.net_tap);
@@ -1066,7 +1067,7 @@ RETRO_API void retro_run(void) {
       fd.aa = game_aa_wanted(*A.game);
       if (!g_aa_try.passed && (fd.aa > 0) != (g_aa_try.frames >= 0)) aa_try_mark(fd.aa > 0);
       glr_render(&fd, (unsigned)hw.get_current_framebuffer(), &st, false);
-      game_set_aa_available(*A.game, glr_aa_max());   // se la GPU ha rifiutato l'antialias (o gli 8 campioni), la pausa lo sa
+      game_set_aa_available(*A.game, glr_aa_max());   // if the GPU refused antialiasing (or the 8 samples), the pause knows
       if (g_aa_try.frames >= 0 && ++g_aa_try.frames >= AA_TRY_FRAMES) {
         aa_try_mark(false);
         g_aa_try.passed = true;
@@ -1083,7 +1084,7 @@ RETRO_API void retro_run(void) {
     video_cb(fb, (unsigned)A.w, (unsigned)A.h, (size_t)A.w * 4);
   }
   const double t3 = plat_now_ms();
-  // Sonoro: sempre inviato (e' cio' che tiene il passo quando il video del frontend e' su un altro thread).
+  // Sound: always sent (it is what keeps the pace when the frontend's video is on another thread).
   audio_render(g_audio, AUDIO_FRAMES);
   const double t4 = plat_now_ms();
   if (audio_batch_cb) audio_batch_cb(g_audio, AUDIO_FRAMES);
@@ -1096,7 +1097,7 @@ RETRO_API void retro_run(void) {
   A.e_audio = ema(A.e_audio, t4 - t3);
   A.st = st;
   A.frame++;
-  // Riga di stato periodica: prestazioni e situazione della partita.
+  // Periodic status line: performance and state of the game.
   if (A.frame % STAT_PERIOD == 0) {
     GameInfo gi;
     game_info(*A.game, &gi);
@@ -1107,7 +1108,7 @@ RETRO_API void retro_run(void) {
     AudioStats as;
     audio_get_stats(&as);
     audio_clear_stats();
-    // Vite di ogni posto ("3 2 - -": - chi non gioca).
+    // Lives of each slot ("3 2 - -": - for whoever is not playing).
     char lives[24];
     int nl = 0;
     for (int p = 0; p < MAX_PLAYERS; ++p)

@@ -1,14 +1,14 @@
 #!/bin/sh
-# Prove del renderer GPU su un OpenGL ES software (Mesa, senza schermo). Uso: make test-gl
-#  1. il core ottiene il contesto e non lascia sporco lo stato GL;
-#  2. l'immagine e' la stessa qualunque stato GL trovi all'inizio del fotogramma (--dirty);
-#  3. software e GPU disegnano la stessa scena (si contano i pixel diversi).
+# Tests of the GPU renderer on a software OpenGL ES (Mesa, headless). Usage: make test-gl
+#  1. the core gets the context and does not leave the GL state dirty;
+#  2. the image is the same whatever GL state it finds at the start of the frame (--dirty);
+#  3. software and GPU draw the same scene (the differing pixels are counted).
 H=build/native/host
 C=build/native/pupazzi_libretro.so
 T=$(mktemp -d) || exit 1
 trap 'rm -rf "$T"' EXIT
-# Partita giocata da due giocatori automatici: nemici, colpi, particelle e HUD in scena. Niente
-# passaggio da solo da 8 a 4 campioni (dipende da quanto e' veloce la macchina: immagini diverse).
+# Game played by two bots: enemies, shots, particles and HUD in the scene. No automatic switch
+# from 8 to 4 samples (it depends on how fast the machine is: different images).
 export PUPAZZI_BOT=2 PUPAZZI_PERF=1 PUPAZZI_AA_ADATTA=0
 N=420
 fail=0
@@ -20,8 +20,8 @@ case "$out" in
 esac
 case "$out" in *"STATO GL SPORCO"*) echo "ERRORE: il core lascia sporco lo stato GL"; echo "$out" | grep SPORCO; fail=1 ;; esac
 
-# Con e senza antialias (PUPAZZI_AA=0, e "prova": il percorso delle GPU a tessere con un solo
-# campione): la stessa immagine qualunque stato GL si trovi.
+# With and without antialiasing (PUPAZZI_AA=0, and "prova": the tile-based GPU path with a single
+# sample): the same image whatever GL state is found.
 for aa in auto 0 prova; do
   ref=""
   for d in 0 1 2 4 8 16 31; do
@@ -34,8 +34,8 @@ for aa in auto 0 prova; do
   [ $fail = 0 ] && echo "stato GL (antialias $aa): stessa immagine con ogni stato di partenza ($ref)"
 done
 
-# Il percorso delle GPU a tessere (texture con i campioni, poi copia a schermo) con un solo
-# campione deve dare esattamente l'immagine senza antialias.
+# The tile-based GPU path (texture with the samples, then copy to the screen) with a single
+# sample must give exactly the image without antialiasing.
 h0=$(PUPAZZI_PERF=0 PUPAZZI_AA=0 PUPAZZI_OUT="$T" PUPAZZI_RENDERER=gpu $H $C --gl --frames $N --quiet 2>&1 | sed -n 's/.*hash=\([0-9a-f]*\).*/\1/p' | tail -n 1)
 o1=$(PUPAZZI_PERF=0 PUPAZZI_AA=prova PUPAZZI_OUT="$T" PUPAZZI_RENDERER=gpu $H $C --gl --frames $N 2>&1)
 h1=$(echo "$o1" | sed -n 's/.*hash=\([0-9a-f]*\).*/\1/p' | tail -n 1)
@@ -45,8 +45,8 @@ case "$o1" in
 esac
 if [ -n "$h0" ] && [ "$h0" = "$h1" ]; then echo "antialias, percorso a tessere con un campione: stessa immagine ($h0)"
 else echo "ERRORE: percorso a tessere con un campione diverso ($h1 invece di $h0)"; fail=1; fi
-# 0.5.4: fino a 8 campioni (prova8) e 8 rifiutati dalla GPU (prova8no: si passa a 4), sempre con un
-# campione vero: stessa immagine.
+# 0.5.4: up to 8 samples (prova8) and 8 rejected by the GPU (prova8no: it switches to 4), always
+# with one real sample: same image.
 for m in prova8:8x prova8no:4x; do
   o2=$(PUPAZZI_PERF=0 PUPAZZI_AA=${m%%:*} PUPAZZI_OUT="$T" PUPAZZI_RENDERER=gpu $H $C --gl --frames $N 2>&1)
   h2=$(echo "$o2" | sed -n 's/.*hash=\([0-9a-f]*\).*/\1/p' | tail -n 1)
@@ -57,8 +57,8 @@ for m in prova8:8x prova8no:4x; do
   if [ -n "$h0" ] && [ "$h0" = "$h2" ]; then echo "antialias ${m%%:*}: ${m##*:}, stessa immagine ($h2)"
   else echo "ERRORE: antialias ${m%%:*}, immagine diversa ($h2 invece di $h0)"; fail=1; fi
 done
-# 0.5.4: con "il migliore" a 8 campioni, sotto i 55 fotogrammi al secondo in partita si passa da
-# soli a 4 (qui l'host va apposta a 30 al secondo).
+# 0.5.4: with "the best" at 8 samples, below 55 frames per second in a game it switches by itself
+# to 4 (here the host deliberately runs at 30 per second).
 mkdir -p "$T/adatta"
 o3=$(PUPAZZI_AA_ADATTA=1 PUPAZZI_AA=prova8 PUPAZZI_RES=320 PUPAZZI_OUT="$T/adatta" PUPAZZI_SALVATAGGI="$T/adatta" PUPAZZI_HUD=0 PUPAZZI_RENDERER=gpu $H $C --gl --frames 200 --tempo 30 2>&1)
 case "$o3" in
@@ -66,7 +66,7 @@ case "$o3" in
   *) echo "ERRORE: a 30 fotogrammi al secondo l'antialias non passa da 8 a 4 campioni"; fail=1 ;;
 esac
 
-# Software e GPU senza antialias: la stessa scena, a meno di pochi pixel sui bordi.
+# Software and GPU without antialiasing: the same scene, except for a few pixels on the edges.
 mkdir -p "$T/sw" "$T/gl" "$T/aa"
 PUPAZZI_OUT="$T" PUPAZZI_HUD=0 PUPAZZI_RENDERER=software $H $C --frames $N --quiet --dump "$T/sw" --at 30,250,419 > /dev/null 2>&1
 PUPAZZI_AA=0 PUPAZZI_OUT="$T" PUPAZZI_HUD=0 PUPAZZI_RENDERER=gpu $H $C --gl --frames $N --quiet --dump "$T/gl" --at 30,250,419 > /dev/null 2>&1
@@ -77,9 +77,9 @@ for f in f00030.ppm f00250.ppm f00419.ppm; do
   [ "$n" -gt 3000 ] && { echo "ERRORE: troppe differenze tra i due renderer"; fail=1; }
 done
 
-# L'interfaccia (menu, pausa con il popup, HUD in partita) con i due renderer: le stesse forme e gli
-# stessi caratteri. Si contano i pixel con un canale diverso di piu' di 24 (gli arrotondamenti ai
-# bordi sfumati restano sotto); qualche decina viene dalla scena 3D.
+# The interface (menus, pause with the popup, in-game HUD) with the two renderers: the same shapes
+# and the same glyphs. Pixels with a channel differing by more than 24 are counted (the rounding on
+# the soft edges stays below that); a few dozen come from the 3D scene.
 pix() { python3 - "$1" "$2" <<'PYEOF'
 import sys
 def ppm(p):
@@ -94,7 +94,7 @@ PYEOF
 if command -v python3 > /dev/null; then
   MENU_IN="0:A@200-202,0:RIGHT@280-282,0:A@320-322,0:LEFT@360-362,0:A@380-382,0:A@450-452,0:A@470-472,0:DOWN@550-552,0:A@562-564,0:UP@600-602,0:A@620-622,0:RIGHT@700-702,1:A@720-722"
   PAUSE_IN="0:A@40-42,1:A@40-42,0:START@100-102,0:DOWN@130-132,0:A@150-152,0:B@175-177,0:DOWN@190-192"
-  # In italiano e (0.5.3) in hindi e giapponese: parole composte e caratteri cinesi.
+  # In Italian and (0.5.3) in Hindi and Japanese: shaped words and Chinese characters.
   for r in software:sw gpu:gl; do
     R=${r%%:*}; D=$T/ui_${r##*:}; G=""; [ "$R" = gpu ] && G=--gl
     for L in it hi ja; do
@@ -120,7 +120,7 @@ else
   echo "interfaccia: python3 assente, confronto saltato"
 fi
 
-# Con l'antialias (se la GPU lo sa fare) cambiano solo i bordi: qualcosa, ma non troppo.
+# With antialiasing (if the GPU can do it) only the edges change: something, but not too much.
 o=$(PUPAZZI_OUT="$T" PUPAZZI_HUD=0 PUPAZZI_RENDERER=gpu $H $C --gl --frames $N --dump "$T/aa" --at 30,250,419 2>&1)
 case "$o" in
   *"antialias 8x pronto"*|*"antialias 4x pronto"*|*"antialias 2x pronto"*)

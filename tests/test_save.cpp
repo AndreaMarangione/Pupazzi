@@ -1,10 +1,10 @@
-// Prove dei salvataggi: dalla 0.5.3 le impostazioni in pupazzi.sav e le partite in partita1..4.sav.
-// File che mancano, andata e ritorno, file rovinati (troncati, binari, con righe non valide), chiavi
-// sconosciute conservate, cartella in sola lettura o che non c'e', tante scritture di fila, giri e
-// mappe aperte di ogni pianeta, i salvataggi della 0.4 e della 0.5.2 (che diventano la partita 1),
-// le partite: nuova, carica, copia, elimina; file che non si leggono tutti (errore della scheda,
-// troppo grandi) che restano da parte, la partita 1 della 0.5.2 che non si riesce a scrivere.
-// Usa solo save.cpp e plat.cpp, in una cartella temporanea.
+// Save tests: since 0.5.3 the settings in pupazzi.sav and the games in partita1..4.sav. Missing
+// files, round trip, damaged files (truncated, binary, with invalid lines), unknown keys kept,
+// read-only or missing directory, many writes in a row, rounds and unlocked maps of every planet,
+// the 0.4 and 0.5.2 saves (which become game 1), the games: new, load, copy, delete; files that
+// cannot be read in full (SD card error, too big) that are set aside, the 0.5.2 game 1 that cannot
+// be written.
+// Uses only save.cpp and plat.cpp, in a temporary directory.
 //   make build/native/test_save && ./build/native/test_save
 #include "game/save.h"
 #include "platform/plat.h"
@@ -25,7 +25,7 @@ static void sink(const char* line) {
   snprintf(g_lastlog, sizeof(g_lastlog), "%s", line);
 }
 
-// Cartella di prova name dentro quella temporanea (creata se create).
+// Test directory name inside the temporary one (created if create).
 static const char* dir_of(const char* name, bool create) {
   static char path[8][200];
   static int k = 0;
@@ -65,7 +65,7 @@ static bool exists(const char* path) {
   return stat(path, &st) == 0;
 }
 
-// Dove punta il collegamento path ("" se non e' un collegamento).
+// Where the link path points ("" if it is not a link).
 static const char* link_of(const char* path) {
   static char buf[256];
   const ssize_t n = readlink(path, buf, sizeof(buf) - 1);
@@ -79,7 +79,7 @@ static int count_of(const char* hay, const char* needle) {
   return n;
 }
 
-// Pianeti: la Terra con la prima mappa aperta, gli altri chiusi; tutti al giro 1.
+// Planets: Earth with the first map unlocked, the others locked; all at round 1.
 static bool worlds_default(const SaveData* d) {
   bool ok = d->maps_open[0] == 1;
   for (int w = 0; w < SAVE_WORLDS; ++w) ok &= d->giro[w] == 1 && (w == 0 || d->maps_open[w] == 0);
@@ -134,9 +134,9 @@ static bool game_full(const SaveData* d) {
   return ok && !strcmp(d->name, "SQUADRA 1") && d->seconds == 3725 && save_stars_in(d, "terra1") == 3 && save_stars_in(d, "terra_boss") == 4;
 }
 
-// Il file della partita 1 con questi byte, poi la si carica partendo da capo: una partita gia' attiva
-// prima si scriverebbe sopra il file appena messo (come nel gioco, dove nessuno cambia i file mentre
-// gira).
+// The game 1 file with these bytes, then it is loaded starting from scratch: a game already active
+// before would be written over the file just put there (as in the game, where nobody changes the
+// files while it runs).
 static bool load_bytes(const char* dir, const void* data, size_t n) {
   put_file(file_in(dir, "partita1.sav"), data, n);
   save_open(dir);
@@ -174,8 +174,8 @@ TEST_CASE("2) andata e ritorno") {
   SaveData* d = save_data();
   d->maps_open[0] = 3;
   d->giro[0] = 2;
-  d->maps_open[1] = 1;          // Luna raggiunta: si scrive anche lei
-  snprintf(d->name, sizeof(d->name), "Squadra 1");   // il gioco lo scrive com'e': nel file in maiuscolo
+  d->maps_open[1] = 1;          // Moon reached: it is written too
+  snprintf(d->name, sizeof(d->name), "Squadra 1");   // the game writes it as is: upper case in the file
   d->seconds = 3725;
   d->aim[0] = 0; d->aim[1] = 2; d->aim[2] = 3; d->aim[3] = 1;
   d->antialias = false;
@@ -260,7 +260,7 @@ TEST_CASE("5) file troncato in ogni punto") {
     if (cut == 0) { ok &= loaded && strstr(save_slot_status(), "vuoto") != 0 && game_default(d); continue; }
     if (cut < ver + 10) { ok &= loaded && (strstr(save_slot_status(), "letto") || game_default(d)); continue; }
     ok &= loaded && !strncmp(save_slot_status(), "letto", 5);
-    // Ogni valore e' quello scritto, quello predefinito o (numero tagliato) un suo prefisso.
+    // Every value is the one written, the default one or (number cut short) a prefix of it.
     ok &= save_stars("terra_boss") == 0 || save_stars("terra_boss") == 4;
     ok &= d->giro[0] == 1 || d->giro[0] == 2;
     ok &= d->seconds == 0 || d->seconds == 3 || d->seconds == 37 || d->seconds == 372 || d->seconds == 3725;
@@ -301,7 +301,7 @@ TEST_CASE("6) file binario o rovinato") {
   static char zeros[4096];
   EXPECT(load_bytes(D, zeros, sizeof(zeros)) && strstr(save_slot_status(), "illeggibile") && game_default(save_data()),
          "tutto zeri (spegnimento sulla FAT): illeggibile");
-  // Contenuto buono seguito da zeri: quello che c'e' si tiene.
+  // Good content followed by zeros: what is there is kept.
   char mixed[8192];
   const int lf = (int)strlen(FULL_GAME);
   memcpy(mixed, FULL_GAME, (size_t)lf);
@@ -350,13 +350,13 @@ TEST_CASE("7) chiavi sconosciute conservate") {
   get_file(save_slot_path(0), buf, sizeof(buf));
   for (const char* k : KEEP_GAME) ok &= count_of(buf, k) == 1;
   EXPECT(ok, "e restano anche alla seconda scrittura");
-  // Troppe: se ne tengono 64 e il registro lo dice.
+  // Too many: 64 are kept and the log says so.
   static char many[400 * 1024];
   int n = 0;
   for (int i = 0; n < (int)sizeof(many) - 64; ++i) n += snprintf(many + n, sizeof(many) - (size_t)n, "futura.chiave%d=%d\n", i, i);
   EXPECT(load_text(E, many) && strstr(save_slot_status(), "voci sconosciute di troppo") && strstr(save_slot_status(), "letto solo l'inizio"),
          save_slot_status());
-  save_data()->seconds = 4;     // senza cambiamenti non si riscriverebbe
+  save_data()->seconds = 4;     // without changes it would not be rewritten
   save_write();
   get_file(save_slot_path(0), buf, sizeof(buf));
   EXPECT(count_of(buf, "\nfutura.chiave") == 64 && strstr(buf, "\nfutura.chiave63=63\n"), "se ne tengono le prime 64");
@@ -445,7 +445,7 @@ TEST_CASE("9) tante scritture di fila") {
   const SaveData* d = save_data();
   bool same = st == SAVE_LETTO && d->music_vol == (N - 1) % 11 && save_slot_load(2) && d->maps_open[0] == 1 + (N - 1) % 20 && d->nmaps == 50;
   for (int w = 0; w < SAVE_WORLDS; ++w) {
-    int last = 1;                     // l'ultima scrittura del pianeta w
+    int last = 1;                     // the last write of planet w
     for (int i = 0; i < N; ++i)
       if (i % SAVE_WORLDS == w) last = 1 + i % 7;
     same &= d->giro[w] == last;
@@ -453,7 +453,7 @@ TEST_CASE("9) tante scritture di fila") {
   for (int k = 0; k < 50; ++k) {
     char id[16];
     snprintf(id, sizeof(id), "m%02d", k);
-    same &= save_stars(id) == 7;      // ogni mappa ha preso 1, 2 e 4 in giri diversi
+    same &= save_stars(id) == 7;      // every map got 1, 2 and 4 in different iterations
   }
   EXPECT(same, "i file finali hanno gli ultimi valori");
 }
@@ -495,8 +495,8 @@ TEST_CASE("10) nomi di mappa non validi e dati cambiati male dal gioco") {
 }
 
 TEST_CASE("11) il salvataggio della 0.4 (la prateria tutta finita) diventa la partita 1") {
-  // Il file di Andrea dopo la 0.4: 4 mappe aperte e 12 stelle della prateria. La Terra e' nuova:
-  // si ricomincia dalla prima mappa, al giro 1, senza stelle; i dati vecchi restano nei file.
+  // Andrea's file after 0.4: 4 maps unlocked and 12 stars of the prairie. Earth is new: it starts
+  // again from the first map, at round 1, with no stars; the old data stays in the files.
   const char* Q = dir_of("q", true);
   put_text(file_in(Q, "pupazzi.sav"),
            "# Pupazzi: salvataggio. Cancellalo per ricominciare da capo.\n"
@@ -592,11 +592,11 @@ TEST_CASE("14) giri e mappe di ogni pianeta") {
   ok &= count_of(buf, "\ngiro.marte=7\nmappe.venere") == 0 && count_of(buf, "\nmappe.marte=0\ngiro.marte=7\n") == 1;
   ok &= count_of(buf, "\nmappe.nettuno=0\ngiro.nettuno=99\n") == 1 && count_of(buf, "venere") == 0 && count_of(buf, "mercurio") == 0;
   EXPECT(ok, "pianeti sconosciuti o scritti male restano come chiavi sconosciute; si scrivono i pianeti raggiunti");
-  // Giro nuovo: le stelle del pianeta tornano a zero (la mappa resta nel file con 0).
+  // New round: the planet's stars go back to zero (the map stays in the file with 0).
   save_set_stars("terra1", 0);
-  save_set_stars("terra3", 0);          // non c'era: niente riga
+  save_set_stars("terra3", 0);          // it was not there: no line
   save_set_stars("terra2", 6);
-  save_set_stars("a b", 3);             // nome non valido: niente
+  save_set_stars("a b", 3);             // invalid name: nothing
   EXPECT(save_stars("terra1") == 0 && save_stars("terra2") == 6 && save_stars("terra3") == 0 && save_write(), "save_set_stars");
   get_file(save_slot_path(0), buf, sizeof(buf));
   EXPECT(count_of(buf, "\nstelle.terra1=0\n") == 1 && count_of(buf, "\nstelle.terra2=6\n") == 1 && count_of(buf, "terra3") == 0,
@@ -608,7 +608,7 @@ TEST_CASE("14) giri e mappe di ogni pianeta") {
 
 TEST_CASE("15) file che non si leggono tutti: restano da parte") {
   SaveData peek;
-  // Errore della scheda: /proc/self/mem dall'inizio non si legge (EIO; anche da root).
+  // SD card error: /proc/self/mem cannot be read from the start (EIO; even as root).
   const char* X = dir_of("x", true);
   if (exists("/proc/self/mem") && symlink("/proc/self/mem", file_in(X, "pupazzi.sav")) == 0 &&
       symlink("/proc/self/mem", file_in(X, "partita1.sav")) == 0) {
@@ -626,7 +626,7 @@ TEST_CASE("15) file che non si leggono tutti: restano da parte") {
            "i file che non si leggevano restano da parte come .illeggibile");
     EXPECT(save_open(X) == SAVE_LETTO && save_data()->music_vol == 3 && save_slot_load(0) && save_data()->maps_open[0] == 2,
            "i file nuovi si rileggono");
-    // Una cartella con il nome della partita non si sposta.
+    // A directory with the name of the game file is not moved.
     mkdir(file_in(X, "partita2.sav"), 0755);
     EXPECT(save_slot_peek(1, &peek) == SAVE_ILLEGGIBILE && save_slot_load(1) && strstr(save_slot_status(), "c'e' una cartella") &&
                !strstr(save_slot_status(), ".illeggibile"),
@@ -637,7 +637,7 @@ TEST_CASE("15) file che non si leggono tutti: restano da parte") {
   } else {
     printf("  (niente /proc/self/mem: prova dell'errore della scheda saltata)\n");
   }
-  // Piu' di 256 KB (non e' un salvataggio vero): si legge l'inizio, il file intero resta da parte.
+  // More than 256 KB (not a real save): the beginning is read, the whole file is set aside.
   const char* X2 = dir_of("x2", true);
   static char big[300 * 1024];
   int nb = snprintf(big, sizeof(big), "%s", FULL_GAME);
@@ -651,7 +651,7 @@ TEST_CASE("15) file che non si leggono tutti: restano da parte") {
   EXPECT(stat(file_in(X2, "partita1.sav.illeggibile"), &sb) == 0 && sb.st_size == nb && save_slot_peek(0, &peek) == SAVE_LETTO &&
              peek.seconds == 3726 && peek.maps_open[0] == 3 && peek.giro[0] == 2,
          "il file intero resta da parte; la partita scritta si rilegge");
-  // Il file illeggibile non si riesce a mettere da parte (c'e' una cartella con quel nome): non lo si sostituisce.
+  // The unreadable file cannot be set aside (there is a directory with that name): it is not replaced.
   const char* Y = dir_of("y", true);
   mkdir(file_in(Y, "partita1.sav.illeggibile"), 0755);
   EXPECT(load_text(Y, "solo testo\n") && strstr(save_slot_status(), "nessuna riga valida"), save_slot_status());
@@ -670,7 +670,7 @@ TEST_CASE("15) file che non si leggono tutti: restano da parte") {
 TEST_CASE("16) la partita 1 dalla 0.5.2 non si riesce a scrivere: si riprova al prossimo avvio") {
   const char* Z = dir_of("z", true);
   put_text(file_in(Z, "pupazzi.sav"), "versione=1\nmira.1=1\nvolume_musica=4\nmappe.terra=4\ngiro.terra=2\nstelle.terra1=7\n");
-  mkdir(file_in(Z, "partita1.sav.tmp"), 0755);         // la partita 1 non si puo' creare
+  mkdir(file_in(Z, "partita1.sav.tmp"), 0755);         // game 1 cannot be created
   int logs = g_logs;
   EXPECT(save_open(Z) == SAVE_LETTO && !exists(file_in(Z, "partita1.sav")) && g_logs == logs + 1 && strstr(g_lastlog, "non riuscito"), g_lastlog);
   save_data()->music_vol = 3;
@@ -684,7 +684,7 @@ TEST_CASE("16) la partita 1 dalla 0.5.2 non si riesce a scrivere: si riprova al 
          "al prossimo avvio la partita 1 c'e'");
   get_file(file_in(Z, "pupazzi.sav"), buf, sizeof(buf));
   EXPECT(count_of(buf, "\nsalvataggi=1\n") == 1 && count_of(buf, "salvataggi=0") == 0, "e salvataggi=1");
-  // C'e' gia' una partita: i progressi vecchi non si prendono, neanche dopo averla eliminata.
+  // There is already a game: the old progress is not taken, not even after deleting it.
   const char* Z2 = dir_of("z2", true);
   put_text(file_in(Z2, "pupazzi.sav"), "versione=1\nmappe.terra=4\n");
   put_text(file_in(Z2, "partita3.sav"), "mappe.terra=2\n");
@@ -717,7 +717,7 @@ TEST_CASE("17) antialias: 0, 1 (il migliore), 4 o 8") {
   save_write();
   get_file(file_in(W, "pupazzi.sav"), buf, sizeof(buf));
   ok = count_of(buf, "\nantialias=8\n") == 1;
-  save_data()->antialias = 3;          // il gioco non lo fa: si scrive il migliore
+  save_data()->antialias = 3;          // the game does not do this: the best one is written
   save_write();
   get_file(file_in(W, "pupazzi.sav"), buf, sizeof(buf));
   EXPECT(ok && count_of(buf, "\nantialias=1\n") == 1, "scritto 8; un valore che non va diventa 1");
@@ -740,7 +740,7 @@ TEST_CASE("18) nome delle partite") {
     chars &= save_name_char((char)c) == want;
   }
   EXPECT(chars, "caratteri del nome: A-Z 0-9 spazio - ' ! ? .");
-  // Rinominare una partita che non e' quella attiva: il resto del file resta (anche le chiavi sconosciute).
+  // Renaming a game that is not the active one: the rest of the file stays (unknown keys too).
   put_text(save_slot_path(1), "versione=2\nnome=VECCHIO\nmappe.terra=3\nfutura=7\nstelle.terra1=5\ntempo=99\n");
   EXPECT(save_slot() == 3 && save_slot_rename(1, "Nuovo Nome!") && save_slot() == 3, "rinominata la 2 (attiva la 4)");
   SaveData peek;
@@ -749,7 +749,7 @@ TEST_CASE("18) nome delle partite") {
          "la 2 ha il nome nuovo e tutto il resto");
   get_file(save_slot_path(1), buf, sizeof(buf));
   EXPECT(count_of(buf, "\nfutura=7\n") == 1 && count_of(buf, "nome=") == 1 && count_of(buf, "VECCHIO") == 0, "chiave sconosciuta conservata, un solo nome");
-  // Quella attiva: cambia anche in memoria; il nome vuoto torna a "PARTITA N".
+  // The active one: it also changes in memory; the empty name goes back to "PARTITA N".
   EXPECT(save_slot_rename(3, "zeta") && !strcmp(save_data()->name, "ZETA") && save_slot_peek(3, &peek) == SAVE_LETTO && !strcmp(peek.name, "ZETA"),
          "rinominata quella attiva");
   EXPECT(save_slot_rename(3, "") && !save_data()->name[0] && save_slot_peek(3, &peek) == SAVE_LETTO && !peek.name[0], "nome vuoto: torna senza nome");
@@ -761,7 +761,7 @@ TEST_CASE("18) nome delle partite") {
   EXPECT(!save_slot_rename(2, "X"), "file illeggibile: non si rinomina");
   get_file(save_slot_path(2), buf, sizeof(buf));
   EXPECT(!strcmp(buf, "solo testo senza uguali\n"), "e resta com'era");
-  // Lettura: minuscole e spazi attorno vanno bene; troppo lungo o caratteri strani: riga non valida.
+  // Reading: lower case and surrounding spaces are fine; too long or odd characters: invalid line.
   EXPECT(load_text(N, "nome=   Mario  \nmappe.terra=2\n") && !strcmp(save_data()->name, "MARIO") && !strcmp(save_slot_status(), "letto"),
          "nome=   Mario  : MARIO");
   EXPECT(load_text(N, "nome=ABCDEFGHIJKLM\nmappe.terra=2\n") && !save_data()->name[0] && strstr(save_slot_status(), "righe non valide ignorate: 1"),
@@ -769,7 +769,7 @@ TEST_CASE("18) nome delle partite") {
   EXPECT(load_text(N, "nome=G\xC3\xB2\nmappe.terra=2\n") && !save_data()->name[0] && strstr(save_slot_status(), "righe non valide ignorate: 1"),
          "nome con una lettera accentata: riga non valida");
   EXPECT(load_text(N, "nome=ABCDEFGHIJKL\nnome=\n") && !save_data()->name[0] && !strcmp(save_slot_status(), "letto"), "nome= vuoto: valido, senza nome");
-  // Una copia ha lo stesso nome.
+  // A copy has the same name.
   EXPECT(load_text(N, "nome=COPIA\nmappe.terra=2\n") && save_slot_copy(0, 2) && save_slot_peek(2, &peek) == SAVE_LETTO && !strcmp(peek.name, "COPIA"),
          "la copia ha lo stesso nome");
 }

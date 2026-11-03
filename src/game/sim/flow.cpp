@@ -1,6 +1,6 @@
-// Percorsi: campo di distanze su una griglia di celle da mezzo metro che copre la mappa.
-// I mostri scendono il campo per arrivare ai giocatori girando attorno agli ostacoli; le celle
-// che toccano un ostacolo costano un po' di piu', cosi' i percorsi stanno lontani dagli spigoli.
+// Paths: distance field on a grid of half-metre cells that covers the map.
+// The monsters go down the field to reach the players going around the obstacles; the cells
+// that touch an obstacle cost a little more, so the paths stay away from the corners.
 #include "game/sim/game_int.h"
 #include <string.h>
 
@@ -23,7 +23,7 @@ void build_blocks(Game& g) {
   g.session.flow_w = g.L.W * 2;
   g.session.flow_h = g.L.H * 2;
   for (int z = 0; z < g.session.flow_h; ++z)
-    for (int x = 0; x < g.session.flow_w; ++x) g.session.flow_blk[z * g.session.flow_w + x] = level_blocks(&g.L, x / 2, z / 2, 0.0f, PL_STEP, BODY_WALK | BODY_PIT) ? 1 : 0;   // anche il cenote
+    for (int x = 0; x < g.session.flow_w; ++x) g.session.flow_blk[z * g.session.flow_w + x] = level_blocks(&g.L, x / 2, z / 2, 0.0f, PL_STEP, BODY_WALK | BODY_PIT) ? 1 : 0;   // the cenote too
   for (int z = 0; z < g.session.flow_h; ++z)
     for (int x = 0; x < g.session.flow_w; ++x) {
       uint8_t& b = g.session.flow_blk[z * g.session.flow_w + x];
@@ -38,11 +38,11 @@ inline bool free_cell(Game& g, int c) { return g.session.flow_blk[c] != 1; }
 
 }  // namespace
 
-// Dijkstra a secchi: passi da 10 in orizzontale e verticale, 14 in diagonale, +6 per le celle
-// vicine agli ostacoli. Le partenze arrivano fino a 20 e un passo aggiunge al massimo 20, quindi
-// in coda non ci sono mai piu' di 41 valori diversi: bastano 64 secchi.
+// Bucketed Dijkstra: steps of 10 horizontally and vertically, 14 diagonally, +6 for the cells
+// next to the obstacles. The starts go up to 20 and a step adds at most 20, so the queue never
+// holds more than 41 different values: 64 buckets are enough.
 void flow_build(Game& g, uint16_t* field, const Vec3* goals, int ngoals, int zone) {
-  enum { NB = 64, CAP = 4096 };   // celle alla stessa distanza: al massimo un fronte d'onda
+  enum { NB = 64, CAP = 4096 };   // cells at the same distance: at most one wavefront
   static uint16_t qb[NB][CAP];
   int qn[NB];
   memset(qn, 0, sizeof(qn));
@@ -70,7 +70,7 @@ void flow_build(Game& g, uint16_t* field, const Vec3* goals, int ngoals, int zon
     const int c = cell_of(g, goals[k].x, goals[k].z);
     if (c < 0) continue;
     if (free_cell(g, c)) { FLOW_PUSH(c, 0); continue; }
-    // Obiettivo sopra un ostacolo (una cassa, una piattaforma): partono le celle libere vicine.
+    // Goal on top of an obstacle (a crate, a platform): the nearby free cells are the starts.
     const int cx = c % g.session.flow_w, cz = c / g.session.flow_w;
     int rmin = -1;
     for (int r = 1; r <= 8; ++r) {
@@ -99,7 +99,7 @@ void flow_build(Game& g, uint16_t* field, const Vec3* goals, int ngoals, int zon
         if (x < bx0 || z < bz0 || x > bx1 || z > bz1) continue;
         const int n = z * g.session.flow_w + x;
         if (!free_cell(g, n)) continue;
-        if (j >= 4 && (!free_cell(g, cz * g.session.flow_w + x) || !free_cell(g, z * g.session.flow_w + cx))) continue;   // niente angoli tagliati
+        if (j >= 4 && (!free_cell(g, cz * g.session.flow_w + x) || !free_cell(g, z * g.session.flow_w + cx))) continue;   // no cut corners
         const int nd = d + (j < 4 ? 10 : 14) + (g.session.flow_blk[n] == 2 ? 6 : 0);
         FLOW_PUSH(n, nd);
       }

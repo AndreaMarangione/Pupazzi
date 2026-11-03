@@ -10,18 +10,17 @@ using namespace screens;
 
 namespace {
 
-// --- riquadri (0.5.2: stile Orbita, in pixel a 640x480) ----------------------------------
+// --- panels (0.5.2: Orbita style, in pixels at 640x480) ----------------------------------
 
 const float PANEL_Y = 86.0f, PANEL_H = 330.0f, LINE = 17.0f;
 const int MAX_LINES = 8;
 struct Lines { char s[MAX_LINES][ui::WRAP_LEN]; int n; bool cut; };
 
-// Divide s in righe larghe al massimo w pixel (faccia face): a capo sugli spazi e, in cinese e
-// giapponese, tra un carattere e l'altro. cut: non ci sta in MAX_LINES righe.
+// Splits s into lines at most w pixels wide (font face face): breaking at spaces and, in Chinese
+// and Japanese, between one character and the next. cut: it does not fit in MAX_LINES lines.
 void wrap(const char* s, float w, int face, Lines* out) { out->n = ui::wrap(s, w, face, 0.3f, out->s, MAX_LINES, &out->cut); }
 
-// Nome da mostrare in un riquadro largo w: quello vero, oppure (riquadri stretti dei 4 giocatori)
-// uno piu' corto.
+// Name to show in a panel w wide: the real one, or (narrow panels with 4 players) a shorter one.
 const char* card_label(int c, float w, int face) {
   const char* full = tr(CARDS[c].name);
   if (hud_text_w(face, full, 0.8f) <= w) return full;
@@ -39,8 +38,8 @@ const char* card_desc(int c, bool narrow) { return tr(narrow && CARDS[c].brief ?
 
 struct PanelFit { float bottom; int desc_lines; bool name_cut, head_cut, cut; };
 
-// Dorso di tre carte coperte a ventaglio (0.5.4), centrate in (cx, cy), larghe w: prima le due ai
-// lati, poi quella in mezzo, piu' in alto, con la stella.
+// Backs of three face-down cards in a fan (0.5.4), centered at (cx, cy), w wide: first the two at
+// the sides, then the middle one, higher up, with the star.
 void card_backs(Hud* h, float cx, float cy, float w, float alpha = 1.0f) {
   const float hh = floorf(w * 1.4f);
   static const int ORDER[3] = { 0, 2, 1 };
@@ -59,17 +58,17 @@ void card_backs(Hud* h, float cx, float cy, float w, float alpha = 1.0f) {
   hud_icon(h, icon, floorf(cx - iw * 0.5f), floorf(cy - 5.0f - ih * 0.5f), hud_a(ui::STAR, alpha));
 }
 
-// Riquadro di un giocatore: "G1 ASTRO", le tre carte, la descrizione di quella col cursore e in
-// fondo le carte gia' prese; dopo la scelta "PRESA!". Con h NULL misura soltanto (prove).
+// Panel of a player: "G1 ASTRO", the three cards, the description of the one under the cursor and
+// at the bottom the cards already taken; after the choice "PRESA!". h NULL: measures only (tests).
 PanelFit draw_panel(const Game& g, Hud* h, int i, int ch, const CardOffer& o, uint32_t owned, bool others, float px, float pw) {
   PanelFit fit = { 0.0f, 0, false, false, false };
   const bool narrow = pw < 180.0f;
-  const float pad = narrow ? 12.0f : 14.0f;    // nei riquadri stretti (4 giocatori) un po' di posto in piu'
+  const float pad = narrow ? 12.0f : 14.0f;    // in the narrow panels (4 players) a little more room
   const float py = PANEL_Y, inner = pw - 2.0f * pad, ix = px + pad, cx = px + pw * 0.5f;
   const int nface = narrow ? HF_S13 : HF_S15, dface = narrow ? HF_S12 : HF_S13;
   char buf[512];
-  // In alto G1, la faccina e il nome dell'eroe: nei riquadri stretti piu' stretti e, se il nome non
-  // ci sta lo stesso (マルツィオ), senza la faccina.
+  // At the top G1, the little face and the hero's name: in the narrow panels tighter and, if the
+  // name still does not fit (マルツィオ), without the little face.
   const char* hero = tr(CHARS[ch].name);
   const float htrack = narrow ? 1.0f : 1.5f, gw = ui::gp_w(i), hw = hud_text_w(HF_B13, hero, htrack);
   const float fx = ix + gw + (narrow ? 6.0f : 8.0f);
@@ -86,7 +85,7 @@ PanelFit draw_panel(const Game& g, Hud* h, int i, int ch, const CardOffer& o, ui
   }
   Lines L;
   if (!o.shown && !o.done) {
-    // 0.5.4: carte ancora coperte finche' questo giocatore non preme A.
+    // 0.5.4: cards still face down until this player presses A.
     const float cw = narrow ? 36.0f : 46.0f;
     if (h) card_backs(h, cx, py + 132.0f, cw);
     Lines W;
@@ -114,7 +113,7 @@ PanelFit draw_panel(const Game& g, Hud* h, int i, int ch, const CardOffer& o, ui
     fit.cut = L.cut;
     fit.bottom = y;
     if (others) {
-      // In fondo, lampeggiando: in una riga o (lingue piu' lunghe, riquadri stretti) in due.
+      // At the bottom, blinking: on one line or (longer languages, narrow panels) on two.
       Lines W;
       W.n = ui::wrap(tr("aspetta gli altri"), inner, HF_S13, 0.5f, W.s, 2, &W.cut);
       const float wy = py + PANEL_H - 22.0f - 15.0f * (float)(W.n - 1);
@@ -133,13 +132,13 @@ PanelFit draw_panel(const Game& g, Hud* h, int i, int ch, const CardOffer& o, ui
     fit.name_cut |= hud_text_w(nface, name, 0.8f) > inner;
     const uint32_t col = O(sel ? ui::ON : (CARDS[c].combo ? ui::A2 : ui::TX));
     if (h) ui::text(h, ix, y + 16.0f, nface, col, name, 0.8f);
-    // Etichetta COMBO a destra, se c'e' posto accanto al nome.
+    // COMBO label on the right, if there is room next to the name.
     const char* combo = tr("COMBO");
     const float tw = hud_text_w(HF_B10, combo, 1.0f) + 15.0f, nw = hud_text_w(nface, name, 0.8f);
     if (h && CARDS[c].combo && ix + nw + 8.0f + tw <= px + pw - pad)
       ui::tag(h, px + pw - pad, y + 16.0f, combo, sel ? ui::ON : ui::A2, HF_B10, 1.0f, 6.0f, 18.0f, 1);
   }
-  // Descrizione della carta col cursore (le combo con la loro etichetta sopra).
+  // Description of the card under the cursor (the combos with their label above).
   const int c = o.card[o.sel];
   float y = py + 44.0f + 36.0f * 3.0f + 14.0f;
   if (h) ui::sep(h, ix, y - 8.0f, inner);
@@ -153,15 +152,15 @@ PanelFit draw_panel(const Game& g, Hud* h, int i, int ch, const CardOffer& o, ui
   fit.desc_lines = L.n;
   fit.cut = L.cut;
   fit.bottom = y;
-  // In fondo: le carte gia' prese in questa mappa (se i nomi non ci stanno, solo quante sono:
-  // succede con molte zone, nelle mappe personalizzate).
+  // At the bottom: the cards already taken in this map (if the names do not fit, only how many:
+  // it happens with many zones, in custom maps).
   if (owned) {
     char names[384], tmp[384];
     int count = 0;
     names[0] = 0;
     for (int k = 1; k < NCARDS; ++k)
       if ((owned >> k) & 1u) {
-        if (count) snprintf(tmp, sizeof(tmp), tr("%s, %s"), names, tr(CARDS[k].name));   // in cinese e giapponese con 、
+        if (count) snprintf(tmp, sizeof(tmp), tr("%s, %s"), names, tr(CARDS[k].name));   // in Chinese and Japanese with 、
         else snprintf(tmp, sizeof(tmp), "%s", tr(CARDS[k].name));
         memcpy(names, tmp, sizeof(names));
         count++;
@@ -183,9 +182,9 @@ PanelFit draw_panel(const Game& g, Hud* h, int i, int ch, const CardOffer& o, ui
   return fit;
 }
 
-// Riquadri affiancati dentro il margine del televisore: 1 giocatore 400 pixel, 2 da 280, 3 da 184, 4 da 138.
+// Panels side by side inside the TV margin: 1 player 400 pixels, 2 of 280, 3 of 184, 4 of 138.
 void panel_geom(int n, int k, float* px, float* pw) {
-  static const float PW[MAX_PLAYERS + 1] = { 0.0f, 400.0f, 280.0f, 184.0f, 138.0f };   // dentro i 576 del margine
+  static const float PW[MAX_PLAYERS + 1] = { 0.0f, 400.0f, 280.0f, 184.0f, 138.0f };   // within the 576 of the margin
   static const float GAP[MAX_PLAYERS + 1] = { 0.0f, 0.0f, 16.0f, 12.0f, 8.0f };
   const float total = PW[n] * (float)n + GAP[n] * (float)(n - 1);
   *pw = PW[n];
@@ -196,23 +195,23 @@ void panel_geom(int n, int k, float* px, float* pw) {
 
 void cards_update(Game& g) {
   bool all = true;
-  // Rete di sicurezza: un pad spento non deve tenere fermo il gioco per sempre (la pausa qui non si apre).
+  // Safety net: a pad that is off must not keep the game frozen forever (the pause does not open here).
   const bool late = ++g.cards_age >= CARDS_TIMEOUT;
   for (int i = 0; i < MAX_PLAYERS; ++i) {
     CardOffer& o = g.offer[i];
     if (!o.on || o.done) continue;
-    if (!g.pl[i].active) {             // uscito (la pausa e' chiusa: non dovrebbe succedere)
+    if (!g.pl[i].active) {             // left (the pause is closed: it should not happen)
       o.done = true;
       continue;
     }
-    // 0.5.4: prima il banner "RITIRA LE TUE CARTE"; ognuno preme A (una pressione nuova, dopo
-    // CARDS_BANNER_MIN fotogrammi) e vede le sue tre carte. Quella A non sceglie.
+    // 0.5.4: first the banner "RITIRA LE TUE CARTE"; each player presses A (a new press, after
+    // CARDS_BANNER_MIN frames) and sees their three cards. That A does not choose.
     if (!o.shown) {
       if (late || (g.cards_age > CARDS_BANNER_MIN && (pad_pressed(g, i, PAD_A) || g.start_tap[i]))) {
         o.shown = true;
         ev_sound_ui(g, SND_CARD_OPEN);
       }
-      if (!late) {                     // dopo un minuto (late) le vede e prende subito quella col cursore
+      if (!late) {                     // after a minute (late): sees them, takes the one under the cursor
         all = false;
         continue;
       }
@@ -234,15 +233,15 @@ void cards_update(Game& g) {
   }
   if (++g.cards_t < CARDS_CLOSE_FRAMES) return;
   g.cards_open = false;
-  // Come dopo la pausa: i tasti ancora premuti (A, START) non contano come pressioni nuove.
+  // As after the pause: the buttons still pressed (A, START) do not count as new presses.
   for (int j = 0; j < MAX_PLAYERS; ++j) g.pl[j].prev_btn = g.in[j].btn;
   plat_log("carte scelte: si riparte");
 }
 
-// 0.5.4: prima delle carte, finche' nessuno ha premuto A, un banner al centro con le carte coperte:
-// "RITIRA LE TUE CARTE", sotto A per scegliere. Entra in un attimo, sopra il gioco fermo.
+// 0.5.4: before the cards, until someone has pressed A, a banner in the center with the face-down
+// cards: "RITIRA LE TUE CARTE", below it A to choose. It comes in quickly, over the frozen game.
 static void cards_banner(const Game& g, Hud* h) {
-  // Sopra il centro dello schermo, dove di solito c'e' il gruppo.
+  // Above the center of the screen, where the group usually is.
   const float a = fminf(1.0f, (float)(g.cards_age + 1) / 10.0f), cy = 160.0f;
   ui::overlay(h, 0.55f * a);
   hud_box_grad(h, 0, cy - 52.0f, 320, 104.0f, 0, hud_a(ui::SCRIM, 0.0f), hud_a(ui::SCRIM, 0.85f * a), 90.0f);
@@ -283,13 +282,13 @@ void cards_hud(const Game& g, Hud* h) {
   ui::footer(h, it, 4);
 }
 
-// Prove: ogni carta, scelta o appena presa, sta nel suo riquadro con 1, 2, 3 e 4 giocatori, anche
-// con cinque carte lunghe gia' prese; e il nome di ogni eroe in alto.
+// Tests: every card, being chosen or just taken, fits in its panel with 1, 2, 3 and 4 players,
+// also with five long cards already taken; and the name of every hero at the top.
 bool cards_layout_ok(Game& g, char* why, int n, bool all) {
   why[0] = 0;
   bool good = true;
-  // Carte gia' prese: i nomi piu' lunghi, fino a 5 (una mappa personalizzata ha al massimo 6 zone,
-  // quindi al massimo 6 scelte).
+  // Cards already taken: the longest names, up to 5 (a custom map has at most 6 zones, so at
+  // most 6 choices).
   const uint32_t owned = (1u << CA_GENEROSO) | (1u << CA_SCHEGGE_GELO) | (1u << CA_SCHEGGE_FUOCO) | (1u << CA_COLPI_FUOCO) |
                          (1u << CA_RICARICA);
   for (int np = 1; np <= MAX_PLAYERS; ++np) {
@@ -301,9 +300,9 @@ bool cards_layout_ok(Game& g, char* why, int n, bool all) {
       snprintf(why, (size_t)n, "%d giocatori: riquadri fuori dal margine del televisore", np);
       return false;
     }
-    for (int ch = 0; ch < NCHARS; ++ch)        // ogni eroe: il nome in alto
+    for (int ch = 0; ch < NCHARS; ++ch)        // every hero: the name at the top
       for (int c = 1; c < NCARDS; ++c)
-        for (int st = 0; st < 3; ++st) {               // coperte, da scegliere, presa
+        for (int st = 0; st < 3; ++st) {               // face down, to choose, taken
           CardOffer o;
           memset(&o, 0, sizeof(o));
           o.card[0] = (uint8_t)c;

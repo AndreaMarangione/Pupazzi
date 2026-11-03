@@ -69,7 +69,7 @@ void maps_hud(const Game& g, Hud* h) {
   int soon[NWORLDS], ns = 0;
   for (int k = 0; k < NWORLDS; ++k)
     if (world_maps(k) == 0) soon[ns++] = k;
-  // Con la nota di una mappa personalizzata (fino a tre righe al posto del piede) niente pianeti in arrivo.
+  // With the note of a custom map (up to three lines in place of the footer) no upcoming planets.
   const bool note = maps_note(g.map_sel)[0] && g.session.info_t <= 0;
   if (note) ns = 0;
   const int soon_rows = (ns + 3) / 4;
@@ -78,7 +78,7 @@ void maps_hud(const Game& g, Hud* h) {
   if (ns) PH += 21.0f + 22.0f + 17.0f * (float)soon_rows + 6.0f * (float)(soon_rows - 1);
   const float PY = 76.0f;
   ui::panel(h, PX, PY, PW, PH);
-  // Pianeta e giro.
+  // Planet and round.
   float y = PY + 14.0f;
   if (w == 0) ui::earth(h, IX + 4.0f, y + 2.0f);
   else ui::planet(h, IX + 9.5f, y + 7.5f, w);
@@ -88,7 +88,7 @@ void maps_hud(const Game& g, Hud* h) {
   y += 30.0f + 10.0f;
   ui::sep(h, IX, y, IW);
   y += 7.0f;
-  // Le mappe.
+  // The maps.
   for (int k = 0; k < n; ++k) {
     const int i = ids[k];
     const bool sel = i == g.map_sel, open = map_unlocked(i);
@@ -104,14 +104,14 @@ void maps_hud(const Game& g, Hud* h) {
       nx += 32.0f;
     }
     hud_upper(buf, tr(maps_name(i)), sizeof(buf));
-    ui::fit(name, sizeof(name), buf, HF_S17, 0.8f, IX + IW - 12.0f - 54.0f - 10.0f - nx);   // fino alle stelle
+    ui::fit(name, sizeof(name), buf, HF_S17, 0.8f, IX + IW - 12.0f - 54.0f - 10.0f - nx);   // up to the stars
     ui::text(h, nx, cy, HF_S17, tc, name, 0.8f);
     if (open) ui::stars3(h, IX + IW - 12.0f - 54.0f, cy, save_stars(maps_id(i)), sel);
     else ui::text(h, IX + IW - 12.0f, cy, HF_S13, tc, tr("CHIUSA"), 1.0f, 1);
     y += 38.0f;
   }
   y -= 2.0f;
-  // Stelle del giro: quante ne servono per il giro dopo.
+  // Stars of the round: how many are needed for the next round.
   const Giro gr = giro_of(w);
   y += 12.0f;
   const float cy = y + 10.0f;
@@ -127,14 +127,14 @@ void maps_hud(const Game& g, Hud* h) {
   const float sw = 16.0f * (float)segs - 2.0f;
   if (segs > 0 && rx - lx >= sw) ui::segs(h, lx + (rx - lx - sw) * 0.5f, cy, segs, fill, 14.0f, 10.0f, ui::STAR, ui::OFF, true);
   y += 20.0f;
-  // I pianeti che arrivano con le prossime versioni.
+  // The planets that arrive with the next versions.
   if (ns) {
     y += 12.0f;
     ui::sep(h, IX, y, IW);
     y += 9.0f;
     ui::text(h, IX + 6.0f, y + 8.0f, HF_S12, O(ui::MU), tr("IN ARRIVO"), 2.0f);
     y += 22.0f;
-    // Quattro colonne larghe quanto serve (Saturno ha gli anelli), lo spazio che avanza tra l'una e l'altra.
+    // Four columns as wide as needed (Saturno has the rings), the leftover space between one and the next.
     float cw[4] = { 0, 0, 0, 0 }, sum = 0.0f;
     for (int k = 0; k < ns; ++k) {
       const float iw = soon[k] == 6 ? 19.0f : 15.0f;
@@ -151,7 +151,7 @@ void maps_hud(const Game& g, Hud* h) {
       ui::text(h, px + iw + 7.0f, pcy, HF_S13, O(ui::MU), tr(WORLD_NAMES[soon[k]]), 0.8f);
     }
   }
-  // Mappa personalizzata con un problema: la nota al posto del piede.
+  // Custom map with a problem: the note in place of the footer.
   if (note) {
     toast(h, maps_note(g.map_sel), ui::A2);
     ui::version(h);
