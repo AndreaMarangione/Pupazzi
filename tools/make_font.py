@@ -1,40 +1,40 @@
 #!/usr/bin/env python3
-# Genera src/font_hud.h (dichiarazioni) e src/font_hud_data.h (dati): caratteri e disegni dell'HUD
-# (dalla 0.5.2, stile Orbita), gia' alla misura esatta in pixel a 640x480, con i bordi sfumati.
-#   python3 tools/make_font.py                         (scrive i due file in src/)
-#   python3 tools/make_font.py --anteprima FILE.png    (l'atlante come lo costruisce il gioco, alone escluso)
-# Servono Pillow con raqm (le coppie di crenatura), uharfbuzz e freetype-py (hindi, cinese e
-# giapponese): pip install uharfbuzz freetype-py.
+# Generates src/font_hud.h (declarations) and src/font_hud_data.h (data): HUD glyphs and drawings
+# (since 0.5.2, Orbita style), already at the exact pixel size at 640x480, with soft edges.
+#   python3 tools/make_font.py                         (writes the two files in src/)
+#   python3 tools/make_font.py --anteprima FILE.png    (the atlas as the game builds it, glow excluded)
+# Requires Pillow with raqm (the kerning pairs), uharfbuzz and freetype-py (Hindi, Chinese and
+# Japanese): pip install uharfbuzz freetype-py.
 #
-# Caratteri latini: Chakra Petch SemiBold e Bold (third_party/fonts, SIL OFL 1.1), una "faccia" per
-# ogni misura usata dall'interfaccia. Ogni faccia ha il suo insieme di caratteri: i titoli solo
-# maiuscole, cifre e punteggiatura, i testi tutto l'ASCII con le lettere accentate di italiano,
-# spagnolo e portoghese e qualche simbolo. Nei testi del gioco si scrive in UTF-8; i simboli fuori
-# da Latin-1 hanno un posto da 0x80 a 0x9F (vedi SPECIAL), che in Latin-1 sono caratteri di
-# controllo mai usati. Le facce dei titoli hanno anche l'alone: il gioco lo calcola all'avvio
-# sfocando il carattere (vedi hud.cpp), qui c'e' solo il suo posto nell'atlante.
+# Latin glyphs: Chakra Petch SemiBold and Bold (third_party/fonts, SIL OFL 1.1), one "face" for
+# each size used by the interface. Each face has its own set of glyphs: the titles only capitals,
+# digits and punctuation, the texts all of ASCII with the accented letters of Italian, Spanish and
+# Portuguese and a few symbols. The game texts are written in UTF-8; the symbols outside Latin-1
+# have a slot from 0x80 to 0x9F (see SPECIAL), which in Latin-1 are control characters that are
+# never used. The title faces also have the glow: the game computes it at startup by blurring the
+# glyph (see hud.cpp), here there is only its slot in the atlas.
 #
-# Dalla 0.5.3 anche le altre scritture, solo con i caratteri dei testi di lang/testi.txt:
-#  - cinese semplificato e giapponese: Noto Sans CJK SC e JP, Medium e Bold (SIL OFL 1.1; del
-#    sistema: pacchetto fonts-noto-cjk, oppure la cartella in PUPAZZI_NOTO_CJK), un carattere per
-#    punto di codice;
-#  - hindi: Poppins Medium e Bold (third_party/fonts, SIL OFL 1.1). Il devanagari va composto
-#    (consonanti unite, vocali prima della consonante...): qui ogni parola dei testi si compone una
-#    volta con HarfBuzz e diventa una fila di pezzi (glifi del font, ognuno al suo posto, a quarti
-#    di pixel); il gioco cerca la parola intera. Una parola che non c'e' (testo nuovo non ancora
-#    generato) si disegna lettera per lettera, senza comporla.
-# Ogni faccia latina ha le sue facce di scrittura (SCRIPT_OF): per i testi piccoli un po' piu'
-# grandi del latino (cinese e giapponese da 14 pixel, l'hindi da 15), nelle facce grandi (@T32...)
-# solo i caratteri dei testi segnati cosi' in lang/testi.txt.
+# Since 0.5.3 also the other scripts, only with the glyphs of the texts in lang/testi.txt:
+#  - Simplified Chinese and Japanese: Noto Sans CJK SC and JP, Medium and Bold (SIL OFL 1.1; from
+#    the system: package fonts-noto-cjk, or the folder in PUPAZZI_NOTO_CJK), one glyph per code
+#    point;
+#  - Hindi: Poppins Medium and Bold (third_party/fonts, SIL OFL 1.1). Devanagari has to be shaped
+#    (joined consonants, vowels before the consonant...): here each word of the texts is shaped
+#    once with HarfBuzz and becomes a run of pieces (font glyphs, each at its position, in quarters
+#    of a pixel); the game looks up the whole word. A word that is not there (a new text not yet
+#    generated) is drawn letter by letter, without shaping it.
+# Each Latin face has its own script faces (SCRIPT_OF): for the small texts a little bigger than
+# the Latin one (Chinese and Japanese at 14 pixels, Hindi at 15), in the big faces (@T32...) only
+# the glyphs of the texts marked that way in lang/testi.txt.
 #
-# Disegni: cuori, X, le facce dei 4 eroi in 3 strati, stelle, freccette, la Terra e i pianeti, la
-# rete, le frecce verso i compagni e i bonus delle casse (0.5.4), a ogni misura che serve; il gioco li colora
-# disegnandoli uno sopra l'altro.
+# Drawings: hearts, X, the faces of the 4 heroes in 3 layers, stars, small arrows, the Earth and the
+# planets, the network, the arrows towards teammates and the crate power-ups (0.5.4), at every size
+# needed; the game colors them by drawing them one on top of the other.
 #
-# Nel file generato: per ogni carattere e disegno la posizione nell'atlante (largo 2048, alto
-# quanto serve, impacchettato qui), la misura, lo spostamento rispetto alla penna sulla linea di
-# base, l'avanzamento in sedicesimi di pixel e i pixel ad alfa 4 bit (due per byte); per ogni
-# faccia le coppie di crenatura (da un quarto di pixel in su).
+# In the generated file: for each glyph and drawing the position in the atlas (2048 wide, as tall
+# as needed, packed here), the size, the offset from the pen on the baseline, the advance in
+# sixteenths of a pixel and the pixels as 4-bit alpha (two per byte); for each face the kerning
+# pairs (from a quarter of a pixel up).
 import os
 import re
 import sys
@@ -50,17 +50,17 @@ FONT = {600: FONTS + "ChakraPetch-SemiBold.ttf", 700: FONTS + "ChakraPetch-Bold.
 DEVA_FONT = {"M": FONTS + "Poppins-Medium.ttf", "B": FONTS + "Poppins-Bold.ttf"}
 NOTO_DIR = os.environ.get("PUPAZZI_NOTO_CJK", "/usr/share/fonts/opentype/noto")
 CJK_FONT = {"M": NOTO_DIR + "/NotoSansCJK-Medium.ttc", "B": NOTO_DIR + "/NotoSansCJK-Bold.ttc"}
-CJK_INDEX = {"SC": 2, "JP": 0}     # facce dentro i .ttc: 0 JP, 1 KR, 2 SC, 3 TC, 4 HK
+CJK_INDEX = {"SC": 2, "JP": 0}     # faces inside the .ttc files: 0 JP, 1 KR, 2 SC, 3 TC, 4 HK
 ATLAS_W = 2048
-GLOW_PAD = 12          # margine dell'alone: 3 passate di sfocatura a scatola larga 9 (raggio 4)
-SS = 16                # i disegni si fanno 16 volte piu' grandi e poi si riducono
+GLOW_PAD = 12          # glow margin: 3 box-blur passes of width 9 (radius 4)
+SS = 16                # drawings are made 16 times bigger and then scaled down
 
 SPECIAL = {"→": 0x80, "←": 0x81, "↑": 0x82, "↓": 0x83, "’": 0x84, "…": 0x85, "•": 0x86}
 LATIN = "àèéìòùÀÈÉÌÒÙáíóúñÁÍÓÚÑçÇüÜöÖäÄ«»·×°âêîôûãõÂÊÎÔÛÃÕ¿¡ªº"
 FULL = "".join(chr(c) for c in range(32, 127)) + LATIN + "".join(SPECIAL)
 TITLE = " ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!?.,:;'-/()+ÀÈÉÌÒÙÁÍÓÚÑÇÜÖÄ×’→ÂÊÎÔÛÃÕ¿¡"
 
-# nome, peso, misura in pixel, caratteri, alone, faccia di scrittura (cinese, giapponese, hindi)
+# name, weight, size in pixels, glyphs, glow, script face (Chinese, Japanese, Hindi)
 FACES = [
     ("LOGO", 700, 80, "PUAZI", True, None),
     ("T44", 700, 44, TITLE, True, "T44"),
@@ -82,8 +82,8 @@ FACES = [
     ("B10", 700, 10, FULL, False, "B13"),
 ]
 
-# Facce di scrittura: peso (Medium o Bold), misura in pixel per cinese e giapponese e per l'hindi,
-# testi (tutti, o solo quelli segnati con la faccia grande), alone.
+# Script faces: weight (Medium or Bold), size in pixels for Chinese and Japanese and for Hindi,
+# texts (all, or only those marked with the big face), glow.
 SCRIPT_FACES = [
     ("S13", "M", 14, 15, None, False),
     ("B13", "B", 14, 15, None, False),
@@ -95,10 +95,10 @@ SCRIPT_FACES = [
     ("T38", "B", 36, 36, "@T38", True),
     ("T44", "B", 42, 42, "@T44", True),
 ]
-SCRIPTS = ["SC", "JP", "DEVA"]           # come HUD_CJK_SC, HUD_CJK_JP, HUD_DEVA in hud.h
+SCRIPTS = ["SC", "JP", "DEVA"]           # like HUD_CJK_SC, HUD_CJK_JP, HUD_DEVA in hud.h
 SCRIPT_LANG = {"SC": "zh", "JP": "ja", "DEVA": "hi"}
-# I nomi delle lingue (pagina delle lingue, S16; voce della prima schermata, S13) si scrivono
-# ognuno con i suoi caratteri, qualunque sia la lingua scelta.
+# The language names (language page, S16; entry on the first screen, S13) are each written with
+# their own glyphs, whatever the chosen language.
 LANG_NAMES = {"SC": "中文", "JP": "日本語", "DEVA": "हिन्दी"}
 
 
@@ -130,9 +130,9 @@ def fnv(b):
     return h
 
 
-# --- disegni -------------------------------------------------------------------------------------
-# Ogni disegno riceve un ImageDraw e la funzione P che porta le coordinate (u da 0 a 1 sulla
-# larghezza, v da 0 a 1 sull'altezza, y verso il basso) in pixel dell'immagine grande.
+# --- drawings ------------------------------------------------------------------------------------
+# Each drawing receives an ImageDraw and the function P that maps the coordinates (u from 0 to 1
+# across the width, v from 0 to 1 down the height, y pointing down) to pixels of the big image.
 
 
 class Mapper:
@@ -155,12 +155,12 @@ def ellipse(d, P, cx, cy, rx, ry, rot=0.0, fill=255):
 
 
 def circle(d, P, cx, cy, r, fill=255):
-    # Cerchio vero anche in un riquadro non quadrato: r e' in frazioni della larghezza.
+    # A true circle even in a non-square box: r is in fractions of the width.
     ellipse(d, P, cx, cy, r, r * P.w / P.h, 0.0, fill)
 
 
 def stroke(d, P, pts, w, fill=255):
-    # Spezzata larga w (in frazioni del lato corto) con le punte e i giunti tondi.
+    # Polyline of width w (in fractions of the short side) with round ends and joints.
     q = [P(u, v) for u, v in pts]
     width = int(round(w * P.scale))
     d.line(q, fill=fill, width=width, joint="curve")
@@ -193,7 +193,7 @@ def g_cross(d, P):
     stroke(d, P, [(0.8, 0.2), (0.2, 0.8)], 0.17)
 
 
-# Astro, astronauta della Terra: casco tondo con la visiera.
+# Astro, astronaut from Earth: round helmet with the visor.
 def astro_1(d, P):
     circle(d, P, 0.5, 0.46, 0.41)
     d.rounded_rectangle([P(0.25, 0.78), P(0.75, 0.97)], radius=0.07 * P.scale, fill=255)
@@ -210,7 +210,7 @@ def astro_3(d, P):
     circle(d, P, 0.47, 0.34, 0.03)
 
 
-# Mochi, coniglio della Luna.
+# Mochi, rabbit from the Moon.
 def mochi_1(d, P):
     ellipse(d, P, 0.5, 0.68, 0.34, 0.29)
     ellipse(d, P, 0.33, 0.29, 0.105, 0.25, -12.0)
@@ -230,7 +230,7 @@ def mochi_3(d, P):
     ellipse(d, P, 0.5, 0.75, 0.045, 0.032)
 
 
-# Marzio, marziano del polo.
+# Marzio, Martian from the pole.
 def marzio_1(d, P):
     circle(d, P, 0.5, 0.62, 0.34)
     stroke(d, P, [(0.4, 0.36), (0.26, 0.12)], 0.065)
@@ -248,7 +248,7 @@ def marzio_3(d, P):
     d.arc([P(0.37, 0.64), P(0.63, 0.86)], start=35, end=145, fill=255, width=int(round(0.045 * P.scale)))
 
 
-# Zolfo, fiamma di Venere.
+# Zolfo, flame from Venus.
 def zolfo_1(d, P):
     circle(d, P, 0.5, 0.68, 0.29)
     d.polygon([P(0.215, 0.7), P(0.2, 0.52), P(0.27, 0.35), P(0.34, 0.43), P(0.39, 0.21), P(0.47, 0.31), P(0.54, 0.03),
@@ -267,7 +267,7 @@ def zolfo_3(d, P):
 
 FACE_LAYERS = [astro_1, astro_2, astro_3, mochi_1, mochi_2, mochi_3, marzio_1, marzio_2, marzio_3, zolfo_1, zolfo_2, zolfo_3]
 
-# Stella a 5 punte (come nei mockup: riquadro 24).
+# 5-pointed star (as in the mockups: box 24).
 STAR = [(12, 2.6), (14.9, 8.6), (21.5, 9.5), (16.7, 14.1), (17.9, 20.6), (12, 17.4), (6.1, 20.6), (7.3, 14.1), (2.5, 9.5), (9.1, 8.6)]
 
 
@@ -279,7 +279,7 @@ def g_star_o(d, P):
     stroke(d, P, [(x / 24.0, y / 24.0) for x, y in STAR + STAR[:1]], 2.0 / 24.0)
 
 
-def g_chev_r(d, P):     # riquadro 8 x 12
+def g_chev_r(d, P):     # box 8 x 12
     q = [(2 / 8, 2 / 12), (6 / 8, 6 / 12), (2 / 8, 10 / 12)]
     stroke(d, P, q, 2.0 / 8.0)
 
@@ -289,7 +289,7 @@ def g_chev_l(d, P):
     stroke(d, P, q, 2.0 / 8.0)
 
 
-def g_tri_r(d, P):      # triangolino pieno (riquadro 8 x 10)
+def g_tri_r(d, P):      # small filled triangle (box 8 x 10)
     d.polygon([P(0.1, 0.05), P(0.95, 0.5), P(0.1, 0.95)], fill=255)
 
 
@@ -301,7 +301,7 @@ def g_tri_d(d, P):
     d.polygon([P(0.05, 0.1), P(0.5, 0.9), P(0.95, 0.1)], fill=255)
 
 
-# Rete (0.5.4, riquadro 18 x 14): tre archi e il punto.
+# Network (0.5.4, box 18 x 14): three arcs and the dot.
 def g_wifi(d, P):
     for r in (11.5, 7.6, 3.8):
         pts = []
@@ -312,8 +312,8 @@ def g_wifi(d, P):
     circle(d, P, 9.0 / 18.0, 12.2 / 14.0, 1.7 / 18.0)
 
 
-# Freccia verso un compagno fuori dallo schermo (0.5.4, riquadro 20): punta verso k * 45 gradi
-# (0 a destra, 2 in basso, 4 a sinistra, 6 in alto).
+# Arrow towards an off-screen teammate (0.5.4, box 20): points towards k * 45 degrees
+# (0 right, 2 down, 4 left, 6 up).
 def g_arrow(k):
     def f(d, P):
         a = k * pi / 4.0
@@ -323,8 +323,8 @@ def g_arrow(k):
     return f
 
 
-# Bonus delle casse (0.5.4, riquadro 14): >> VELOCITA', fiamma FURIA, scudo INVINCIBILE, fulmine CARICA
-# (come sulle monete del gioco, vedi build_powers in models.cpp).
+# Crate power-ups (0.5.4, box 14): >> VELOCITA', flame FURIA, shield INVINCIBILE, lightning CARICA
+# (as on the game's coins, see build_powers in models.cpp).
 def g_power(k):
     def f(d, P):
         if k == 0:
@@ -341,7 +341,7 @@ def g_power(k):
     return f
 
 
-# La Terra (riquadro 26): mare, terre, anello sottile.
+# The Earth (box 26): sea, lands, thin ring.
 def earth_sea(d, P):
     circle(d, P, 0.5, 0.5, 11.0 / 26.0)
 
@@ -360,7 +360,7 @@ def earth_ring(d, P):
     d.ellipse([P(0.5 - r, 0.5 - r), P(0.5 + r, 0.5 + r)], outline=255, width=w)
 
 
-# Pianeti (riquadro 16; Saturno 20 x 16).
+# Planets (box 16; Saturn 20 x 16).
 def pl_body(d, P):
     circle(d, P, 0.5, 0.5, 6.5 / 16.0)
 
@@ -377,7 +377,7 @@ def pl_spot(d, P):
 def pl_streak(d, P):
     pts = []
     for i in range(17):
-        t = i / 16.0          # curva da (3, 9.5) a (13, 9): quadratica con il controllo a (8, 11)
+        t = i / 16.0          # curve from (3, 9.5) to (13, 9): quadratic with the control point at (8, 11)
         x = (1 - t) ** 2 * 3 + 2 * (1 - t) * t * 8 + t * t * 13
         y = (1 - t) ** 2 * 9.5 + 2 * (1 - t) * t * 11.2 + t * t * 9
         pts.append((x / 16.0, y / 16.0))
@@ -390,19 +390,19 @@ def pl_bands(d, P):
         d.line([P(x0 / 16, y / 16), P(x1 / 16, y / 16)], fill=255, width=w)
 
 
-def sat_body(d, P):     # riquadro 20 x 16
+def sat_body(d, P):     # box 20 x 16
     ellipse(d, P, 0.5, 0.5, 5.2 / 20.0, 5.2 / 16.0)
 
 
 def sat_ring(d, P):
     w = 1.4
-    for k in range(-2, 3):          # anello: ellisse spessa w (piu' ellissi vicine)
+    for k in range(-2, 3):          # ring: ellipse of thickness w (several ellipses close together)
         o = w * k / 4.0
         rx, ry = (9.0 + o) / 20.0, (2.6 + o) / 16.0
         d.ellipse([P(0.5 - rx, 8.5 / 16 - ry), P(0.5 + rx, 8.5 / 16 + ry)], outline=255, width=max(1, int(round(w / 4.0 / 16.0 * P.h))))
 
 
-# nome, funzione, larghezza, altezza
+# name, function, width, height
 ICONS = [("HEART", g_heart, 12, 12), ("HEART_EMPTY", g_heart_empty, 12, 12), ("CROSS30", g_cross, 30, 30),
          ("STAR15", g_star, 15, 15), ("STAR16", g_star, 16, 16), ("STAR16O", g_star_o, 16, 16),
          ("STAR22", g_star, 22, 22), ("STAR26", g_star, 26, 26), ("STAR30", g_star, 30, 30), ("STAR34", g_star, 34, 34),
@@ -426,7 +426,7 @@ def draw(fn, w, h):
 
 
 
-# --- caratteri latini ---------------------------------------------------------------------------
+# --- Latin glyphs -------------------------------------------------------------------------------
 
 
 def render_face(name, weight, size, chars):
@@ -447,7 +447,7 @@ def render_face(name, weight, size, chars):
                 img = img.crop(bb)
                 off = (off[0] + bb[0], off[1] + bb[1])
         glyphs.append((ch, img, off[0] if img else 0, off[1] if img else 0, adv))
-    # Crenatura: quanto cambia la larghezza di una coppia rispetto ai due caratteri da soli.
+    # Kerning: how much the width of a pair changes compared to the two glyphs on their own.
     kfont = ImageFont.truetype(FONT[weight], size, layout_engine=ImageFont.Layout.RAQM)
     single = {ch: kfont.getlength(ch) for ch in chars}
     kern = []
@@ -456,18 +456,18 @@ def render_face(name, weight, size, chars):
         for b in letters:
             k = kfont.getlength(a + b) - single[a] - single[b]
             q = int(round(k * 16))
-            if abs(q) >= 4:          # sotto un quarto di pixel non si vede
+            if abs(q) >= 4:          # below a quarter of a pixel it is not visible
                 kern.append((slot(a), slot(b), q))
     asc = int(round(size * 0.992))
     desc = int(round(size * 0.308))
     return dict(name=name, weight=weight, size=size, glyphs=glyphs, kern=kern, asc=asc, desc=desc)
 
 
-# --- testi delle lingue ---------------------------------------------------------------------------
+# --- language texts -------------------------------------------------------------------------------
 
 
 def hud_upper(s):
-    # come hud_upper in hud.cpp: a-z e le minuscole di Latin-1 (tranne la divisione)
+    # like hud_upper in hud.cpp: a-z and the Latin-1 lowercase letters (except the division sign)
     out = []
     for c in s:
         o = ord(c)
@@ -478,12 +478,12 @@ def hud_upper(s):
 
 
 def gather():
-    """Per ogni (scrittura, faccia di scrittura) i caratteri (cinese, giapponese) o le parole (hindi)
-    che servono; e i problemi: caratteri che nessuna faccia sa disegnare."""
+    """For each (script, script face) the glyphs (Chinese, Japanese) or the words (Hindi) that are
+    needed; and the problems: characters that no face can draw."""
     texts, errors = make_lang.parse()
     if errors:
         sys.exit("make_font: lang/testi.txt ha errori (python3 tools/make_lang.py)")
-    for t in texts:                   # i %d diventano cifre (i %s sono altri testi della tabella)
+    for t in texts:                   # the %d become digits (the %s are other texts of the table)
         for l in t.t:
             t.t[l] = make_lang.CONV.sub(lambda m: "%" if m.group(6) == "%" else ("" if m.group(6) == "s" else "0"), t.t[l])
     problems = []
@@ -523,7 +523,7 @@ def gather():
     return need, problems
 
 
-# --- cinese e giapponese ------------------------------------------------------------------------
+# --- Chinese and Japanese -----------------------------------------------------------------------
 
 LOAD = None
 
@@ -534,7 +534,7 @@ def ft_load_flags():
 
 
 def ft_image(face):
-    """Il glifo appena caricato in face: immagine ritagliata e spostamento (o None)."""
+    """The glyph just loaded in face: cropped image and offset (or None)."""
     g = face.glyph
     bm = g.bitmap
     w, h, pitch = bm.width, bm.rows, bm.pitch
@@ -565,12 +565,12 @@ def render_cjk(script, weight, px, chars):
     return out
 
 
-# --- hindi ----------------------------------------------------------------------------------------
+# --- Hindi ----------------------------------------------------------------------------------------
 
 
 def render_deva(weight, px, words, nominal):
-    """Parole composte con HarfBuzz: ([(hash, byte, pezzi, avanzamento)], [pezzi da disegnare]).
-    Un pezzo: (glifo, quarto di pixel) -> immagine; nella parola (pezzo, dx, dy) in pixel interi."""
+    """Words shaped with HarfBuzz: ([(hash, bytes, pieces, advance)], [pieces to draw]).
+    A piece: (glyph, quarter pixel) -> image; in the word (piece, dx, dy) in whole pixels."""
     import freetype
     import uharfbuzz as hb
     path = DEVA_FONT[weight]
@@ -613,7 +613,7 @@ def render_deva(weight, px, words, nominal):
             pen += pos.x_advance
         b = w.encode("utf-8")
         out.append((fnv(b), len(b), run, pen / 64.0))
-    # Lettere da sole (parole che non ci sono): il glifo di ogni punto di codice, senza comporlo.
+    # Single letters (words that are not there): the glyph of each code point, without shaping it.
     singles = []
     if nominal:
         cmap = sorted(c for c in range(0x900, 0x980) if face.get_char_index(c))
@@ -624,11 +624,11 @@ def render_deva(weight, px, words, nominal):
     return out, pieces, singles
 
 
-# --- atlante ---------------------------------------------------------------------------------------
+# --- atlas -----------------------------------------------------------------------------------------
 
 
 def pack(items):
-    # items: (chiave, w, h). Ripiani dall'alto, i piu' alti prima: stessa disposizione a ogni esecuzione.
+    # items: (key, w, h). Shelves from the top, the tallest first: same layout at every run.
     order = sorted(range(len(items)), key=lambda i: (-items[i][2], -items[i][1], i))
     pos = [None] * len(items)
     x = y = shelf = 0
@@ -637,7 +637,7 @@ def pack(items):
         if x + w + 1 > ATLAS_W:
             y += shelf + 1
             x = shelf = 0
-        pos[i] = (x + 1, y + 1)       # un pixel vuoto intorno: il filtro lineare non tocca i vicini
+        pos[i] = (x + 1, y + 1)       # one empty pixel around: the linear filter does not touch the neighbors
         x += w + 1
         shelf = max(shelf, h)
     used = y + shelf + 2
@@ -673,7 +673,7 @@ def build():
             sys.stderr.write("make_font: %s\n" % p)
         sys.exit("make_font: %d testi con caratteri che non si sanno disegnare" % len(problems))
     faces = [dict(render_face(*f[:4]), glow=f[4], script=f[5]) for f in FACES]
-    # Facce di scrittura: ognuna una lista di glifi (chiave, img, ox, oy, adv) e per l'hindi le parole.
+    # Script faces: each one a list of glyphs (key, img, ox, oy, adv) and for Hindi the words.
     sfaces = []
     for script in SCRIPTS:
         for name, weight, pc, pd, flag, glow in SCRIPT_FACES:
@@ -758,7 +758,7 @@ def main_header():
             x, y = where[(gkey, idx_of, gi)]
             glyph_rows.append([x, y, img.size[0], img.size[1], ox, oy, int(round(adv * 16)), len(data), 0xFFFF])
             data.extend(nibbles(img))
-        # Aloni dopo i caratteri della faccia: stessa misura piu' il margine, pixel calcolati dal gioco.
+        # Glows after the glyphs of the face: same size plus the margin, pixels computed by the game.
         if glow:
             for gi, (_k, img, ox, oy, adv) in enumerate(glyphs):
                 if img is None:

@@ -1,6 +1,6 @@
-// Lingue: la tabella dei testi (lang_data.h, da lang/testi.txt) e la ricerca per testo italiano
-// (formato in lang.h). Si cerca per hash FNV-1a del testo, poi si confronta il testo: un testo che
-// non c'e' (nome di una mappa personalizzata, numeri) resta com'e'.
+// Languages: the table of texts (lang_data.h, from lang/testi.txt) and the lookup by Italian text
+// (format in lang.h). The lookup is by FNV-1a hash of the text, then the text is compared: a text
+// that is not there (name of a custom map, numbers) stays as it is.
 #include "engine/lang.h"
 #include "engine/hud.h"
 #include "engine/lang_data.h"
@@ -26,7 +26,7 @@ int find(const char* it) {
     if (LANG_HASH[mid] < h) lo = mid + 1;
     else hi = mid - 1;
   }
-  for (int i = lo; i < LANG_NTEXTS && LANG_HASH[i] == h; ++i)   // stesso hash: si guarda il testo
+  for (int i = lo; i < LANG_NTEXTS && LANG_HASH[i] == h; ++i)   // same hash: look at the text
     if (!strcmp(LANG_TEXT[i][0], it)) return i;
   return -1;
 }

@@ -14,11 +14,11 @@ int16_t px16(float v) {
   return (int16_t)(r < -32000.0f ? -32000.0f : (r > 32000.0f ? 32000.0f : r));
 }
 
-int g_cjk = HUD_CJK_SC;        // cinese o giapponese per i caratteri cinesi (hud_cjk)
-int g_missing;                 // caratteri disegnati come '?' e parole hindi non composte (hud_missing)
+int g_cjk = HUD_CJK_SC;        // Chinese or Japanese for the Chinese characters (hud_cjk)
+int g_missing;                 // characters drawn as '?' and Hindi words not composed (hud_missing)
 
-// Posto nelle tabelle delle facce latine (0..255) del punto di codice: Latin-1 cosi' com'e',
-// qualche simbolo da 0x80 (vedi tools/make_font.py); -1 se non e' latino.
+// Slot of the code point in the tables of the Latin faces (0..255): Latin-1 as it is,
+// a few symbols from 0x80 (see tools/make_font.py); -1 if it is not Latin.
 int latin_slot(uint32_t cp) {
   if (cp < 0x80) return cp == 0x7F || cp < 0x20 ? -1 : (int)cp;
   if (cp >= 0xA0 && cp <= 0xFF) return (int)cp;
@@ -34,8 +34,8 @@ int latin_slot(uint32_t cp) {
   }
 }
 
-// Carattere della faccia per il posto: nelle facce dei titoli (solo maiuscole) le minuscole
-// diventano maiuscole; -1 se manca.
+// Glyph of the face for the slot: in the title faces (uppercase only) lowercase letters
+// become uppercase; -1 if missing.
 int glyph_of(int face, int sl) {
   const uint16_t* map = HUD_FACE_MAP[face];
   if (map[sl] != 0xFFFF) return map[sl];
@@ -46,7 +46,7 @@ int glyph_of(int face, int sl) {
   return -1;
 }
 
-// Carattere della faccia di scrittura sf per il punto di codice (-1 se manca).
+// Glyph of the script face sf for the code point (-1 if missing).
 int sface_cp(int sf, uint32_t cp) {
   if (sf >= HUD_NSFACES) return -1;
   const HudSFace& F = HUD_SFACES[sf];
@@ -60,7 +60,7 @@ int sface_cp(int sf, uint32_t cp) {
   return -1;
 }
 
-// Parola hindi (n byte da s) gia' composta nella faccia di scrittura sf, o NULL.
+// Hindi word (n bytes from s) already composed in the script face sf, or NULL.
 const HudWord* sface_word(int sf, const char* s, int n) {
   if (sf >= HUD_NSFACES) return 0;
   uint32_t h = 2166136261u;
@@ -92,14 +92,14 @@ int kern16(int face, int a, int b) {
   return 0;
 }
 
-// Scorre il testo: fn(carattere, penna, dy) per ognuno (dy: pixel interi sotto la linea di base);
-// restituisce la larghezza. Latino con la crenatura; cinese e giapponese un carattere alla volta;
-// l'hindi una parola alla volta (gia' composta da make_font.py; quella che non c'e' lettera per
-// lettera). track va tra un carattere e l'altro, ma non dentro le parole hindi.
+// Walks the text: fn(glyph, pen, dy) for each one (dy: whole pixels below the baseline);
+// returns the width. Latin with kerning; Chinese and Japanese one character at a time;
+// Hindi one word at a time (already composed by make_font.py; a word that is not there, letter
+// by letter). track goes between one character and the next, but not inside Hindi words.
 template <class F>
 float layout(int face, const char* s, float track, F fn) {
   float pen = 0.0f;
-  int prev = -1;                 // posto latino di prima, per la crenatura
+  int prev = -1;                 // previous Latin slot, for kerning
   bool first = true;
   const uint8_t* sf = HUD_FACE_SF[face];
   for (const char* p = s; *p;) {
@@ -121,7 +121,7 @@ float layout(int face, const char* s, float track, F fn) {
         }
         pen += (float)w->adv16 * (1.0f / 16.0f);
       } else {
-        g_missing++;               // parola non composta (testi cambiati senza rigenerare i caratteri)
+        g_missing++;               // word not composed (texts changed without regenerating the glyphs)
         for (const char* t = p; t < e;) {
           const int g = sface_cp(sf[HUD_DEVA], hud_utf8_next(t));
           if (g < 0) {
@@ -142,7 +142,7 @@ float layout(int face, const char* s, float track, F fn) {
     if (sl >= 0) g = glyph_of(face, sl);
     else if (hud_is_cjk(cp) && sf[g_cjk] != 255) g = sface_cp(sf[g_cjk], cp);
     if (g < 0) {
-      if (cp < 0x20) continue;                     // a capo, tab: non si disegnano
+      if (cp < 0x20) continue;                     // newline, tab: not drawn
       g_missing++;
       sl = '?';
       g = glyph_of(face, sl);
@@ -176,8 +176,8 @@ void text_impl(Hud* h, float x, float base, int face, uint32_t argb, const char*
   if (face < 0 || face >= HUD_NFACES || !s) return;
   if (glow && !HUD_FACES[face].glow) return;
   if (align != -1) x -= hud_text_w(face, s, track) * (align == 0 ? 0.5f : 1.0f);
-  // La penna si arrotonda al pixel per ogni carattere: con il filtro lineare della GPU i caratteri
-  // restano uguali a quelli del renderer software.
+  // The pen is rounded to the pixel for every glyph: with the GPU's linear filter the glyphs
+  // stay identical to those of the software renderer.
   layout(face, s, track, [&](int g, float pen, int dy) {
     const float px = floorf(x + pen + 0.5f), py = base + (float)dy;
     if (glow) {
@@ -188,8 +188,8 @@ void text_impl(Hud* h, float x, float base, int face, uint32_t argb, const char*
   });
 }
 
-// src su dst con l'opacita' a (0..255): round((src*a + dst*(255-a)) / 255) esatto per ogni canale,
-// senza divisioni (rosso e blu insieme nella stessa parola, come in "Three wrongs make a right").
+// src over dst with opacity a (0..255): round((src*a + dst*(255-a)) / 255) exact for every channel,
+// without divisions (red and blue together in the same word, as in "Three wrongs make a right").
 inline uint32_t blend(uint32_t dst, uint32_t src, unsigned a) {
   const unsigned ia = 255u - a;
   uint32_t rb = (src & 0xFF00FFu) * a + (dst & 0xFF00FFu) * ia + 0x800080u;
@@ -199,7 +199,7 @@ inline uint32_t blend(uint32_t dst, uint32_t src, unsigned a) {
   return 0xFF000000u | rb | (g << 8);
 }
 
-// Da pixel a 640x480 a pixel d'uscita con scala k (per difetto, anche per i negativi).
+// From pixels at 640x480 to output pixels with scale k (rounding down, also for negatives).
 inline int to_px(int v, int k) {
   const int p = v * k;
   return p >= 0 ? p / 2 : -((-p + 1) / 2);
@@ -214,9 +214,9 @@ float ellipse_sdf(float qx, float qy, float rx, float ry) {
   return k1 > 1e-5f ? k0 * (k0 - 1.0f) / k1 : -fminf(rx, ry);
 }
 
-inline float mx(float a, float b) { return a > b ? a : b; }   // come fmaxf senza NaN, ma in linea
+inline float mx(float a, float b) { return a > b ? a : b; }   // like fmaxf without NaN, but inline
 
-// La distanza dal bordo (vedi hud_shape_sdf): qui per poterla mettere in linea nei cicli.
+// The distance from the edge (see hud_shape_sdf): here so that it can be inlined in the loops.
 inline float shape_sdf(const HudShape& sh, float s, float px, float py) {
   const float hx = sh.w * 0.5f * s, hy = sh.h * 0.5f * s;
   float qx = px - (sh.x * s + hx), qy = py - (sh.y * s + hy);
@@ -235,7 +235,7 @@ inline float shape_sdf(const HudShape& sh, float s, float px, float py) {
       const float br = (c - (hx - qx) - (hy - qy)) * 0.70710678f;
       d = mx(d, mx(tl, br));
     }
-    const float r = sh.ring * s;          // contorno largo r dentro il bordo (cornici, etichette)
+    const float r = sh.ring * s;          // outline r wide inside the edge (frames, labels)
     if (r > 0.0f) d = fabsf(d + 0.5f * r) - 0.5f * r;
   }
   return d + sh.inset * s;
@@ -244,9 +244,9 @@ inline float shape_sdf(const HudShape& sh, float s, float px, float py) {
 uint8_t g_atlas[HUD_ATLAS_W * HUD_ATLAS_H];
 bool g_atlas_ok;
 
-// Alone di un carattere: il carattere al centro del riquadro (margine HUD_GLOW_PAD), sfocato con
-// tre passate di media su 9 pixel in orizzontale e tre in verticale (quasi una gaussiana, sigma 4,5),
-// poi rafforzato di 8/5. Solo aritmetica intera: uguale su ogni macchina.
+// Glow of a glyph: the glyph in the center of the box (margin HUD_GLOW_PAD), blurred with three
+// 9-pixel averaging passes horizontally and three vertically (almost a Gaussian, sigma 4.5),
+// then strengthened by 8/5. Integer arithmetic only: identical on every machine.
 void make_glow(const HudGlyph& w, const HudGlyph& src) {
   static uint16_t a[256 * 256], b[256 * 256];
   const int W = w.w, H = w.h, P = HUD_GLOW_PAD;
@@ -299,9 +299,9 @@ void build_atlas(void) {
   g_atlas_ok = true;
 }
 
-// Copertura morbida (aloni): 1 / (1 + exp(3.404 t)) con t = d / soft, in tabella da -2 a 2 (passo
-// 1/64, interpolata). Fuori da li', una volta moltiplicata per l'opacita' (al massimo 255) e
-// arrotondata, vale proprio 1 o 0: lo stesso risultato di expf.
+// Soft coverage (glows): 1 / (1 + exp(3.404 t)) with t = d / soft, in a table from -2 to 2 (step
+// 1/64, interpolated). Outside that range, once multiplied by the opacity (at most 255) and
+// rounded, it is exactly 1 or 0: the same result as expf.
 float g_soft_lut[257];
 bool g_soft_ok;
 
@@ -310,14 +310,15 @@ inline float soft_cover(float t) {
   if (t >= 2.0f) return 0.0f;
   const float f = (t + 2.0f) * 64.0f;
   const int i = (int)f;
-  if (i >= 256) return g_soft_lut[256];   // t appena sotto 2: (t + 2) * 64 puo' arrotondare a 256
+  if (i >= 256) return g_soft_lut[256];   // t just below 2: (t + 2) * 64 can round to 256
   const float r = f - (float)i;
   return g_soft_lut[i] + (g_soft_lut[i + 1] - g_soft_lut[i]) * r;
 }
 
-// Forma nel framebuffer software: per ogni pixel del riquadro la distanza dal bordo e la sfumatura.
-// Per i rettangoli e i parallelogrammi la distanza cambia al massimo di 1 da un pixel al vicino:
-// dove la forma e' piena (o vuota) per n pixel di fila, quei pixel si fanno senza ricalcolarla.
+// Shape in the software framebuffer: for every pixel of the box, the distance from the edge and
+// the gradient. For rectangles and parallelograms the distance changes by at most 1 from one pixel
+// to the next: where the shape is solid (or empty) for n pixels in a row, those pixels are done
+// without recomputing it.
 void draw_shape(const HudShape& sh, uint32_t* fb, int W, int H, int k, const HudCmd& c, int ry0, int ry1) {
   const int x0 = to_px(c.x, k), y0 = to_px(c.y, k);
   const int x1 = to_px(c.x + c.w, k) + 1, y1 = to_px(c.y + c.h, k) + 1;
@@ -327,7 +328,7 @@ void draw_shape(const HudShape& sh, uint32_t* fb, int W, int H, int k, const Hud
   const float s = (float)k * 0.5f, soft = sh.soft * s, isoft = soft > 0.0f ? 1.0f / soft : 0.0f;
   const float cx = (sh.x + sh.w * 0.5f) * s, cy = (sh.y + sh.h * 0.5f) * s;
   const bool runs = sh.type == HS_BOX || sh.type == HS_PARA;
-  const float edge = soft > 0.0f ? 2.0f * soft : 0.5f;   // oltre questa distanza: pieno o vuoto
+  const float edge = soft > 0.0f ? 2.0f * soft : 0.5f;   // beyond this distance: solid or empty
   float ca[4], cb[4];
   for (int i = 0; i < 4; ++i) {
     ca[i] = (float)((sh.c0 >> (8 * i)) & 255u);
@@ -368,8 +369,8 @@ void draw_shape(const HudShape& sh, uint32_t* fb, int W, int H, int k, const Hud
         cov = soft > 0.0f ? soft_cover(d * isoft) : 0.5f - d;
       }
       if (cov >= 1.0f && run >= 4) {
-        // Tratto pieno: tinta unita (sfondo per l'opacita' gia' moltiplicato) o sfumatura
-        // in virgola fissa (dentro la forma la sfumatura non esce da 0..1).
+        // Solid run: flat color (background already multiplied by the opacity) or gradient
+        // in fixed point (inside the shape the gradient does not leave 0..1).
         const int xe = x + run;
         if (!grad) {
           if (flat_a >= 255u) {
@@ -431,7 +432,7 @@ void draw_shape(const HudShape& sh, uint32_t* fb, int W, int H, int k, const Hud
 
 }  // namespace
 
-// --- comandi --------------------------------------------------------------------------------
+// --- commands -------------------------------------------------------------------------------
 
 void hud_reset(Hud* h) { h->n = h->ns = 0; }
 
@@ -510,7 +511,7 @@ void hud_upper(char* dst, const char* src, int n) {
     unsigned char c = (unsigned char)src[i];
     if (c >= 'a' && c <= 'z') c = (unsigned char)(c - 32);
     else if (c == 0xC3 && k < n - 2 && src[i + 1]) {
-      // U+00E0..U+00FE (meno la divisione U+00F7): la maiuscola e' 0x20 prima.
+      // U+00E0..U+00FE (except the division sign U+00F7): the uppercase letter is 0x20 before.
       unsigned char d = (unsigned char)src[i + 1];
       if (d >= 0xA0 && d <= 0xBE && d != 0xB7) d = (unsigned char)(d - 0x20);
       dst[k++] = (char)c;
@@ -535,7 +536,7 @@ void hud_shape(Hud* h, const HudShape& s) {
   HudCmd* c = push(h);
   if (!c) return;
   const float m = s.soft > 0.0f ? s.soft * 1.5f + 1.0f : 1.0f;
-  const float mx = m + (s.type == HS_PARA ? fabsf(s.skew) * s.h * 0.5f : 0.0f);   // gli angoli inclinati sporgono
+  const float mx = m + (s.type == HS_PARA ? fabsf(s.skew) * s.h * 0.5f : 0.0f);   // the slanted corners stick out
   const float x0 = floorf(s.x - mx), y0 = floorf(s.y - m), x1 = ceilf(s.x + s.w + mx), y1 = ceilf(s.y + s.h + m);
   c->x = px16(x0); c->y = px16(y0); c->w = px16(x1 - x0); c->h = px16(y1 - y0);
   c->argb = s.c0; c->idx = (uint16_t)h->ns; c->kind = HUD_SHAPE; c->pad = 0;
@@ -563,7 +564,7 @@ void hud_box_grad(Hud* h, float x, float y, float w, float hh, float cut, uint32
   hud_shape(h, s);
 }
 
-// L'alone sta sempre sotto una forma opaca uguale: dentro non serve disegnarlo.
+// The glow always lies under an identical opaque shape: there is no need to draw it inside.
 void hud_glow(Hud* h, float x, float y, float w, float hh, float cut, float soft, uint32_t argb) {
   HudShape s = mk(HS_BOX, x, y, w, hh, argb, argb, 0.0f);
   s.cut = cut;
@@ -612,7 +613,7 @@ float hud_shape_cover(float d, float soft_px) {
   return a < 0.0f ? 0.0f : (a > 1.0f ? 1.0f : a);
 }
 
-// --- renderer software ------------------------------------------------------------------------
+// --- software renderer ------------------------------------------------------------------------
 
 void hud_prepare(void) {
   if (!g_atlas_ok) build_atlas();
@@ -648,17 +649,17 @@ void hud_draw_sw(const Hud* h, uint32_t* fb, int W, int H, int k, int ry0, int r
         uint32_t* p = fb + (long)y * W;
         for (int x = xa; x < xb; ++x) {
           const uint32_t v = p[x];
-          p[x] = 0xFF000000u | (((v >> 2) & 0x3F3F3Fu) + ((v >> 3) & 0x1F1F1Fu));   // 3/8 della luminosita'
+          p[x] = 0xFF000000u | (((v >> 2) & 0x3F3F3Fu) + ((v >> 3) & 0x1F1F1Fu));   // 3/8 of the brightness
         }
       }
     } else if (c.idx < HUD_NGLYPHS) {
-      // Carattere o disegno: ogni pixel dello schermo prende il punto piu' vicino dell'atlante
-      // (a 640x480 un pixel dell'atlante per pixel dello schermo).
+      // Glyph or icon: every screen pixel takes the nearest point of the atlas
+      // (at 640x480 one atlas pixel per screen pixel).
       const HudGlyph& G = HUD_GLYPHS[c.idx];
       const int qw = x1 - x0, qh = y1 - y0;
       if (qw <= 0 || qh <= 0) continue;
       const unsigned ca = c.argb >> 24;
-      if (qw == G.w && qh == G.h) {   // pixel su pixel (640x480): senza divisioni
+      if (qw == G.w && qh == G.h) {   // pixel for pixel (640x480): without divisions
         for (int y = ya; y < yb; ++y) {
           const uint8_t* src = g_atlas + (long)(G.y + y - y0) * HUD_ATLAS_W + G.x - x0;
           uint32_t* p = fb + (long)y * W;

@@ -1,12 +1,12 @@
-// Renderer GPU, OpenGL ES 2.
+// GPU renderer, OpenGL ES 2.
 //
-// Stesso contenuto del renderer software: la geometria fissa viene caricata una volta in un
-// buffer statico, quella che si muove viene trasformata e illuminata sulla CPU e mandata alla
-// GPU in un unico buffer per fotogramma (una sola chiamata di disegno: su queste GPU contano
-// molto di piu' le chiamate che i triangoli).
+// Same content as the software renderer: the fixed geometry is uploaded once into a static
+// buffer, the moving geometry is transformed and lit on the CPU and sent to the GPU in a
+// single buffer per frame (a single draw call: on these GPUs the calls matter much more
+// than the triangles).
 //
-// Il contesto GL e' quello del frontend, quindi alla fine di ogni fotogramma lo stato viene
-// rimesso come RetroArch se lo aspetta.
+// The GL context is the frontend's, so at the end of every frame the state is put back
+// the way RetroArch expects it.
 #include "engine/glr.h"
 #include "platform/plat.h"
 #include <dlfcn.h>
@@ -157,10 +157,10 @@ struct GLApi {
 #undef X
 };
 
-// Funzioni per l'antialias, che non tutte le GPU hanno: se mancano si disegna senza.
-//  - EXT_multisampled_render_to_texture (Mali e altre GPU a tessere): i campioni restano nella
-//    memoria della tessera e si riducono gratis scrivendo la texture; poi una copia a schermo;
-//  - OpenGL ES 3: renderbuffer multicampione e glBlitFramebuffer (Mesa, per le prove sul PC).
+// Functions for antialiasing, which not all GPUs have: if they are missing, it draws without.
+//  - EXT_multisampled_render_to_texture (Mali and other tile-based GPUs): the samples stay in the
+//    tile memory and are resolved for free when writing the texture; then a copy to the screen;
+//  - OpenGL ES 3: multisample renderbuffer and glBlitFramebuffer (Mesa, for the tests on the PC).
 struct GLOpt {
   void (*FramebufferTexture2DMultisampleEXT)(GLenum, GLenum, GLenum, GLuint, GLint, GLsizei);
   void (*RenderbufferStorageMultisampleEXT)(GLenum, GLsizei, GLenum, GLsizei, GLsizei);
@@ -170,13 +170,13 @@ struct GLOpt {
 };
 
 enum { AA_NONE = 0, AA_EXT, AA_ES3 };
-// max: campioni al massimo (da GL_MAX_SAMPLES, fino a 8); samples: quelli del bersaglio di adesso.
+// max: maximum samples (from GL_MAX_SAMPLES, up to 8); samples: those of the current target.
 struct AAState { int mode, max, samples, w, h; GLuint fbo, tex, color_rb, depth_rb; GLenum depth_fmt; bool discard; };
 
-struct WV { float x, y, z; uint8_t r, g, b, a; };          // vertice del mondo, 16 byte
-struct HV { float x, y, u, v; uint8_t r, g, b, a; };       // vertice 2D (cielo, copia dell'antialias), 20 byte
-// Vertice dell'interfaccia (0.5.2): posizione, coordinate nell'atlante, punto rispetto al centro della
-// forma, tipo e morbidezza, mezze misure, taglio, rientro, inclinazione, spessore dell'anello, colore.
+struct WV { float x, y, z; uint8_t r, g, b, a; };          // world vertex, 16 bytes
+struct HV { float x, y, u, v; uint8_t r, g, b, a; };       // 2D vertex (sky, antialiasing copy), 20 bytes
+// Interface vertex (0.5.2): position, coordinates in the atlas, point relative to the center of the
+// shape, type and softness, half sizes, cut, inset, skew, ring thickness, color.
 struct UV { float x, y, u, v, qx, qy, type, soft, hx, hy, cut, inset, skew, ring; uint8_t r, g, b, a; };
 struct StaticEntry { uint32_t id; GLuint vbo; int count; unsigned used; };
 
@@ -189,7 +189,7 @@ GLint g_u_xf_ui, g_u_tex_ui;
 UV* g_uv;
 int g_uv_n, g_uv_cap;
 GLint g_u_vp, g_u_xf, g_u_tex, g_u_xf_copy, g_u_tex_copy;
-const int MAX_STATIC = 160;  // blocchi della mappa, del menu e qualche mappa precedente
+const int MAX_STATIC = 160;  // blocks of the map, of the menu and a few previous maps
 StaticEntry g_static[MAX_STATIC];
 int g_nstatic;
 unsigned g_frame_no;
@@ -201,7 +201,7 @@ Vec3* g_tmp;
 int g_tmp_cap;
 char g_info[200];
 int g_depth_bits = -1;
-int g_nattribs = 8;       // quanti array di attributi spegnere all'inizio di ogni fotogramma
+int g_nattribs = 8;       // how many attribute arrays to disable at the start of every frame
 
 const char* VS_WORLD =
   "attribute vec3 a_pos;\n"
@@ -209,14 +209,14 @@ const char* VS_WORLD =
   "uniform mat4 u_vp;\n"
   "varying lowp vec4 v_col;\n"
   "void main() { v_col = a_col; gl_Position = u_vp * vec4(a_pos, 1.0); }\n";
-// Nei fragment shader di GLSL ES i float non hanno una precisione predefinita: la si dichiara
-// comunque, anche se ogni variabile ha gia' la sua, perche' alcuni compilatori la pretendono.
+// In GLSL ES fragment shaders floats have no default precision: it is declared anyway, even
+// though every variable already has its own, because some compilers demand it.
 const char* FS_WORLD =
   "precision mediump float;\n"
   "varying lowp vec4 v_col;\n"
   "void main() { gl_FragColor = v_col; }\n";
-// Coordinate di texture in alta precisione dove c'e': con la media (16 bit su Mali) in un atlante
-// largo 1024 si sbaglierebbe fino a un quarto di pixel e i caratteri verrebbero sfocati.
+// Texture coordinates in high precision where available: with medium (16 bits on Mali) in an atlas
+// 1024 wide the error would be up to a quarter of a pixel and the glyphs would come out blurred.
 const char* VS_HUD =
   "attribute vec2 a_pos;\n"
   "attribute vec2 a_uv;\n"
@@ -235,7 +235,7 @@ const char* FS_HUD =
   "#endif\n"
   "varying lowp vec4 v_col;\n"
   "void main() { gl_FragColor = vec4(v_col.rgb, v_col.a * texture2D(u_tex, v_uv).a); }\n";
-// Copia a schermo dell'immagine disegnata con l'antialias.
+// Copy to the screen of the image drawn with antialiasing.
 const char* FS_COPY =
   "precision mediump float;\n"
   "uniform sampler2D u_tex;\n"
@@ -246,9 +246,9 @@ const char* FS_COPY =
   "#endif\n"
   "varying lowp vec4 v_col;\n"
   "void main() { gl_FragColor = vec4(texture2D(u_tex, v_uv).rgb, 1.0); }\n";
-// Interfaccia (0.5.2): caratteri e disegni dall'atlante (tipo 0) oppure forme calcolate per pixel,
-// con la stessa matematica di hud_shape_sdf e hud_shape_cover (hud.cpp). Distanze in pixel
-// d'uscita: servono in alta precisione (con 16 bit a 300 pixel dal centro si sbaglia di un quarto).
+// Interface (0.5.2): glyphs and icons from the atlas (type 0) or shapes computed per pixel,
+// with the same math as hud_shape_sdf and hud_shape_cover (hud.cpp). Distances in output pixels:
+// they need high precision (with 16 bits, at 300 pixels from the center the error is a quarter).
 const char* VS_UI =
   "attribute vec2 a_pos;\n"
   "attribute vec2 a_uv;\n"
@@ -314,9 +314,9 @@ const char* FS_UI =
   "  gl_FragColor = vec4(v_col.rgb, v_col.a * a);\n"
   "}\n";
 
-// Cerca una funzione GL: prima nella libreria GLES gia' caricata dal frontend (lo stesso modo
-// in cui la trovano i core che si collegano direttamente a libGLESv2), poi tra i simboli
-// globali, infine chiedendola al frontend.
+// Looks up a GL function: first in the GLES library already loaded by the frontend (the same way
+// the cores that link directly against libGLESv2 find it), then among the global symbols,
+// finally by asking the frontend for it.
 void* resolve(glr_get_proc_t get_proc, const char* name, int how[3]) {
   static void* lib;
   static bool tried;
@@ -390,7 +390,7 @@ inline void wv_push(Vec3 p, uint32_t c) {
   v.r = (uint8_t)(c >> 16); v.g = (uint8_t)(c >> 8); v.b = (uint8_t)c; v.a = 255;
 }
 
-// Trasforma e illumina sulla CPU un oggetto; scarta le facce rivolte altrove se cull = true.
+// Transforms and lights an object on the CPU; discards the faces turned away if cull = true.
 void emit_item(const DrawItem& it, const FrameDesc& f, bool cull, RenderStats* st) {
   const Mesh& m = *it.mesh;
   if (m.nv > g_tmp_cap) {
@@ -412,8 +412,8 @@ void emit_item(const DrawItem& it, const FrameDesc& f, bool cull, RenderStats* s
   }
 }
 
-// Geometria fissa: caricata una volta e riconosciuta dall'identificativo della mesh. Se la
-// cache e' piena (per esempio dopo qualche cambio di mappa) si butta la meno usata di recente.
+// Fixed geometry: uploaded once and recognized by the mesh id. If the cache is full (for
+// example after a few map changes) the least recently used entry is thrown away.
 const StaticEntry* get_static(const DrawItem& it, const FrameDesc& f) {
   for (int i = 0; i < g_nstatic; ++i)
     if (g_static[i].id == it.mesh->id) {
@@ -425,7 +425,7 @@ const StaticEntry* get_static(const DrawItem& it, const FrameDesc& f) {
     slot = 0;
     for (int i = 1; i < MAX_STATIC; ++i)
       if (g_static[i].used < g_static[slot].used) slot = i;
-    if (g_static[slot].used == g_frame_no) return 0;   // tutte in uso in questo fotogramma
+    if (g_static[slot].used == g_frame_no) return 0;   // all in use in this frame
     gl.DeleteBuffers(1, &g_static[slot].vbo);
   } else {
     g_nstatic++;
@@ -462,7 +462,7 @@ inline void hv_push(float x, float y, float u, float v, uint32_t rgb, uint8_t a)
   o.r = (uint8_t)(rgb >> 16); o.g = (uint8_t)(rgb >> 8); o.b = (uint8_t)rgb; o.a = a;
 }
 
-// Rettangolo in pixel (origine in alto a sinistra), con colore diverso sopra e sotto.
+// Rectangle in pixels (origin at the top left), with different colors at the top and bottom.
 void hud_quad(float x0, float y0, float x1, float y1, float u0, float v0, float u1, float v1,
               uint32_t top, uint32_t bot, uint8_t a) {
   hv_reserve(6);
@@ -474,7 +474,7 @@ void hud_quad(float x0, float y0, float x1, float y1, float u0, float v0, float 
   hv_push(x1, y0, u1, v0, top, a);
 }
 
-float SOLID_U, SOLID_V;   // un punto del blocco pieno dell'atlante (rettangoli a tinta unita)
+float SOLID_U, SOLID_V;   // a point of the atlas's solid block (solid-color rectangles)
 
 void quads_flush(int w, int h, GLuint prog, GLint u_xf, GLint u_tex, GLuint tex) {
   if (g_hv_n == 0) return;
@@ -498,7 +498,7 @@ void quads_flush(int w, int h, GLuint prog, GLint u_xf, GLint u_tex, GLuint tex)
 
 void hud_flush(int w, int h) { quads_flush(w, h, g_prog_hud, g_u_xf, g_u_tex, g_tex_font); }
 
-// --- interfaccia ------------------------------------------------------------------------------
+// --- interface --------------------------------------------------------------------------------
 
 inline void uv_reserve(int extra) {
   if (g_uv_n + extra <= g_uv_cap) return;

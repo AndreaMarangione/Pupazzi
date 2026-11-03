@@ -1,4 +1,4 @@
-// Disegno: oggetti della scena con le loro animazioni, telecamera e HUD della partita.
+// Drawing: scene objects with their animations, camera and the game HUD.
 #include "game/sim/game_int.h"
 #include "game/view/view.h"
 #include "game/sim/maps.h"
@@ -12,10 +12,10 @@
 namespace {
 
 enum { MAX_ITEMS = 3072 };
-const int HELP_FLASH = 150;    // la capsula ha appena chiamato aiuto: lucina accesa fissa
+const int HELP_FLASH = 150;    // the capsule has just called for help: light steadily on
 DrawItem g_items[MAX_ITEMS];
 int g_n;
-Vec3 g_view;          // centro dell'inquadratura: gli oggetti lontani non si mandano nemmeno al renderer
+Vec3 g_view;          // center of the framing: far objects are not even sent to the renderer
 
 const float CAM_FOVY = 0.87f;
 
@@ -37,10 +37,10 @@ Xform part(const Xform& root, float x, float y, float z, float pitch) {
 Xform scaled(const Xform& x, float sx, float sy, float sz) { return xf_mul(x, xf_scale(sx, sy, sz)); }
 Xform ground_at(Vec3 p, float s) { return xf_mul(xf_translate(p), xf_scale(s, 1.0f, s)); }
 
-// Scarto grossolano degli oggetti mobili lontani dall'inquadratura (poi i renderer scartano
-// quelli fuori dal campo visivo): un rettangolo attorno al punto inquadrato che contiene il
-// terreno visibile con la telecamera di gioco a distanza d (inclinazione 0,98, campo 0,87):
-// di lato circa 0,93 d, verso la telecamera 0,45 d, in fondo 0,86 d (a 21 m: 19,5 - 9,2 - 18,1).
+// Rough culling of the moving objects far from the framing (then the renderers cull the ones
+// outside the field of view): a rectangle around the framed point that contains the ground
+// visible with the play camera at distance d (pitch 0.98, field of view 0.87): sideways about
+// 0.93 d, towards the camera 0.45 d, at the far end 0.86 d (at 21 m: 19.5 - 9.2 - 18.1).
 bool near_view(const View& v, const Game& g, Vec3 p, float margin) {
   const float d = fmaxf(v.cam_dist, 17.0f);
   return fabsf(p.x - g_view.x) < 0.95f * d + margin && p.z - g_view.z < 0.55f * d + margin && g_view.z - p.z < d + margin;
@@ -48,8 +48,8 @@ bool near_view(const View& v, const Game& g, Vec3 p, float margin) {
 
 float ground_under(const Game& g, Vec3 p) { return level_ground(&g.L, p.x, p.z, p.y, PL_STEP); }
 
-// Ombra a disco della misura k (piccola, media, grande, boss) nel tono del terreno della mappa:
-// prato, sabbia o pietra, scelto una volta per mappa dal colore medio del pavimento.
+// Disc shadow of size k (small, medium, large, boss) in the tone of the map's ground: grass,
+// sand or stone, chosen once per map from the average color of the floor.
 const Mesh* shadow(const Game& g, int k) {
   static uint32_t seen = 0;
   static int tone = -1;
@@ -65,28 +65,28 @@ const Mesh* shadow(const Game& g, int k) {
       }
     }
     tone = -1;
-    if (n > 0.0f && gr < r * 1.05f) tone = r > bl * 1.35f ? 0 : 1;   // non verde: sabbia (calda) o pietra
+    if (n > 0.0f && gr < r * 1.05f) tone = r > bl * 1.35f ? 0 : 1;   // not green: sand (warm) or stone
   }
   return tone < 0 ? &M.shadow[k] : &M.shadow_tone[tone][k];
 }
 
-// --- personaggi -------------------------------------------------------------------------
+// --- characters -------------------------------------------------------------------------
 
 struct Anim {
   float sq;           // squash & stretch
-  float swing;        // camminata (-1..1)
-  float recoil;       // attacco col braccio destro (0..1)
-  bool air;           // in aria
-  bool both;          // tutte e due le braccia avanti (Zolfo che sputa fuoco)
-  bool aim;           // mira o raffica in corso: chi ha l'arma nel braccio (Astro) la tiene puntata
-  float cheer;        // braccia in alto (vittoria, 0..1)
-  float down;         // a terra (0..1)
-  float t;            // tempo delle parti che si muovono da sole (fiamma, antenne, orecchio)
+  float swing;        // walk (-1..1)
+  float recoil;       // attack with the right arm (0..1)
+  bool air;           // in the air
+  bool both;          // both arms forward (Zolfo spitting fire)
+  bool aim;           // aim or burst in progress: whoever has the weapon in the arm (Astro) keeps it pointed
+  float cheer;        // arms up (victory, 0..1)
+  float down;         // down (0..1)
+  float t;            // time of the parts that move by themselves (flame, antennae, ear)
   uint8_t flash, dim;
 };
 
-// Parte che si muove da sola (CharMesh.fx), attorno al suo perno: la fiamma di Zolfo tremola, le
-// antenne di Marzio molleggiano, l'orecchio piegato di Mochi ballonzola.
+// Part that moves by itself (CharMesh.fx), around its pivot: Zolfo's flame flickers, Marzio's
+// antennae bounce, Mochi's folded ear bobs.
 Xform fx_motion(int ch, const CharMesh& c, const Anim& a) {
   float rz, rx, sy = 1.0f, sxz = 1.0f;
   switch (ch) {
@@ -112,8 +112,8 @@ Xform fx_motion(int ch, const CharMesh& c, const Anim& a) {
   return xf_mul(xf_translate(p), xf_mul(xf_rot_z(rz), xf_mul(xf_rot_x(rx), xf_mul(xf_scale(sxz, sy, sxz), xf_translate(p * -1.0f)))));
 }
 
-// Disegna un personaggio; in tip[0] e tip[1] mette dove nascono i colpi delle due braccia (bocca
-// del fucilone di Astro o mano), per i lampi.
+// Draws a character; in tip[0] and tip[1] it puts where the shots of the two arms start (muzzle
+// of Astro's shotgun, or the hand), for the flashes.
 void draw_char(int ch, int col, Vec3 pos, float yaw, const Anim& a, Vec3* tip = 0) {
   const CharMesh& c = M.ch[ch];
   const float sy = 1.0f + a.sq, sxz = 1.0f - 0.5f * a.sq;
@@ -137,7 +137,7 @@ void draw_char(int ch, int col, Vec3 pos, float yaw, const Anim& a, Vec3* tip = 
     leg_l = -a.swing;
     leg_r = a.swing;
   }
-  if (a.aim && c.rest_r < 0.0f && a.down <= 0.0f) arm_r = -D_HALF_PI;   // fucilone puntato
+  if (a.aim && c.rest_r < 0.0f && a.down <= 0.0f) arm_r = -D_HALF_PI;   // shotgun pointed
   if (a.recoil > 0.0f) arm_r = -D_HALF_PI - 0.5f * a.recoil;
   if (a.both) arm_r = arm_l = -D_HALF_PI;
   if (a.cheer > 0.0f) {
@@ -153,7 +153,7 @@ void draw_char(int ch, int col, Vec3 pos, float yaw, const Anim& a, Vec3* tip = 
     tip[0] = xf_point(xr, c.tip);
     tip[1] = xf_point(xl, v3(-c.tip.x, c.tip.y, c.tip.z));
   }
-  // Ghiaccio secco che fuma ai piedi di Marzio, scintille che salgono dalla fiamma di Zolfo.
+  // Dry ice smoking at Marzio's feet, sparks rising from Zolfo's flame.
   if (a.down <= 0.0f && (ch == CH_MARZIO || ch == CH_ZOLFO)) {
     for (int k = 0; k < 2; ++k) {
       const float u = a.t * 0.06f + 0.5f * (float)k, f = u - floorf(u);
@@ -173,7 +173,7 @@ void draw_char(int ch, int col, Vec3 pos, float yaw, const Anim& a, Vec3* tip = 
 void push_aim(const Game& g, int i) {
   const Player& p = g.pl[i];
   const CharDef& cd = CHARS[p.ch];
-  const float y = p.pos.y + 0.02f, range = pl_range(p);   // LUNGA GITTATA: la striscia e' lunga quanto il colpo
+  const float y = p.pos.y + 0.02f, range = pl_range(p);   // LUNGA GITTATA: the strip is as long as the shot's range
   auto dashes = [&](float yaw, float from, float to) {
     const Vec3 d = dir_yaw(yaw);
     for (float s = from; s < to - 0.15f; s += 0.6f) push(&M.aim_dash[i], at(p.pos.x + d.x * s, y, p.pos.z + d.z * s, yaw));
@@ -185,7 +185,7 @@ void push_aim(const Game& g, int i) {
     dashes(p.aim_yaw, 0.6f, range);
   }
   if (p.charge < pl_special_cost(p)) return;
-  // Speciale carico: dove arriva.
+  // Charged special: where it lands.
   if (cd.aim_sp == AIM_LOB) {
     const float dist = fmaxf(p.ch == CH_MOCHI ? 1.5f : 2.0f, p.aim_k * cd.sp_range);
     const Vec3 t = p.pos + dir_yaw(p.aim_yaw) * dist;
@@ -197,7 +197,7 @@ void push_aim(const Game& g, int i) {
 
 void push_player(const View& v, const Game& g, int i) {
   const Player& p = g.pl[i];
-  if (!p.active || (p.out && p.down >= OUT_VANISH)) return;   // senza vite: sparito in uno sbuffo
+  if (!p.active || (p.out && p.down >= OUT_VANISH)) return;   // out of lives: vanished in a puff
   Anim a;
   memset(&a, 0, sizeof(a));
   if (!p.alive) {
@@ -224,15 +224,16 @@ void push_player(const View& v, const Game& g, int i) {
   push(shadow(g, 0), xf_translate(v3(p.pos.x, gy, p.pos.z)));
   push(&M.ring[i], xf_translate(v3(p.pos.x, gy, p.pos.z)));
   if (p.shield) {
-    // SCUDO: una bolla del colore del giocatore che pulsa, cioe' un anello rivolto verso la
-    // telecamera attorno al corpo e uno di traverso all'altezza della pancia.
+    // SCUDO: a pulsing bubble in the player's color, that is a ring facing the camera around the
+    // body and one crosswise at belly height.
     const float k = 1.1f + 0.06f * d_sin((float)g.ui_tick * 0.16f + (float)i * 1.3f);
     const Vec3 c = v3(p.pos.x, p.pos.y + 0.7f, p.pos.z);
     push(&M.ring_big[i], scaled(xf_mul(xf_translate(c), xf_rot_x(D_HALF_PI - v.cam_pitch)), k, k, k));
     push(&M.ring_big[i], scaled(xf_mul(at(c + v3(0, -0.15f, 0), (float)g.ui_tick * 0.04f), xf_rot_x(0.35f)), k * 1.05f, k, k * 1.05f));
   }
-  // Bonus delle casse (0.5.4): anello del colore del bonus ai piedi; VELOCITA' lascia una scia azzurra,
-  // FURIA ha le fiamme sulle mani, INVINCIBILE una bolla d'oro. Negli ultimi 2 secondi lampeggiano.
+  // Crate power-ups (0.5.4): a ring in the power-up's color at the feet; VELOCITA' leaves a light
+  // blue trail, FURIA has flames on the hands, INVINCIBILE a golden bubble. They blink in the last
+  // 2 seconds.
   for (int k = 0; k < NPW_TIMED; ++k) {
     const int t = p.pw_t[k];
     if (t <= 0 || (t < PW_WARN && ((g.ui_tick >> 3) & 1u))) continue;
@@ -267,8 +268,8 @@ void push_player(const View& v, const Game& g, int i) {
   if (p.leap_n > 0) {
     push(&M.aim_ring[i], xf_mul(xf_translate(v3(p.leap_b.x, p.leap_b.y + 0.02f, p.leap_b.z)), xf_scale(1.0f, 1.0f, 1.0f)));
   }
-  // Lampi dei colpi: alla bocca del fucilone per ogni colpo della raffica di Astro (colpi appena
-  // partiti), alla mano per le schegge di Mochi e il ghiaccio di Marzio, fiammelle sulle mani di Zolfo.
+  // Shot flashes: at the shotgun's muzzle for every shot of Astro's burst (shots just fired), at
+  // the hand for Mochi's shards and Marzio's ice, small flames on Zolfo's hands.
   switch (p.ch) {
     case CH_ASTRO:
       for (int k = 0; k < MAX_SHOTS; ++k) {
@@ -296,29 +297,30 @@ void push_player(const View& v, const Game& g, int i) {
   }
 }
 
-// --- mostri e boss -------------------------------------------------------------------
+// --- monsters and boss ----------------------------------------------------------------
 
-// Braccio appeso al perno (x, y, z): prima inclinato di lato di roll (attorno a Z, positivo verso +X:
-// in fuori per il braccio a destra, verso il corpo per quello a sinistra), poi alzato di pitch.
+// Arm hanging from the pivot (x, y, z): first tilted sideways by roll (around Z, positive towards
+// +X: outwards for the arm on the right, towards the body for the one on the left), then raised by
+// pitch.
 Xform limb(const Xform& root, float x, float y, float z, float pitch, float roll) {
   return xf_mul(root, xf_mul(xf_translate(v3(x, y, z)), xf_mul(xf_rot_x(pitch), xf_rot_z(roll))));
 }
-// Rotazione attorno a un punto (coordinate del pezzo).
+// Rotation around a point (coordinates of the piece).
 Xform about(Vec3 p, const Xform& r) { return xf_mul(xf_translate(p), xf_mul(r, xf_translate(p * -1.0f))); }
 float smooth01(float x) {
   x = clampf(x, 0.0f, 1.0f);
   return x * x * (3.0f - 2.0f * x);
 }
 
-// Cima del disegno di un mostro a terra (non l'altezza delle regole, MONS: la coda dello scorpione,
-// l'arciere che e' alto quasi come il guerriero).
+// Top of the drawing of a monster on the ground (not the height of the rules, MONS: the scorpion's
+// tail, the archer who is almost as tall as the warrior).
 static float monster_draw_top(const Monster& m) {
   static const float TOP[MO_NTYPES] = { 1.1f, 1.7f, 0.6f, 2.15f };
   return m.pos.y + TOP[m.type];
 }
 
-// Braccio a due pezzi lunghi a e b dalla spalla s alla mano h (avvicinata se e' troppo lontana): il
-// gomito, dalla parte di hint.
+// Arm of two pieces with lengths a and b from the shoulder s to the hand h (moved closer if it is
+// too far): the elbow, on the side of hint.
 Vec3 elbow_ik(Vec3 s, Vec3* h, float a, float b, Vec3 hint) {
   Vec3 d = *h - s;
   float l = length(d);
@@ -335,20 +337,20 @@ Vec3 elbow_ik(Vec3 s, Vec3* h, float a, float b, Vec3 hint) {
   w = length(w) > 1e-4f ? normalize(w) : v3(u.y, -u.x, 0.0f);
   return s + u * x + w * sqrtf(fmaxf(0.0f, a * a - x * x));
 }
-// Pezzo appeso al perno p che pende (lungo -Y) verso q.
+// Piece hung from the pivot p, dangling (along -Y) towards q.
 Xform hang(Vec3 p, Vec3 q) { return xf_mul(xf_translate(p), xf_align_y(normalize(p - q))); }
 
-// Scorpione: zampette che zampettano a coppie alterne, chele che pizzicano, coda inarcata.
+// Scorpion: little legs scuttling in alternating pairs, pinching claws, arched tail.
 void draw_scorpion(const Game& g, const Monster& m, int k, uint8_t flash, float rise, float sy, float sxz) {
   const float tk = (float)g.tick;
   float yaw = m.yaw, pitch = 0.0f, y = m.pos.y - 1.1f * rise;
   float ph = m.phase * 1.2f, step = 0.3f, lift = 0.4f;
-  // Coda: inclinazione della base (0 indietro in piano, pi/2 dritta in su) e piega di ogni giunto.
+  // Tail: tilt of the base (0 flat backwards, pi/2 straight up) and bend of every joint.
   float tail0 = 0.95f, bend = 0.62f, sting = 0.62f, sway = 0.08f * d_sin(tk * 0.05f + (float)k * 1.7f);
-  // Chele: in fuori (spread), in giu' (droop), dita aperte (open).
+  // Claws: outwards (spread), downwards (droop), fingers open (open).
   float spread = 0.06f * d_sin(ph), droop = 0.0f, open = 0.1f + 0.1f * d_sin(tk * 0.09f + (float)k * 2.0f);
   bool glow = false, stunned = false;
-  if (m.state == 1) {                         // si prepara: coda alta che freme, chele spalancate, "!"
+  if (m.state == 1) {                         // winding up: tail high and quivering, claws wide open, "!"
     const float u = smooth01((1.0f - (float)m.state_t / 32.0f) * 3.0f);
     const float tw = 0.07f * d_sin(tk * 1.9f);
     tail0 = lerpf(tail0, 1.3f, u);
@@ -362,7 +364,7 @@ void draw_scorpion(const Game& g, const Monster& m, int k, uint8_t flash, float 
     flash = ((m.state_t >> 2) & 1) ? 120 : flash;
     glow = true;
     push(&M.alert, at(m.pos.x, 1.55f + 0.05f * fabsf(d_sin(tk * 0.35f)), m.pos.z, 0.0f));
-  } else if (m.state == 2) {                  // carica: basso, chele avanti, pungiglione puntato avanti
+  } else if (m.state == 2) {                  // charge: low, claws forward, sting pointed forward
     ph = m.phase * 0.8f;
     step = 0.45f;
     tail0 = 1.4f;
@@ -374,7 +376,7 @@ void draw_scorpion(const Game& g, const Monster& m, int k, uint8_t flash, float 
     pitch = 0.07f;
     y -= 0.06f;
     glow = true;
-  } else if (m.state == 3 && m.state_t > 24) {   // stordito contro un ostacolo: coda a terra, chele molli
+  } else if (m.state == 3 && m.state_t > 24) {   // stunned against an obstacle: tail on the ground, claws limp
     stunned = true;
     yaw += 0.12f * d_sin(tk * 0.3f);
     tail0 = -0.22f + 0.05f * d_sin(tk * 0.21f);
@@ -387,8 +389,8 @@ void draw_scorpion(const Game& g, const Monster& m, int k, uint8_t flash, float 
   }
   const Xform root = scaled(xf_mul(at(m.pos.x, y, m.pos.z, yaw), xf_rot_x(pitch)), sxz, sy, sxz);
   push(&M.scorpion_body, root, flash);
-  // Zampe: verso l'esterno, le davanti piegate in avanti e le dietro indietro; a coppie alterne
-  // (destra 1 con sinistra 2...) si spostano avanti alzandosi e indietro poggiate.
+  // Legs: outwards, the front ones bent forward and the back ones backward; in alternating pairs
+  // (right 1 with left 2...) they move forward lifting and backward resting on the ground.
   static const float LEG_A[4] = { 0.8f, 0.28f, -0.22f, -0.7f };
   for (int s = -1; s <= 1; s += 2)
     for (int l = 0; l < 4; ++l) {
@@ -398,7 +400,7 @@ void draw_scorpion(const Game& g, const Monster& m, int k, uint8_t flash, float 
       const Xform r = xf_mul(xf_rot_y(s > 0 ? -a : D_PI + a), xf_rot_z(up * 0.5f));
       push(&M.scorpion_leg, xf_mul(root, xf_mul(hip, r)), flash);
     }
-  // Chele e dita mobili.
+  // Claws and movable fingers.
   for (int s = -1; s <= 1; s += 2) {
     const float sx = (float)s;
     const Xform c = xf_mul(root, xf_mul(xf_translate(v3(sx * SCORPION_CLAW_X, SCORPION_CLAW_Y, SCORPION_CLAW_Z)),
@@ -407,7 +409,7 @@ void draw_scorpion(const Game& g, const Monster& m, int k, uint8_t flash, float 
     push(s > 0 ? &M.scorpion_finger_r : &M.scorpion_finger_l,
          xf_mul(c, xf_mul(xf_translate(v3(sx * SCORPION_FINGER_X, SCORPION_FINGER_Y, SCORPION_FINGER_Z)), xf_rot_y(-sx * open))), flash);
   }
-  // Coda: segmenti a catena dalla base, ognuno piegato verso il dentro della curva.
+  // Tail: segments chained from the base, each one bent towards the inside of the curve.
   Xform t = xf_mul(root, xf_mul(xf_translate(v3(0, SCORPION_TAIL_Y, SCORPION_TAIL_Z)), xf_mul(xf_rot_y(D_PI + sway), xf_rot_x(-tail0))));
   for (int s = 0; s < SCORPION_SEGS; ++s) {
     push(&M.scorpion_tail[s], t, flash);
@@ -429,9 +431,10 @@ void draw_scorpion(const Game& g, const Monster& m, int k, uint8_t flash, float 
   if (m.rise == 0) push(shadow(g, 2), at(m.pos.x, 0.0f, m.pos.z, m.yaw));
 }
 
-// Arciere di terracotta. Cammina con l'arco nella sinistra; per tirare si inginocchia (ginocchio
-// destro a terra), si gira di fianco, alza l'arco verso il cielo e tende la corda fino al mento con
-// la freccia incoccata; scoccata, la corda vibra e la mano va indietro, poi abbassa l'arco e si rialza.
+// Terracotta archer. It walks with the bow in the left hand; to shoot it kneels (right knee on the
+// ground), turns sideways, raises the bow towards the sky and draws the string to the chin with the
+// arrow nocked; once loosed, the string vibrates and the hand goes back, then it lowers the bow and
+// stands up again.
 void draw_archer(const Game& g, const Monster& m, uint8_t flash, float rise, float sy, float sxz) {
   float kneel = 0.0f, raise = 0.0f, pull = 0.0f, rel = 0.0f;
   if (m.windup > 0) {
@@ -446,13 +449,13 @@ void draw_archer(const Game& g, const Monster& m, uint8_t flash, float rise, flo
     raise = smooth01((r - 0.3f) / 0.45f);
     rel = smooth01((r - 0.5f) / 0.5f);
   }
-  const float sw = d_sin(m.phase) * (1.0f - kneel);      // passo
+  const float sw = d_sin(m.phase) * (1.0f - kneel);      // step
   const float twist = 1.0f * raise, lean = -0.12f * raise, elev = 0.7f;
   const Xform root = scaled(at(m.pos.x, m.pos.y - 1.7f * rise - 0.3f * kneel, m.pos.z, m.yaw + twist), sxz, sy, sxz);
-  const Xform ub = about(v3(0, ARCHER_HIP_Y, 0), xf_rot_x(lean));       // busto (nel sistema di root)
+  const Xform ub = about(v3(0, ARCHER_HIP_Y, 0), xf_rot_x(lean));       // torso (in root's coordinate system)
   push(&M.archer_body, xf_mul(root, ub), flash);
-  // Gambe: camminando oscillano piegando il ginocchio; in ginocchio la sinistra va avanti con il
-  // piede a terra, la destra ha il ginocchio a terra e lo stinco disteso dietro.
+  // Legs: when walking they swing bending the knee; when kneeling the left one goes forward with
+  // the foot on the ground, the right one has the knee on the ground and the shin stretched behind.
   for (int s = -1; s <= 1; s += 2) {
     const float leg = (float)s * sw;
     float thigh = 0.5f * leg, knee = 0.12f + 0.45f * fmaxf(0.0f, -d_cos(m.phase + (s > 0 ? D_PI : 0.0f))) * (1.0f - kneel);
@@ -462,10 +465,10 @@ void draw_archer(const Game& g, const Monster& m, uint8_t flash, float rise, flo
     push(&M.archer_thigh, th, flash);
     push(&M.archer_shin, xf_mul(th, xf_mul(xf_translate(v3(0, -ARCHER_THIGH, 0)), xf_rot_x(knee))), flash);
   }
-  // Tutto nel sistema di root (che e' gia' girato di twist). Mirando, la freccia va dal mento (dove
-  // la mano destra tende la corda) verso il bersaglio e in alto, e passa per la mano dell'arco: il
-  // braccio sinistro punta dove questa linea incontra la sfera della sua lunghezza.
-  const float L = ARCHER_ARM - 0.04f;                    // dalla spalla all'impugnatura
+  // Everything in root's coordinate system (already turned by twist). When aiming, the arrow goes
+  // from the chin (where the right hand draws the string) towards the target and upwards, and
+  // passes through the bow hand: the left arm points where this line meets the sphere of its length.
+  const float L = ARCHER_ARM - 0.04f;                    // from the shoulder to the grip
   const Vec3 sl = xf_point(ub, v3(-ARCHER_SH_X, ARCHER_SH_Y, 0.02f)), sr = xf_point(ub, v3(ARCHER_SH_X, ARCHER_SH_Y, 0.0f));
   const Vec3 dir = v3(-d_sin(twist) * d_cos(elev), d_sin(elev), d_cos(twist) * d_cos(elev));
   const Vec3 chin = xf_point(ub, v3(0.05f, 1.36f, 0.1f));
@@ -475,19 +478,19 @@ void draw_archer(const Game& g, const Monster& m, uint8_t flash, float rise, flo
     const float b = dot(dir, w), disc = b * b - dot(w, w) + L * L;
     aim = chin + dir * (-b + sqrtf(fmaxf(0.0f, disc))) - sl;
   }
-  const Vec3 down = v3(0.0f, -d_cos(0.35f * sw), -d_sin(0.35f * sw));   // a riposo: penzola e oscilla
+  const Vec3 down = v3(0.0f, -d_cos(0.35f * sw), -d_sin(0.35f * sw));   // at rest: it dangles and swings
   const Vec3 adir = normalize(down + (normalize(aim) - down) * raise);
   const Vec3 hand_l = sl + adir * L;
   push(&M.archer_arm_l, xf_mul(root, hang(sl, hand_l)), flash);
-  // Arco nel pugno: a riposo lungo il braccio, mirando dritto sulla linea della freccia.
+  // Bow in the fist: at rest along the arm, when aiming straight on the line of the arrow.
   Vec3 bz = normalize(v3(0, 0, 1) + (dir - v3(0, 0, 1)) * raise);
   Vec3 by = normalize(adir * -1.0f + (normalize(v3(0, 1, 0) - dir * dir.y) + adir) * raise);
   by = normalize(by - bz * dot(by, bz));
   Xform bow = xf_axes(cross(by, bz), by, bz);
   bow.p = hand_l;
   push(&M.bow, xf_mul(root, bow), flash);
-  // Corda tesa fino al mento (dopo il tiro vibra), freccia incoccata: tre a ventaglio se il tiro e'
-  // una raffica (m.hitmask, bit 0, vedi shoot_arrow).
+  // String drawn to the chin (after the shot it vibrates), arrow nocked: three in a fan if the shot
+  // is a burst (m.hitmask, bit 0, see shoot_arrow).
   const float full = -length(chin - hand_l);
   float nz = lerpf(ARCHER_STRING_Z, full, pull);
   if (rel > 0.0f) nz += 0.05f * rel * d_sin((float)g.ui_tick * 2.6f);
@@ -502,8 +505,8 @@ void draw_archer(const Game& g, const Monster& m, uint8_t flash, float rise, flo
     for (int a = 0; a < n; ++a)
       push(&M.arrow, xf_mul(root, xf_mul(nk, xf_mul(xf_rot_y(0.16f * (float)(a - n / 2)), xf_translate(v3(0, 0, 0.55f))))), flash);
   }
-  // Braccio destro: la mano va alla corda (dopo il tiro resta li' e va un po' indietro), il gomito
-  // alto e indietro; camminando penzola. A due pezzi dalla spalla alla mano.
+  // Right arm: the hand goes to the string (after the shot it stays there and moves back a little),
+  // the elbow high and back; when walking it dangles. In two pieces from the shoulder to the hand.
   const Vec3 rest = sr + v3(0.03f, -0.46f, 0.08f + 0.18f * sw);
   const Vec3 grip = xf_point(bow, v3(0.02f, 0.0f, (rel > 0.0f ? full - 0.1f * rel : nz) - 0.02f));
   Vec3 hand = rest + (grip - rest) * smooth01(raise * 1.4f);
@@ -514,7 +517,7 @@ void draw_archer(const Game& g, const Monster& m, uint8_t flash, float rise, flo
   if (m.rise == 0) push(shadow(g, 1), xf_translate(v3(m.pos.x, 0.0f, m.pos.z)));
 }
 
-// Corpo del mostro con le sue animazioni.
+// Body of the monster with its animations.
 void draw_monster(const Game& g, const Monster& m, int k) {
   uint8_t flash = m.hurt > 0 ? (uint8_t)(m.hurt >= 4 ? 200 : 70) : 0;
   const float rise = m.rise > 0 ? (float)m.rise / 36.0f : 0.0f;
@@ -538,8 +541,8 @@ void draw_monster(const Game& g, const Monster& m, int k) {
       break;
     }
     default: {
-      // Guerriero di terracotta: tiene l'alabarda dritta; per colpire la alza sopra la testa con
-      // tutte e due le mani e la cala davanti a se', poi la rialza piano.
+      // Terracotta warrior: holds the halberd upright; to strike it raises it above the head with
+      // both hands and brings it down in front of itself, then raises it again slowly.
       float tall = 1.0f, arm_r = 0.1f + d_sin(m.phase) * 0.12f, arm_l = -d_sin(m.phase) * 0.45f, roll = 0.0f;
       float halb = 0.12f, lean = 0.0f;
       if (m.state == 1) {
@@ -561,7 +564,7 @@ void draw_monster(const Game& g, const Monster& m, int k) {
           lean = -0.1f + 0.32f * u;
         }
       } else if (m.state == 3) {
-        const float e = smooth01((float)m.state_t / 30.0f * 1.4f);   // 1 subito dopo il colpo, poi 0
+        const float e = smooth01((float)m.state_t / 30.0f * 1.4f);   // 1 right after the blow, then 0
         tall = 1.0f - 0.03f * e;
         arm_r = arm_l = -1.3f * e;
         roll = 0.72f * e;
@@ -585,7 +588,7 @@ void draw_monster(const Game& g, const Monster& m, int k) {
     push(&M.snow_ring, xf_mul(at(m.pos.x, MONS[m.type].flying ? 0.02f : 0.04f, m.pos.z, (float)g.tick * 0.1f), xf_scale(r, 1.0f, r)));
   }
   if (m.burn_t > 0 && m.rise == 0) {
-    // Carte combo: chi brucia ha una fiammella che tremola sulla testa (oltre alle scintille).
+    // Combo cards: whoever is burning has a small flame flickering on the head (besides the sparks).
     const float fl = 1.0f + 0.25f * d_sin((float)g.ui_tick * 0.9f + (float)k * 1.7f);
     const float top = MONS[m.type].flying ? m.fly + 0.3f : monster_draw_top(m) - 0.15f;
     push(&M.glow[PC_FIRE], scaled(at(m.pos.x, top, m.pos.z, (float)g.ui_tick * 0.3f), 2.0f * fl, 2.6f * fl, 2.0f * fl));
@@ -600,35 +603,35 @@ void push_monster(const View& v, const Game& g, int k) {
   draw_monster(g, m, k);
 }
 
-// Posa del Gladiatore gigante, calcolata solo dal suo stato (camminata, azione in corso, ruggito,
-// sconfitta).
+// Pose of the giant Gladiator, computed only from its state (walk, action in progress, roar,
+// defeat).
 struct BossPose {
-  float lean, twist, drop;      // busto avanti/indietro (sui piedi), girato, abbassato (m)
-  float arm_r, arm_l;           // braccio della spada e dello scudo (come i personaggi: -pi/2 avanti)
-  float roll_r, roll_l;         // braccia in fuori (+) o verso il corpo (-); con il braccio avanti
-                                // (arm -pi/2) il roll lo porta di lato in orizzontale (il fendente)
-  float head;                   // testa: su (-) o giu' (+)
-  float wrist;                  // gladio rispetto al braccio (pi/2: lungo il braccio)
+  float lean, twist, drop;      // torso forward/back (on the feet), turned, lowered (m)
+  float arm_r, arm_l;           // sword arm and shield arm (like the characters: -pi/2 forward)
+  float roll_r, roll_l;         // arms outwards (+) or towards the body (-); with the arm forward
+                                // (arm -pi/2) the roll takes it sideways, horizontal (the sweep)
+  float head;                   // head: up (-) or down (+)
+  float wrist;                  // gladius relative to the arm (pi/2: along the arm)
   float leg_l, leg_r;
-  float shield;                 // scudo girato in avanti, davanti al petto (0..1, la carica)
-  bool sword;                   // gladio in mano (altrimenti nel fodero, mentre lancia)
-  bool javelin;                 // giavellotto in mano
-  bool stars;                   // stordito: stelline attorno all'elmo
+  float shield;                 // shield turned forward, in front of the chest (0..1, the charge)
+  bool sword;                   // gladius in hand (otherwise in the scabbard, while throwing)
+  bool javelin;                 // javelin in hand
+  bool stars;                   // stunned: little stars around the helmet
 };
 
-const float BOSS_ACT_THROW = 30.0f;            // fotogramma "di serie" del lancio dei giavellotti
+const float BOSS_ACT_THROW = 30.0f;            // "standard" frame of the javelin throw
 const float BOSS_REST_R = -0.35f, BOSS_REST_L = -0.8f, BOSS_REST_ROLL_L = -0.3f, BOSS_REST_WRIST = 0.55f;
 
 float span(float t, float t0, float t1) { return smooth01((t - t0) / (t1 - t0)); }
 
-// Tempo dell'azione "di serie": nelle fasi avanzate la preparazione (b.wind fotogrammi) e' piu'
-// corta, quindi la posa la percorre piu' in fretta fino al colpo (nom); dopo il colpo va uguale.
+// Time of the "standard" action: in the advanced phases the wind-up (b.wind frames) is shorter,
+// so the pose goes through it faster up to the blow (nom); after the blow it runs the same.
 float act_time(const Boss& b, float nom) {
   const float t = (float)b.act_t, w = (float)(b.wind > 0 ? b.wind : 1);
   return t < w ? t * nom / w : nom + (t - w);
 }
 
-// Posa della corsa con lo scudo davanti (u: quanto e' abbassato, s: passo della corsa).
+// Pose of the run with the shield in front (u: how far it is lowered, s: running step).
 void rush_pose(BossPose* p, float u, float s, float run) {
   p->drop = 0.42f * u + 0.06f * run * fabsf(s);
   p->lean = 0.3f * u + 0.12f * run;
@@ -644,14 +647,14 @@ void rush_pose(BossPose* p, float u, float s, float run) {
 }
 
 void boss_pose(const Game& g, const Boss& b, BossPose* p) {
-  const float br = d_sin((float)g.tick * 0.05f);           // respiro
+  const float br = d_sin((float)g.tick * 0.05f);           // breathing
   p->lean = 0.0f; p->twist = 0.0f; p->drop = 0.03f * br;
   p->arm_r = BOSS_REST_R + 0.05f * br; p->arm_l = BOSS_REST_L; p->roll_r = 0.0f; p->roll_l = BOSS_REST_ROLL_L;
   p->head = 0.0f; p->wrist = BOSS_REST_WRIST; p->leg_l = p->leg_r = 0.0f;
   p->shield = 0.0f;
   p->sword = true; p->javelin = false; p->stars = false;
   if (!b.alive) {
-    // Sconfitto: cede sulle ginocchia, crolla in avanti e sprofonda nella polvere.
+    // Defeated: buckles at the knees, collapses forward and sinks into the dust.
     const float t = (float)b.dead_t;
     const float kneel = span(t, 0.0f, 20.0f), fall = span(t, 20.0f, 44.0f), sink = span(t, 40.0f, 72.0f);
     p->drop = 0.9f * kneel + 2.2f * sink;
@@ -666,7 +669,7 @@ void boss_pose(const Game& g, const Boss& b, BossPose* p) {
     return;
   }
   if (b.roar > 0) {
-    // Ruggito tra una fase e l'altra: braccia larghe in alto, testa all'indietro.
+    // Roar between one phase and the next: arms wide and up, head back.
     const float u = span((float)(70 - b.roar), 0.0f, 10.0f) * span((float)b.roar, 0.0f, 10.0f);
     p->arm_r = lerpf(p->arm_r, -2.2f, u);
     p->arm_l = lerpf(p->arm_l, -2.2f, u);
@@ -678,14 +681,14 @@ void boss_pose(const Game& g, const Boss& b, BossPose* p) {
   }
   switch (b.act) {
     case BA_NONE: {
-      // Camminata pesante: gambe e braccia a passo alterno (spada con la gamba sinistra, scudo con
-      // la destra), il busto che va su e giu' e si gira un po', la cresta che dondola.
+      // Heavy walk: legs and arms in alternating steps (sword with the left leg, shield with the
+      // right), the torso going up and down and turning a little, the crest swaying.
       const float s = d_sin(b.phase), a = clampf(b.amp, 0.0f, 1.2f);
       p->leg_l = 0.6f * s * a;
       p->leg_r = -0.6f * s * a;
       p->arm_r += 0.3f * s * a;
       p->arm_l -= 0.2f * s * a;
-      p->roll_l += 0.06f * fabsf(s) * a;            // lo scudo ballonzola
+      p->roll_l += 0.06f * fabsf(s) * a;            // the shield bobs
       p->drop += 0.1f * a * fabsf(s);
       p->twist = -0.09f * s * a;
       p->lean = 0.06f * a;
@@ -693,7 +696,7 @@ void boss_pose(const Game& g, const Boss& b, BossPose* p) {
       break;
     }
     case BA_JAVELIN: {
-      // Giavellotti: prende un giavellotto dalla faretra, lo carica dietro la testa e lo lancia.
+      // Javelins: takes a javelin from the quiver, cocks it behind the head and throws it.
       const float t = act_time(b, BOSS_ACT_THROW);
       p->sword = false;
       const float reach = span(t, 0.0f, 8.0f), cock = span(t, 24.0f, 30.0f), follow = span(t, 30.0f, 35.0f), back = span(t, 35.0f, 44.0f);
@@ -709,7 +712,7 @@ void boss_pose(const Game& g, const Boss& b, BossPose* p) {
       break;
     }
     case BA_SLAM: {
-      // Spaccaterra: spada in alto in un attimo e giu' fino a terra lungo la linea della crepa.
+      // Ground slam: sword up in an instant and down to the ground along the line of the crack.
       const float t = act_time(b, 14.0f);
       const float up = span(t, 0.0f, 10.0f), slam = span(t, 10.0f, 16.0f), rec = span(t, 40.0f, 60.0f);
       float a = lerpf(BOSS_REST_R, -3.0f, up);
@@ -727,7 +730,7 @@ void boss_pose(const Game& g, const Boss& b, BossPose* p) {
       break;
     }
     case BA_SUMMON: {
-      // Chiama i rinforzi: spada e scudo in alto, testa all'indietro.
+      // Calls the reinforcements: sword and shield up, head back.
       const float t = (float)b.act_t;
       const float u = span(t, 0.0f, 12.0f) * (1.0f - span(t, 30.0f, 40.0f));
       p->arm_r = lerpf(BOSS_REST_R, -2.9f, u);
@@ -740,9 +743,9 @@ void boss_pose(const Game& g, const Boss& b, BossPose* p) {
       break;
     }
     case BA_SWEEP: {
-      // Fendente: braccio quasi orizzontale con la spada portata indietro di lato (con il braccio
-      // in avanti, roll lo gira in orizzontale; il busto si carica e si abbassa), poi la spadata
-      // larga e bassa da destra a sinistra davanti a se', e la ripresa.
+      // Sweep: arm almost horizontal with the sword brought back to the side (with the arm
+      // forward, roll turns it horizontal; the torso winds up and lowers), then the wide, low
+      // sword stroke from right to left in front of itself, and the recovery.
       const float t = act_time(b, 33.0f);
       const float load = span(t, 0.0f, 24.0f), cut = span(t, 31.0f, 37.0f), rec = span(t, 46.0f, 71.0f);
       const float k = (1.0f - rec), shake = t > 24.0f && t < 31.0f ? 0.03f * d_sin(t * 2.7f) : 0.0f;
@@ -761,15 +764,15 @@ void boss_pose(const Game& g, const Boss& b, BossPose* p) {
     }
     case BA_RUSH: {
       if (b.act_t < b.wind) {
-        // Si abbassa dietro lo scudo, una gamba indietro per la spinta che raspa la sabbia.
+        // Crouches behind the shield, one leg back for the push, scraping the sand.
         const float u = span((float)b.act_t, 0.0f, (float)b.wind * 0.45f);
         rush_pose(p, u, 0.0f, 0.0f);
         p->leg_r += 0.22f * u * d_sin((float)b.act_t * 0.75f);
         p->head = 0.2f * u + 0.04f * d_sin((float)b.act_t * 0.75f);
       } else if (b.run < b.lane) {
-        rush_pose(p, 1.0f, d_sin(b.phase), 1.0f);      // corre a testa bassa dietro lo scudo
+        rush_pose(p, 1.0f, d_sin(b.phase), 1.0f);      // runs head down behind the shield
       } else {
-        // Corsa finita senza sbattere: frena puntando i piedi, poi si rialza.
+        // Run ended without crashing: brakes by digging in its feet, then straightens up.
         const float u = 1.0f - span((float)(b.act_t - b.end_t), 6.0f, 28.0f);
         rush_pose(p, u, 0.0f, 0.0f);
         p->lean = lerpf(0.0f, -0.1f, u);
@@ -779,7 +782,7 @@ void boss_pose(const Game& g, const Boss& b, BossPose* p) {
       break;
     }
     case BA_STUN: {
-      // Stordito: le ginocchia cedono, il busto si accascia e ciondola, braccia giu', le stelline.
+      // Stunned: the knees give way, the torso slumps and sways, arms down, the little stars.
       const float t = (float)b.act_t, w = (float)b.wind;
       const float u = span(t, 0.0f, 8.0f) * (1.0f - span(t, w - 16.0f, w));
       const float wob = d_sin(t * 0.21f);
@@ -805,8 +808,8 @@ void push_boss(const Game& g) {
   const Boss& b = g.boss;
   const bool dying = !b.alive && b.dead_t > 0 && b.dead_t < 72;
   if (!b.alive && !dying) return;
-  // Colpito: lampo forte solo nei primi fotogrammi (in quattro lo colpiscono di continuo: deve
-  // restare dei suoi colori), lampeggia mentre ruggisce.
+  // Hit: strong flash only in the first frames (four players hit it all the time: it must keep its
+  // own colors), it flashes while roaring.
   uint8_t flash = b.hurt >= 5 ? 70 : (b.hurt > 0 ? 25 : 0);
   if (b.roar > 0 && ((b.roar >> 3) & 1)) flash = 90;
   uint8_t dim = 0;
@@ -818,7 +821,7 @@ void push_boss(const Game& g) {
   boss_pose(g, b, &p);
   const float sy = 1.0f + b.sq * 0.5f, sxz = 1.0f - 0.25f * b.sq;
   const Xform base = scaled(xf_mul(at(b.pos + v3(0, -p.drop, 0), b.face), xf_rot_x(p.lean)), sxz, sy, sxz);
-  // Gambe (non girano col busto), poi il busto girato attorno ai fianchi con testa, braccia e armi.
+  // Legs (not turned with the torso), then the torso turned at the hips with head, arms and weapons.
   push(&M.boss_leg_l, part(base, -BOSS_HIP_X, BOSS_HIP_Y, 0.0f, p.leg_l), flash, dim);
   push(&M.boss_leg_r, part(base, BOSS_HIP_X, BOSS_HIP_Y, 0.0f, p.leg_r), flash, dim);
   const Xform up = xf_mul(base, about(v3(0, BOSS_HIP_Y, 0), xf_mul(xf_rot_y(p.twist), xf_rot_z(b.sway))));
@@ -832,14 +835,14 @@ void push_boss(const Game& g) {
   if (p.sword) {
     push(&M.boss_sword, xf_mul(up, xf_mul(ar, xf_mul(xf_translate(v3(0, -BOSS_ARM, 0.05f)), xf_rot_x(p.wrist)))), flash, dim);
   } else {
-    push(&M.boss_sword, xf_mul(up, boss_scabbard()), flash, dim);      // nel fodero: si vede l'impugnatura
+    push(&M.boss_sword, xf_mul(up, boss_scabbard()), flash, dim);      // in the scabbard: the hilt shows
   }
-  if (p.javelin) push(&M.javelin, xf_mul(up, xf_mul(xf_translate(hand_r), xf_rot_x(-0.2f))), flash, dim);   // quasi orizzontale: si vede dall'alto
-  // Scudo: un po' girato verso l'esterno, dritto davanti nella carica.
+  if (p.javelin) push(&M.javelin, xf_mul(up, xf_mul(xf_translate(hand_r), xf_rot_x(-0.2f))), flash, dim);   // almost horizontal: visible from above
+  // Shield: turned a little outwards, straight in front during the charge.
   const float sh_yaw = -0.25f * (1.0f - p.shield), sh_tilt = -0.25f * (p.arm_l - BOSS_REST_L) * (1.0f - p.shield);
   push(&M.boss_shield, xf_mul(up, xf_mul(xf_translate(hand_l), xf_mul(xf_rot_y(sh_yaw), xf_rot_x(sh_tilt)))), flash, dim);
   if (p.stars) {
-    // Stordito: quattro stelline grandi che girano attorno all'elmo.
+    // Stunned: four big stars circling around the helmet.
     const Vec3 c = xf_point(up, v3(0, BOSS_NECK_Y + 1.15f, 0.1f));
     for (int q = 0; q < 4; ++q) {
       const float a = (float)b.act_t * 0.16f + (float)q * D_HALF_PI;
@@ -849,7 +852,7 @@ void push_boss(const Game& g) {
   if (b.alive) push(shadow(g, 3), xf_translate(v3(b.pos.x, 0.0f, b.pos.z)));
 }
 
-// Mano del gladiatore quando lascia i giavellotti (coordinate del boss): da li' partono quelli disegnati.
+// The gladiator's hand when it releases the javelins (boss coordinates): the drawn ones start there.
 Vec3 boss_throw_hand(const Game& g, const Boss& b) {
   Boss t = b;
   t.alive = true;
@@ -863,10 +866,10 @@ Vec3 boss_throw_hand(const Game& g, const Boss& b) {
   return xf_point(xf_mul(up, limb(xf_identity(), BOSS_SH_X, BOSS_SH_Y, 0.0f, p.arm_r, p.roll_r)), v3(0, -BOSS_ARM, 0.05f));
 }
 
-// --- mondo ------------------------------------------------------------------------------
+// --- world ------------------------------------------------------------------------------
 
-// Capsula dell'esploratore: chiusa con lui dentro che saltella e la lucina dell'antenna che
-// lampeggia; poi aperta, vuota, con un filo di fumo.
+// Explorer's capsule: closed with him inside hopping and the antenna light blinking; then open,
+// empty, with a wisp of smoke.
 void push_capsule(const Game& g, const DynCell& dc, int d, Vec3 c) {
   if (dc.hp > 0.0f) {
     const float hit = (float)g.crate_hit[d] / 10.0f;
@@ -889,15 +892,15 @@ void push_capsule(const Game& g, const DynCell& dc, int d, Vec3 c) {
 
 void push_world(const View& v, const Game& g) {
   for (int i = 0; i < g.L.nchunks; ++i) push(&g.L.chunk[i], xf_identity(), 0, 0, ITEM_STATIC);
-  for (int i = 0; i < g.L.nscenery; ++i) push(&g.L.scenery[i], xf_identity(), 0, 0, ITEM_STATIC);   // paesaggio lontano
-  // Cancelli a battente (0.5.4): ogni battente gira attorno al suo cardine, dalla posizione da chiuso.
+  for (int i = 0; i < g.L.nscenery; ++i) push(&g.L.scenery[i], xf_identity(), 0, 0, ITEM_STATIC);   // distant scenery
+  // Swing gates (0.5.4): each leaf turns around its hinge, starting from the closed position.
   for (int i = 0; i < g.L.ngates; ++i)
     for (int side = 0; side < 2; ++side) {
       Vec3 h, d, c;
       float len;
       level_gate_leaf(&g.L, i, side, gate_theta(g.L.gates[i], side), &h, &d, &len, &c);
       if (!near_view(v, g, h, 2.5f)) continue;
-      const float co = c.x * d.x + c.z * d.z, si = c.z * d.x - c.x * d.z;   // rotazione attorno a Y che porta c in d
+      const float co = c.x * d.x + c.z * d.z, si = c.z * d.x - c.x * d.z;   // rotation around Y that takes c to d
       Xform xf = xf_translate(h);
       xf.r[0] = co;
       xf.r[2] = si;
@@ -905,8 +908,8 @@ void push_world(const View& v, const Game& g) {
       xf.r[8] = co;
       push(&g.L.gates[i].leaf[side], xf);
     }
-  // Cespugli, erba alta, casse e trampolini con le mesh dello stile della mappa (level_mesh.cpp):
-  // girati e un po' piu' grandi o piu' piccoli secondo la casella, cosi' non sembrano in fila.
+  // Bushes, tall grass, crates and trampolines with the meshes of the map's style (level_mesh.cpp):
+  // turned and a little bigger or smaller depending on the cell, so they don't look lined up.
   for (int d = 0; d < g.L.ndyn; ++d) {
     const DynCell& dc = g.L.dyn[d];
     const Vec3 c = cell_center(&g.L, dc.cx, dc.cz);
@@ -937,7 +940,7 @@ void push_world(const View& v, const Game& g) {
         for (int it = 0; it < g.L.nitems; ++it) tal |= g.L.items[it].crate == d;
         const float hit = (float)g.crate_hit[d] / 10.0f;
         const float wob = 0.06f * hit * d_sin((float)g.crate_hit[d] * 2.0f);
-        const float tilt = 0.004f * (float)((int)((hh >> 4) % 100u) - 50);   // poco: le casse quadrate restano nella casella
+        const float tilt = 0.004f * (float)((int)((hh >> 4) % 100u) - 50);   // slightly: the square crates stay inside the cell
         push(&g.L.dyn_mesh[tal ? DM_CRATE_TAL : DM_CRATE], scaled(at(c, tilt + wob), 1.0f + 0.05f * hit, 1.0f - 0.05f * hit, 1.0f + 0.05f * hit),
              hit > 0.0f ? 120 : 0);
         break;
@@ -951,7 +954,7 @@ void push_world(const View& v, const Game& g) {
       default: break;
     }
   }
-  // Talismani e bombe della mappa.
+  // The map's talismans and bombs.
   for (int it = 0; it < g.L.nitems; ++it) {
     if (!g.item_on[it]) continue;
     const MapItem& mi = g.L.items[it];
@@ -964,11 +967,11 @@ void push_world(const View& v, const Game& g) {
       push(&M.talisman, scaled(at(c.x, mi.y + 0.75f + 0.12f * d_sin(ph) + 0.6f * (1.0f - pop), c.z, (float)g.ui_tick * 0.05f), s, s, s));
       push(&M.talisman_glow, xf_mul(xf_translate(v3(c.x, mi.y, c.z)), xf_scale(1.0f + 0.15f * d_sin(ph * 2.0f), 1.0f, 1.0f + 0.15f * d_sin(ph * 2.0f))));
     } else if (mi.kind == IT_POWER) {
-      // Bonus delle casse (0.5.4): la moneta salta fuori dalla cassa rotta, poi ondeggia girata verso
-      // la telecamera (dall'alto una moneta dritta si vedrebbe di taglio).
+      // Crate power-ups (0.5.4): the coin jumps out of the broken crate, then bobs turned towards
+      // the camera (from above an upright coin would be seen edge-on).
       const int k = g.item_pw[it] < NPOWERS ? g.item_pw[it] : 0;
       const float ph = (float)g.ui_tick * 0.07f + (float)it * 1.3f;
-      const float u = clampf((float)g.item_t[it] / 20.0f, 0.0f, 1.0f);       // salto: in 20 fotogrammi
+      const float u = clampf((float)g.item_t[it] / 20.0f, 0.0f, 1.0f);       // jump: in 20 frames
       const float y = mi.y + 0.85f + 0.1f * d_sin(ph) + 1.2f * u * (1.0f - u) * 2.0f;
       const float s = (0.4f + 0.6f * u) * 1.35f;
       const Xform face = xf_mul(xf_rot_x(-v.cam_pitch), xf_rot_y(0.5f * d_sin(ph * 0.8f)));
@@ -984,7 +987,7 @@ void push_world(const View& v, const Game& g) {
   for (int i = 0; i < MAX_BOMBS; ++i) {
     const Bomb& b = g.bo[i];
     if (!b.alive) continue;
-    // BOMBE GIGANTI: le bombe lasciate da chi ha la carta si vedono piu' grandi.
+    // BOMBE GIGANTI: the bombs dropped by whoever has the card look bigger.
     const float big = b.item < 0 && b.owner >= 0 && b.owner < MAX_PLAYERS && has_card(g.pl[b.owner], CA_BOMBE) ? 1.3f : 1.0f;
     const float k = big * (b.fuse < 60 ? 1.0f + 0.18f * fabsf(d_sin((float)b.fuse * 0.5f))
                                        : 1.0f + 0.08f * fabsf(d_sin((float)b.fuse * 0.2f)));
@@ -995,7 +998,7 @@ void push_world(const View& v, const Game& g) {
   }
 }
 
-// L'esploratore salvato: salta di gioia davanti alla capsula, poi se ne va saltellando.
+// The rescued explorer: jumps for joy in front of the capsule, then hops away.
 void push_explorer(const View& v, const Game& g) {
   if (g.expl_t < 0 || !near_view(v, g, g.expl_pos, 2.0f)) return;
   const float t = (float)g.expl_t;
@@ -1009,9 +1012,9 @@ void push_explorer(const View& v, const Game& g) {
     push(&M.stars, at(g.expl_pos.x, ground_under(g, g.expl_pos) + hop + 1.05f, g.expl_pos.z, t * 0.2f));
 }
 
-// Colpi. I giavellotti appena lanciati dal gladiatore partono dalla mano disegnata: per i primi
-// fotogrammi si spostano un po' verso li' (solo nel disegno; il gioco li fa partire da
-// boss_javelin_start, launch_javelins). Le frecce degli arcieri partono gia' dall'arco disegnato
+// Shots. The javelins just thrown by the gladiator start from the drawn hand: for the first frames
+// they are moved a little towards it (only in the drawing; the game makes them start from
+// boss_javelin_start, launch_javelins). The archers' arrows already start from the drawn bow
 // (ARCHER_NOCK_*, shoot_arrow).
 void push_shots(const View& v, const Game& g) {
   const Boss& b = g.boss;
@@ -1028,8 +1031,8 @@ void push_shots(const View& v, const Game& g) {
         push(&M.frost_mist, xf_mul(at(s.pos, -(float)s.life * 0.22f), xf_rot_x(0.35f)));
         break;
       case SK_ARROW: {
-        // Freccia dell'arciere: in volo inclinata lungo la parabola; piantata a terra (life <= 0,
-        // vedi update_arrow) resta con la punta nel terreno e alla fine affonda.
+        // Archer's arrow: in flight, tilted along the parabola; stuck in the ground (life <= 0, see
+        // update_arrow) it stays with the tip in the ground and in the end sinks in.
         const float hv = sqrtf(s.vel.x * s.vel.x + s.vel.z * s.vel.z);
         const Xform r = xf_mul(at(s.pos, s.yaw), xf_rot_x(-d_atan2(s.vel.y, hv)));
         if (s.life > 0) {
@@ -1051,7 +1054,7 @@ void push_shots(const View& v, const Game& g) {
       }
       case SK_LAVA: push(&M.lava, xf_mul(at(s.pos, s.yaw), xf_rot_x((float)s.life * 0.25f))); break;
       case SK_JAVELIN: {
-        // Inclinato lungo la traiettoria, punta in avanti.
+        // Tilted along the trajectory, tip forward.
         Vec3 p = s.pos;
         if (s.owner == -2 && s.life < 12) {
           if (!hand_ok) { hand = boss_throw_hand(g, b); hand_ok = true; }
@@ -1087,9 +1090,9 @@ void push_markers(const Game& g) {
         push(&M.mark_fill, ground_at(m.pos - v3(0, 0.005f, 0), m.r * f));
         break;
       case MK_ROOT: {
-        // Spaccaterra del gladiatore: la crepa corre dalla spada verso fuori (ogni segno si apre a
-        // open_at, prima quelli vicini a lui), la riga dentro si accende sempre di piu', poi spuntano
-        // le pietre a punta.
+        // The gladiator's ground slam: the crack runs from the sword outwards (every mark opens at
+        // open_at, the ones near him first), the line inside glows brighter and brighter, then the
+        // pointed rocks spring up.
         const float yaw = m.yaw;
         if (m.t < m.fire_at) {
           if (m.t < m.open_at) break;
@@ -1106,8 +1109,8 @@ void push_markers(const Game& g) {
         break;
       }
       case MK_SWEEP: {
-        // Fendente: il settore davanti al gladiatore si riempie dal centro verso il bordo; quando e'
-        // pieno arriva la spadata e per qualche fotogramma resta chiaro dove ha colpito.
+        // Sweep: the sector in front of the gladiator fills from the center towards the edge; when
+        // it is full the sword stroke comes and for a few frames it stays clear where it hit.
         const Xform base = at(m.pos.x, m.pos.y, m.pos.z, m.yaw);
         if (m.t < m.fire_at) {
           const float k = m.fire_at > 0 ? (float)m.t / (float)m.fire_at : 1.0f;
@@ -1115,7 +1118,7 @@ void push_markers(const Game& g) {
           push(&M.mark_sector_fill, scaled(base, m.r * k, 1.0f, m.r * k));
         } else if (m.t < m.fire_at + 6) {
           push(&M.mark_sector_hit, scaled(base, m.r, 1.0f, m.r));
-          // La scia della spada all'altezza della lama, che si allarga e scende mentre svanisce.
+          // The sword's trail at the height of the blade, widening and dropping as it fades.
           if (m.t < m.fire_at + 4) {
             const float u = (float)(m.t - m.fire_at) / 4.0f, r = m.r * (0.8f + 0.12f * u);
             push(&M.mark_swoosh, scaled(at(m.pos.x, m.pos.y + 1.7f - 0.5f * u, m.pos.z, m.yaw), r, 1.0f, r));
@@ -1124,14 +1127,14 @@ void push_markers(const Game& g) {
         break;
       }
       case MK_LANE: {
-        // Carica: la corsia dal gladiatore in avanti, bordi e frecce, si riempie mentre si prepara e
-        // resta finche' corre; dove c'e' un ostacolo, alla fine, il segno dell'urto.
+        // Charge: the lane from the gladiator forwards, edges and arrows, fills while he winds up
+        // and stays while he runs; where there is an obstacle, at the end, the impact mark.
         const Xform base = at(m.pos.x, m.pos.y, m.pos.z, m.yaw);
         const float k = m.fire_at > 0 ? clampf((float)m.t / (float)m.fire_at, 0.0f, 1.0f) : 1.0f;
         push(&M.mark_lane_fill, xf_mul(base, xf_scale(m.r, 1.0f, m.len * k)));
         for (int s = -1; s <= 1; s += 2) push(&M.mark_lane_edge, xf_mul(base, xf_mul(xf_translate(v3((float)s * m.r, 0, 0)), xf_scale(1.0f, 1.0f, m.len))));
         push(&M.mark_lane_end, xf_mul(base, xf_mul(xf_translate(v3(0, 0, m.len)), xf_scale(m.r, 1.0f, 1.0f))));
-        // Frecce che scorrono verso la fine (piu' svelte mentre corre).
+        // Arrows scrolling towards the end (faster while he runs).
         const float step = 2.2f, run = fmodf((float)m.t * (m.t < m.fire_at ? 0.04f : 0.12f), 1.0f) * step;
         for (float z = 1.6f + run; z < m.len - 0.6f; z += step) push(&M.mark_chevron, xf_mul(base, xf_mul(xf_translate(v3(0, 0, z)), xf_scale(m.r, 1.0f, 1.0f))));
         if (m.crash) push(&M.mark_impact, xf_mul(base, xf_translate(v3(0, 0, m.len))));
@@ -1191,7 +1194,7 @@ void push_particles(const Game& g) {
   }
 }
 
-// Menu: i personaggi alla partenza della mappa, rivolti verso la telecamera.
+// Menu: the characters at the map's start, facing the camera.
 void push_menu_chars(const Game& g) {
   for (int i = 0; i < MAX_PLAYERS; ++i) {
     int ch = i;
@@ -1254,8 +1257,8 @@ void push_stats_chars(const Game& g) {
   }
 }
 
-// --- HUD (0.5.2: stile Orbita, in pixel a 640x480) ---------------------------------------
-// Dentro il margine dei televisori: 24 pixel ai lati, 16 sopra e sotto.
+// --- HUD (0.5.2: Orbita style, in pixels at 640x480) ------------------------------------
+// Inside the margin of TV sets: 24 pixels at the sides, 16 above and below.
 
 const float HX = 24.0f, HY = 16.0f;
 
@@ -1263,7 +1266,7 @@ bool blink(const Game& g, unsigned period) { return ((g.ui_tick / period) & 1u) 
 inline uint32_t O(uint32_t rgb) { return HUD_OPAQUE(rgb); }
 inline uint32_t A(uint32_t rgb, float a) { return hud_a(rgb, a); }
 
-// Colore a meta' strada tra a e b (t da 0 ad a, 1 a b).
+// Color partway between a and b (t from 0 at a to 1 at b).
 uint32_t mix_rgb(uint32_t a, uint32_t b, float t) {
   uint32_t out = 0;
   for (int s = 0; s <= 16; s += 8) {
@@ -1273,14 +1276,14 @@ uint32_t mix_rgb(uint32_t a, uint32_t b, float t) {
   return out;
 }
 
-// Testo sopra il gioco: con l'ombra scura, per staccarsi da qualunque sfondo.
+// Text over the game: with a dark shadow, to stand out from any background.
 void stext(Hud* h, float x, float cy, int face, uint32_t rgb, const char* s, float track = 0.0f, int align = -1) {
   const float o = hud_face_size(face) >= 25 ? 2.0f : 1.0f;
   ui::text(h, x + o, cy + o, face, A(ui::SCRIM, 0.85f), s, track, align);
   ui::text(h, x, cy, face, O(rgb), s, track, align);
 }
 
-// Punto del mondo -> pixel a 640x480.
+// World point -> pixels at 640x480.
 bool to_px(const Camera& cam, Vec3 p, float* x, float* y) {
   int sx, sy;
   if (!to_screen(cam, p, &sx, &sy)) return false;
@@ -1294,7 +1297,7 @@ void player_bars(const Game& g, Hud* h, const Camera& cam, int i) {
   const CharDef& cd = CHARS[p.ch];
   float sx, sy;
   if (!to_px(cam, v3(p.pos.x, p.pos.y + M.ch[p.ch].top + 0.15f, p.pos.z), &sx, &sy)) return;
-  // Barre sottili sopra la testa: vita, colpo (tacche, o carburante per Zolfo), speciale.
+  // Thin bars above the head: health, shot (notches, or fuel for Zolfo), special.
   const float W = 48.0f, x0 = sx - W * 0.5f, y0 = sy - 22.0f;
   hud_box(h, x0 - 2.0f, y0 - 2.0f, W + 4.0f, 17.0f, 3.0f, A(ui::SCRIM, 0.8f));
   hud_box(h, x0 - 19.0f, y0 - 2.0f, 15.0f, 17.0f, 3.0f, O(ui::PLAYER[i]));
@@ -1317,7 +1320,7 @@ void player_bars(const Game& g, Hud* h, const Camera& cam, int i) {
     hud_rect(h, x0, y0 + 7.0f, W, 3.0f, ui::OFF);
     hud_rect(h, x0, y0 + 7.0f, clampf(p.ammo / cd.ammo_max, 0.0f, 1.0f) * W, 3.0f, ac);
   }
-  const float cost = pl_special_cost(p);   // SUPER CARICA: la barra si riempie prima
+  const float cost = pl_special_cost(p);   // SUPER CARICA: the bar fills sooner
   const bool ready = p.charge >= cost;
   hud_rect(h, x0, y0 + 11.0f, clampf(p.charge / cost, 0.0f, 1.0f) * W, 2.0f, ready && blink(g, 6) ? 0xFFFFFF : ui::STAR);
   if (ready) {
@@ -1331,10 +1334,10 @@ void player_bars(const Game& g, Hud* h, const Camera& cam, int i) {
   if (p.frozen) stext(h, sx, y0 - 22.0f, HF_B12, ui::A2, tr("COMANDI FERMI"), 1.0f, 0);
 }
 
-// Schede dei giocatori in alto a sinistra: la faccia dell'eroe nella cornice del colore del
-// giocatore e sotto i cuori delle vite. A terra la faccia si spegne e una barra rossa si svuota nei
-// 5 secondi del rientro; senza vite la faccia e' grigia con una X. Ci sono anche da soli.
-// Restituisce dove finiscono a destra.
+// Player panels at the top left: the hero's face in a frame of the player's color and below it the
+// hearts of the lives. When down the face dims and a red bar empties over the 5 seconds of the
+// respawn; out of lives the face is gray with an X. They are there even when playing alone.
+// Returns where they end on the right.
 const float CARD = 40.0f, CARD_STEP = 46.0f;
 
 float player_icons(const Game& g, Hud* h) {
@@ -1344,7 +1347,7 @@ float player_icons(const Game& g, Hud* h) {
     if (!p.active) continue;
     const bool down = !p.alive && !p.out, out = p.out;
     const uint32_t c = out ? 0x6A6470 : (down ? mix_rgb(ui::PLAYER[i], 0x101418, 0.45f) : ui::PLAYER[i]);
-    // In rete (0.5.4) la scheda di questa console ha il bordo bianco.
+    // In a LAN game (0.5.4) the panel of this console has a white border.
     if (i == net_local(g)) hud_frame(h, x - 2.0f, HY - 2.0f, CARD + 4.0f, CARD + 4.0f, 8.0f, 2.0f, 0xFFFFFFFFu);
     hud_box_grad(h, x, HY, CARD, CARD, 7.0f, O(c), O(mix_rgb(c, 0x101418, 0.4f)), 135.0f);
     hud_box(h, x, HY, CARD, CARD, 7.0f, ui::SOLID, 2.0f);
@@ -1353,20 +1356,20 @@ float player_icons(const Game& g, Hud* h) {
       hud_icon(h, HI_CROSS30, x + 6.0f, HY + 6.0f, O(0x101418));
       hud_icon(h, HI_CROSS30, x + 5.0f, HY + 5.0f, O(0xFF4A3A));
     } else if (down) {
-      // Barra rossa del rientro: piena quando cade, vuota quando rientra (ferma se si rifa' la zona).
+      // Red respawn bar: full on going down, empty on coming back (stopped if the zone is replayed).
       const float k = clampf((float)p.respawn / (float)RESPAWN_FRAMES, 0.0f, 1.0f);
       hud_rect(h, x + 4.0f, HY + CARD - 10.0f, CARD - 8.0f, 6.0f, 0x101418);
       hud_rect(h, x + 5.0f, HY + CARD - 9.0f, (CARD - 10.0f) * k, 4.0f, 0xFF2E2E);
     }
-    // In rete: la sua console non risponde da un po' (lampeggia la rete sulla faccia).
+    // LAN game: their console hasn't answered for a while (the network icon blinks over the face).
     if ((net_silent(g) >> i) & 1u) {
       if (blink(g, 10)) {
         hud_box(h, x + CARD - 21.0f, HY + 1.0f, 20.0f, 16.0f, 3.0f, A(0x101418, 0.85f));
         hud_icon(h, HI_WIFI, x + CARD - 20.0f, HY + 2.0f, O(0xFF4A3A));
       }
     }
-    // Bonus delle casse (0.5.4): sotto i cuori il disegno di ogni bonus in corso e quanto ne resta
-    // (negli ultimi 2 secondi lampeggia).
+    // Crate power-ups (0.5.4): below the hearts the picture of every active power-up and how much
+    // of it is left (it blinks in the last 2 seconds).
     int nb = 0;
     for (int k = 0; k < NPW_TIMED; ++k) nb += p.pw_t[k] > 0;
     if (nb > 0 && p.alive) {
@@ -1382,7 +1385,7 @@ float player_icons(const Game& g, Hud* h) {
         px += 16.0f;
       }
     }
-    // Vite: cuori pieni per quelle rimaste, vuoti per quelle perse (3, o 4 con VITA EXTRA).
+    // Lives: full hearts for the ones left, empty for the ones lost (3, or 4 with VITA EXTRA).
     int total = START_LIVES + (has_card(p, CA_VITA) ? 1 : 0);
     if (p.lives > total) total = p.lives;
     const int shown = total < 5 ? total : 5;
@@ -1400,8 +1403,8 @@ float player_icons(const Game& g, Hud* h) {
   return x - (CARD_STEP - CARD);
 }
 
-// Riga in alto, a destra delle schede: pianeta e mappa, giro, zona, mostri che mancano; nell'arena
-// la vita del boss al posto della zona.
+// Top line, to the right of the panels: planet and map, round, zone, monsters left; in the arena
+// the boss's health instead of the zone.
 void top_line(const Game& g, Hud* h, float x) {
   char buf[128];
   const float cy = HY + 14.0f;
@@ -1415,7 +1418,7 @@ void top_line(const Game& g, Hud* h, float x) {
   x += ui::tag(h, x, cy, buf, ui::FTX, HF_B11, 1.5f, 6.0f, 19.0f) + 12.0f;
   float xr = 640.0f - HX;
   const SysBattery bat = sys_battery(plat_now_ms());
-  if (bat.present) xr -= 70.0f;                    // la batteria (0.5.4) all'estremo destro
+  if (bat.present) xr -= 70.0f;                    // the battery (0.5.4) at the far right
   if (g.phase == PH_CLEAR) {
     const char* go = tr("VAI AVANTI");
     const float tw = hud_text_w(HF_B13, go, 1.5f);
@@ -1450,8 +1453,8 @@ void top_line(const Game& g, Hud* h, float x) {
   }
 }
 
-// In rete (0.5.4) ogni console inquadra il suo eroe: per ogni compagno fuori dallo schermo una
-// freccia nel suo colore sul bordo, verso di lui, con il suo numero.
+// In a LAN game (0.5.4) every console frames its own hero: for every teammate off screen an arrow
+// in their color on the edge, pointing at them, with their number.
 void mate_arrows(const Game& g, Hud* h, const Camera& cam) {
   const int me = net_local(g);
   if (me < 0) return;
@@ -1467,10 +1470,10 @@ void mate_arrows(const Game& g, Hud* h, const Camera& cam) {
     float dx, dy;
     if (cw > 0.05f) {
       const float sx = (cx / cw * 0.5f + 0.5f) * 640.0f, sy = (0.5f - cy / cw * 0.5f) * 480.0f;
-      if (sx >= 24.0f && sx <= 616.0f && sy >= 80.0f && sy <= 456.0f) continue;   // si vede
+      if (sx >= 24.0f && sx <= 616.0f && sy >= 80.0f && sy <= 456.0f) continue;   // visible
       dx = sx - CX;
       dy = sy - CY;
-    } else {                                   // dietro la telecamera: dalla parte opposta
+    } else {                                   // behind the camera: on the opposite side
       dx = -cx;
       dy = cy;
     }
@@ -1478,7 +1481,7 @@ void mate_arrows(const Game& g, Hud* h, const Camera& cam) {
     if (l < 1e-3f) continue;
     dx /= l;
     dy /= l;
-    // Dove la semiretta dal centro esce dal riquadro.
+    // Where the ray from the center leaves the box.
     float t = 1e30f;
     if (dx > 1e-4f) t = fminf(t, (X1 - CX) / dx);
     if (dx < -1e-4f) t = fminf(t, (X0 - CX) / dx);
@@ -1490,13 +1493,13 @@ void mate_arrows(const Game& g, Hud* h, const Camera& cam) {
     const uint32_t col = p.alive ? ui::PLAYER[i] : mix_rgb(ui::PLAYER[i], 0x101418, 0.45f);
     hud_icon(h, HI_ARW0 + k, ax - 10.0f + 1.0f, ay - 10.0f + 1.0f, A(ui::SCRIM, 0.9f));
     hud_icon(h, HI_ARW0 + k, ax - 10.0f, ay - 10.0f, O(col));
-    // Il numero del compagno, un po' piu' all'interno.
+    // The teammate's number, a little further in.
     const float gw = ui::gp_w(i);
     ui::gp(h, ax - dx * 26.0f - gw * 0.5f, ay - dy * 26.0f, i);
   }
 }
 
-// In rete, sulle console che aspettano i fotogrammi di chi ha creato la partita: "rete lenta".
+// LAN game, on the consoles waiting for the host's frames: "rete lenta".
 void net_wait_badge(const Game& g, Hud* h) {
   if (net_wait_frames(g) < 12) return;
   const char* t = tr("rete lenta...");
@@ -1506,7 +1509,7 @@ void net_wait_badge(const Game& g, Hud* h) {
   ui::text(h, x + 38.0f, cy, HF_S13, O(ui::TX), t, 0.5f);
 }
 
-// Messaggio grande al centro, su una fascia scura che sfuma ai lati.
+// Big message in the center, on a dark band that fades out at the sides.
 void center_msg(const Game& g, Hud* h) {
   const float cy = 140.0f, has2 = g.msg2[0] ? 1.0f : 0.0f;
   const float bh = 54.0f + 26.0f * has2, by = cy - 30.0f;
@@ -1514,7 +1517,7 @@ void center_msg(const Game& g, Hud* h) {
   hud_box_grad(h, 320, by, 320, bh, 0, A(ui::SCRIM, 0.6f), A(ui::SCRIM, 0.0f), 90.0f);
   const float base = hud_mid(HF_T32, cy);
   char big[192], sub[256];
-  ui::fit(big, sizeof(big), g.msg, HF_T32, 3.0f, 600.0f, "...");   // i nomi delle mappe personalizzate
+  ui::fit(big, sizeof(big), g.msg, HF_T32, 3.0f, 600.0f, "...");   // the names of custom maps
   hud_text(h, 320, base + 2.0f, HF_T32, O(ui::TDROP), big, 3.0f, 0);
   hud_text_glow(h, 320, base, HF_T32, ui::TGLOW, big, 3.0f, 0);
   hud_text(h, 320, base, HF_T32, O(g.msg_rgb), big, 3.0f, 0);
@@ -1523,7 +1526,7 @@ void center_msg(const Game& g, Hud* h) {
 
 void build_play_hud(const Game& g, Hud* h, const Camera& cam) {
   char buf[64];
-  // Sopra i mostri colpiti: quanta vita resta.
+  // Above the monsters that were hit: how much health is left.
   for (int k = 0; k < MAX_MONSTERS; ++k) {
     const Monster& m = g.mo[k];
     if (!m.alive || m.rise > 0 || m.shown <= 0 || !monster_drawn(g, m)) continue;
@@ -1551,20 +1554,20 @@ void build_play_hud(const Game& g, Hud* h, const Camera& cam) {
     const FloatText& f = g.ft[i];
     if (!f.alive) continue;
     float sx, sy;
-    if (to_px(cam, f.pos, &sx, &sy)) stext(h, sx, sy + 8.0f, HF_B13, f.rgb, tr(f.txt), 1.0f, 0);   // numeri: restano come sono
+    if (to_px(cam, f.pos, &sx, &sy)) stext(h, sx, sy + 8.0f, HF_B13, f.rgb, tr(f.txt), 1.0f, 0);   // numbers: they stay as they are
   }
 
-  // In alto: le schede dei giocatori a sinistra, poi la riga con mappa, giro, zona e mostri.
+  // At the top: the player panels on the left, then the line with map, round, zone and monsters.
   int n = 0;
   for (int i = 0; i < MAX_PLAYERS; ++i) n += g.pl[i].active;
-  // Sotto la pausa e le carte no: si scontrerebbe con i titoli (e il gioco e' fermo).
+  // Not under the pause and the cards: it would clash with the titles (and the game is stopped).
   if (!g.paused && !g.cards_open) {
     ui::scrim_top(h, 96.0f);
     const float right = n > 0 ? player_icons(g, h) : HX - 12.0f;
     top_line(g, h, right + 12.0f);
   }
 
-  // Messaggi grandi al centro (non sotto le carte: si vedono dopo, il gioco e' fermo).
+  // Big messages in the center (not under the cards: they show afterwards, the game is stopped).
   if (g.msg_t > 0 && !g.paused && !g.cards_open) center_msg(g, h);
   bool waiting = false, joining = false;
   for (int i = 0; i < MAX_PLAYERS; ++i) {
@@ -1587,18 +1590,18 @@ void build_play_hud(const Game& g, Hud* h, const Camera& cam) {
     mate_arrows(g, h, cam);
     net_wait_badge(g, h);
   }
-  if (g.cards_open) cards_hud(g, h);      // scelta delle carte al posto di pausa e finestre per entrare
+  if (g.cards_open) cards_hud(g, h);      // card choice instead of the pause and the windows for joining
   else play_menus_hud(g, h);
-  // La batteria della console in alto a destra, sempre (anche in pausa e con le carte).
+  // The console's battery at the top right, always (also in pause and with the cards).
   const SysBattery bat = sys_battery(plat_now_ms());
   if (bat.present) ui::battery(h, 640.0f - HX, HY + 14.0f, bat.percent, bat.charging, g.ui_tick);
 }
 
 }  // namespace
 
-// --- funzioni condivise ----------------------------------------------------------------
+// --- shared functions ------------------------------------------------------------------
 
-// Punto del mondo -> griglia virtuale 320x240 dell'HUD.
+// World point -> the HUD's virtual 320x240 grid.
 bool to_screen(const Camera& c, Vec3 p, int* sx, int* sy) {
   const float* m = c.vp.m;
   const float x = m[0] * p.x + m[4] * p.y + m[8] * p.z + m[12];
@@ -1651,8 +1654,8 @@ void view_build_frame(const View& v, const Game& g, FrameDesc* fd, int w, int h,
   hud_reset(hud);
   if (g.screen == SC_PLAY) build_play_hud(g, hud, fd->cam);
   else screens_hud(g, hud);
-  // Caratteri che il gioco non sa disegnare (si vedono come '?'; nomi di mappe personalizzate, o
-  // testi cambiati senza rigenerare i caratteri): una volta nel registro.
+  // Characters the game can't draw (they show as '?'; names of custom maps, or texts changed
+  // without regenerating the glyphs): once in the log.
   static bool missing_logged = false;
   const int miss = hud_missing(true);
   if (miss > 0 && !missing_logged) {

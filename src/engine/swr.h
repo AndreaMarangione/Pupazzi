@@ -1,4 +1,4 @@
-// Renderer software: trasformazione, ritaglio e rasterizzazione con z-buffer, su piu' thread.
+// Software renderer: transformation, clipping and z-buffer rasterization, on multiple threads.
 #pragma once
 #include "engine/render.h"
 
@@ -8,10 +8,10 @@ void swr_set_threads(int n);
 int  swr_get_threads(void);
 int  swr_max_threads(void);
 
-// Disegna il fotogramma e restituisce il buffer colore XRGB8888 (w * h pixel, passo w * 4 byte).
+// Draws the frame and returns the XRGB8888 color buffer (w * h pixels, stride w * 4 bytes).
 const uint32_t* swr_render(const FrameDesc* f, RenderStats* st);
 
-// Solo per i test: in modalita' conteggio ogni pixel accumula quante volte viene coperto.
+// Tests only: in count mode each pixel accumulates how many times it is covered.
 void swr_debug_count_mode(bool on);
 const float* swr_debug_depth(void);
-int swr_debug_clipped(void);   // triangoli passati dal ritaglio nell'ultimo fotogramma
+int swr_debug_clipped(void);   // triangles that went through clipping in the last frame

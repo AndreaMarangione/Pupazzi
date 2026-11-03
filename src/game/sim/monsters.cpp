@@ -1,12 +1,12 @@
-// Mostri della Terra (scorpione, arciere di terracotta, scarabei, guerriero di terracotta) e il boss,
-// il Gladiatore gigante del Colosseo. Comportamenti della 0.4: corridore, tiratore, sciame, grosso;
-// il gladiatore dalla 0.5.1 cammina, insegue e combatte (fendente, carica, crepa, giavellotti).
+// Earth monsters (scorpion, terracotta archer, scarabs, terracotta warrior) and the boss, the
+// giant Gladiator of the Colosseum. Behaviors from 0.4: runner, shooter, swarm, big one; since
+// 0.5.1 the gladiator walks, chases and fights (sweep, charge, crack, javelins).
 #include "game/sim/game_int.h"
 #include "platform/plat.h"
 #include <string.h>
 
 const MonDef MONS[MO_NTYPES] = {
-  // nome, vita, velocita', danno, raggio, altezza, vola
+  // name, health, speed, damage, radius, height, flies
   { "scorpione", 70.0f, 3.4f, 18.0f, 0.42f, 1.0f, false },
   { "arciere di terracotta", 50.0f, 2.3f, 14.0f, 0.42f, 0.8f, false },
   { "scarabeo", 18.0f, 4.4f, 6.0f, 0.26f, 0.5f, true },
@@ -32,7 +32,7 @@ void boss_push_monster(Game& g, Monster& m) {
   m.pos.z = g.boss.pos.z + dz / d * r;
 }
 
-// Bersaglio: il giocatore in piedi piu' vicino che il mostro riesce a vedere.
+// Target: the nearest standing player that the monster can see.
 void pick_target(Game& g, Monster& m, int k) {
   if (m.target >= 0 && g.pl[m.target].alive && (g.tick + (unsigned)k) % 20u != 0u && player_visible_from(g, m.target, m.pos)) return;
   m.target = -1;
@@ -45,7 +45,7 @@ void pick_target(Game& g, Monster& m, int k) {
   }
 }
 
-// Velocita' voluta verso (tx, tz): in linea retta se si puo', altrimenti lungo il campo dei percorsi.
+// Wanted velocity toward (tx, tz): in a straight line if possible, otherwise along the path field.
 void steer(Game& g, Monster& m, Vec3 to, float spd, float* dvx, float* dvz) {
   const bool fl = MONS[m.type].flying;
   const float ex = to.x - m.pos.x, ez = to.z - m.pos.z, d = sqrtf(ex * ex + ez * ez);

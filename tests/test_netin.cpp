@@ -1,7 +1,7 @@
-// Prove dei comandi che arrivano a chi ha creato la partita in rete (0.5.4, revisione): numeri dei
-// comandi sbagliati o assurdi (un messaggio costruito apposta, o rovinato) non devono bloccare il
-// gioco ne' far usare comandi vecchi; quelli giusti si usano in ordine, anche con i buchi, i
-// doppioni e dopo un lungo stop. Si prova la parte di src/net/net.cpp che li legge, senza rete.
+// Tests of the commands that reach the host of a LAN game (0.5.4, review): wrong or absurd command
+// numbers (a message crafted on purpose, or corrupted) must not block the game or make it use old
+// commands; the right ones are used in order, even with gaps, duplicates and after a long stop.
+// Tests the part of src/net/net.cpp that reads them, without a network.
 //   make build/native/test_netin && ./build/native/test_netin
 #include "net/net.cpp"
 #include <signal.h>
@@ -13,7 +13,7 @@ static void on_alarm(int) {
   _exit(3);
 }
 
-// Un messaggio INPUT del giocatore 2 con i comandi first..first+n-1 (tasti = numero del comando).
+// An INPUT message from player 2 with the commands first..first+n-1 (buttons = command number).
 static void input(uint32_t first, int n) {
   Wr w;
   w.head(T_INPUT);
@@ -55,7 +55,7 @@ TEST_CASE("1) numeri assurdi scartati, gli altri in ordine") {
   Peer& p = fresh_peer();
   input(0xFFFFFFFFu, 1);
   EXPECT(!p.any, "primo comando con un numero assurdo (2^32-1): scartato");
-  // Uno a fotogramma, come arrivano di solito (con due o piu' in attesa se ne usano due insieme).
+  // One per frame, as they usually arrive (with two or more waiting, two are used together).
   input(0, 1);
   const NetPad a = host_take(p);
   input(0, 2);
@@ -75,7 +75,7 @@ TEST_CASE("1) numeri assurdi scartati, gli altri in ordine") {
 }
 
 TEST_CASE("2) dopo un lungo stop i comandi arrivano molto avanti") {
-  // Chi ha creato la partita si era fermato: i comandi arrivano molto avanti (ma possibili).
+  // The host had stopped: the commands arrive far ahead (but possible).
   Peer& p = fresh_peer();
   input(0, 2);
   host_take(p);
@@ -91,7 +91,7 @@ TEST_CASE("2) dopo un lungo stop i comandi arrivano molto avanti") {
 }
 
 TEST_CASE("3) numeri vicini al giro dei 32 bit") {
-  // Numeri vicini al giro dei 32 bit (dopo anni di partita): si continua in ordine.
+  // Numbers close to the 32-bit wraparound (after years of play): it goes on in order.
   Peer& p = fresh_peer();
   input(0, 1);
   host_take(p);

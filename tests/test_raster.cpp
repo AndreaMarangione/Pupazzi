@@ -1,8 +1,8 @@
-// Prova del rasterizzatore: una stanza chiusa, con le pareti tassellate a caso, vista
-// dall'interno deve coprire ogni pixel esattamente una volta. Qualunque fessura o doppia
-// copertura (lati condivisi, ritaglio sul piano vicino o sulla banda di guardia, scarto delle
-// facce) fa fallire la prova. In piu' controlla che la profondita' resti nei limiti attesi e
-// che l'immagine non dipenda dal numero di thread.
+// Rasterizer test: a closed room, with randomly tessellated walls, seen from the inside must
+// cover every pixel exactly once. Any crack or double coverage (shared edges, clipping
+// against the near plane or the guard band, face culling) makes the test fail. It also
+// checks that the depth stays within the expected limits and that the image does not
+// depend on the number of threads.
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -29,8 +29,8 @@ static Mesh build_room(void) {
   int* idx = (int*)malloc(sizeof(int) * L * L * L);
   for (int i = 0; i < L * L * L; ++i) idx[i] = -1;
   const float cell = 2.0f * S / (float)N;
-  // Vertici sulla superficie del cubo; quelli interni a una faccia o a uno spigolo vengono
-  // spostati restando sulla faccia o sullo spigolo.
+  // Vertices on the surface of the cube; those inside a face or an edge are moved while
+  // staying on the face or the edge.
   for (int k = 0; k < L; ++k)
     for (int j = 0; j < L; ++j)
       for (int i = 0; i < L; ++i) {
@@ -76,7 +76,7 @@ static Mesh build_room(void) {
   return mb_finish(&mb);
 }
 
-static int g_views = 300;   // primo argomento: quante viste
+static int g_views = 300;   // first argument: how many views
 
 TEST_CASE("1) stanza chiusa vista dall'interno: ogni pixel una volta sola") {
   const int views = g_views;
@@ -92,16 +92,16 @@ TEST_CASE("1) stanza chiusa vista dall'interno: ogni pixel una volta sola") {
     Mesh room = build_room();
     const int r = (int)(rnd() % 3);
     const int W = RES[r][0], H = RES[r][1];
-    // Trasformazione rigida a caso dell'oggetto, e telecamera portata nello stesso spazio.
+    // Random rigid transformation of the object, and the camera brought into the same space.
     Xform xf = xf_mul(xf_translate(v3(frange(-30, 30), frange(-30, 30), frange(-30, 30))),
                       xf_mul(xf_rot_y(frange(-3.1f, 3.1f)), xf_rot_x(frange(-3.1f, 3.1f))));
     if (view % 5 == 0) xf = xf_identity();
-    const float margin = (view & 1) ? 0.45f : 2.0f;       // meta' delle viste rasenti alle pareti
+    const float margin = (view & 1) ? 0.45f : 2.0f;       // half of the views close to the walls
     const Vec3 eye_l = v3(frange(-S + margin, S - margin), frange(-S + margin, S - margin), frange(-S + margin, S - margin));
     const float yaw = frange(-3.1f, 3.1f), pitch = frange(-1.3f, 1.3f);
     const Vec3 dir_l = v3(d_sin(yaw) * d_cos(pitch), d_sin(pitch), d_cos(yaw) * d_cos(pitch));
     const Vec3 eye = xf_point(xf, eye_l), target = xf_point(xf, eye_l + dir_l);
-    // look_at usa la verticale del mondo: si evita di guardare quasi lungo di essa.
+    // look_at uses the world vertical: avoid looking almost along it.
     const Vec3 d = normalize(target - eye);
     if (fabsf(d.y) > 0.97f) { mesh_free(&room); --view; continue; }
 
@@ -112,7 +112,7 @@ TEST_CASE("1) stanza chiusa vista dall'interno: ogni pixel una volta sola") {
     FrameDesc f = FrameDesc();
     f.w = W;
     f.h = H;
-    // Campo visivo limitato in modo che nessun punto visibile delle pareti stia prima del piano vicino.
+    // Field of view limited so that no visible point of the walls is closer than the near plane.
     camera_setup(&f.cam, eye, target, frange(0.6f, 1.4f), (float)W / (float)H, 0.25f, 300.0f);
     f.items = &item;
     f.nitems = 1;
@@ -133,14 +133,14 @@ TEST_CASE("1) stanza chiusa vista dall'interno: ogni pixel una volta sola") {
     }
     clipped_tris += swr_debug_clipped();
     if (swr_debug_clipped() > 0) clipped_views++;
-    // Passata normale: profondita' nei limiti, e stessa immagine con 1 thread e con tutti.
+    // Normal pass: depth within limits, and the same image with 1 thread and with all of them.
     swr_debug_count_mode(false);
     memset(&st, 0, sizeof(st));
     swr_set_threads(1);
     px = swr_render(&f, &st);
     memcpy(ref, px, sizeof(uint32_t) * (size_t)W * H);
     const float* z = swr_debug_depth();
-    // znear / w: al massimo 1 (piano vicino), al minimo la diagonale della stanza.
+    // znear / w: at most 1 (near plane), at the least the room's diagonal.
     const float zmax = 1.0f, zmin = 0.25f / (2.0f * S * 1.7321f + 0.5f);
     long long zb = 0;
     for (int i = 0; i < W * H; ++i)

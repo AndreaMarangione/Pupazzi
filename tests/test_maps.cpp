@@ -1,18 +1,18 @@
-// Prove delle mappe (0.5.1): niente fughe dalle zone. Andrea nelle Piramidi saltava nel Nilo e da
-// li' le spinte lo facevano uscire dall'altra parte dei muri, fino alle zone dopo senza aprire i
-// cancelli. Qui:
-//   1) controlli fissi delle mappe di serie (bordo, fuori, zone che si toccano, caselle fuori dalle
-//      zone, tutto raggiungibile a piedi) rifatti a parte, e le mappe sbagliate che il gioco deve
-//      rifiutare con il loro messaggio;
-//   2) giocatori a caso: in ogni zona di ogni mappa 4 giocatori invulnerabili, senza mostri, vanno
-//      di qua e di la' con salti corti e lunghi, contro muri, acqua, cancelli, blocchi, piattaforme,
-//      muretti, trampolini e cenote, con qualche spinta forte come quella delle bombe; a ogni
-//      fotogramma ognuno deve stare nella sua zona (o nel passaggio del cancello aperto) e non
-//      toccare mai una casella che lo ferma; chi cade nel cenote si conta a parte;
-//   3) casi mirati: salti da piattaforme e blocchi contro i muri delle zone, contro i cancelli
-//      chiusi, verso l'acqua; il cenote (ci si cade, ci si salta sopra, i mostri spinti dentro, chi
-//      rientra non riappare sul pozzo); casse che tornano su chi ci sta sopra.
-// Numeri a caso da una funzione hash della prova: mai il generatore del gioco.
+// Map tests (0.5.1): no escapes from the zones. Andrea, in the Piramidi map, jumped into the Nile
+// and from there the pushes took him out through the other side of the walls, into the next zones
+// without opening the gates. Here:
+//   1) fixed checks of the built-in maps (edge, outside, zones that touch, cells outside the
+//      zones, everything reachable on foot) redone separately, and the wrong maps the game must
+//      reject with their message;
+//   2) random players: in every zone of every map 4 invulnerable players, with no monsters, go
+//      back and forth with short and long jumps, against walls, water, gates, blocks, platforms,
+//      low walls, trampolines and cenotes, with a few strong pushes like those of bombs; at every
+//      frame each one must stay in their zone (or in the passage of the open gate) and never
+//      touch a cell that stops them; whoever falls into the cenote is counted separately;
+//   3) targeted cases: jumps from platforms and blocks against the zone walls, against closed
+//      gates, towards water; the cenote (falling in, jumping over it, monsters pushed in, whoever
+//      comes back does not reappear on the pit); crates that come back on whoever stands there.
+// Random numbers from a hash function of the test: never the game's generator.
 //   make build/native/test_maps && ./build/native/test_maps [FOTOGRAMMI_PER_ZONA [SEME]]
 #include "game/sim/game_int.h"
 #include "game/sim/maps.h"
@@ -29,10 +29,10 @@ static Game& g = *game_create();   // the game under test (the game keeps no glo
 
 static Pad g_pads[MAX_PLAYERS];
 static char g_base[64] = "/tmp/pupazzi_test_maps_XXXXXX";
-static int g_per_zone = 3000;        // primo argomento: fotogrammi per zona
-static uint32_t g_seed = 0;          // secondo argomento: altre partite a caso
+static int g_per_zone = 3000;        // first argument: frames per zone
+static uint32_t g_seed = 0;          // second argument: other random games
 
-// Come nel gioco: le impostazioni, poi la partita 1 (caricata o, se non c'e', nuova).
+// As in the game: the settings, then game 1 (loaded or, if there is none, new).
 static void open_game(const char* dir) {
   save_open(dir);
   if (!save_slot_load(0)) save_slot_new(0);
@@ -49,7 +49,7 @@ static uint32_t hmix(uint32_t a, uint32_t b, uint32_t c) {
 }
 static float hfloat(uint32_t a, uint32_t b, uint32_t c) { return (float)(hmix(a, b, c) >> 8) * (1.0f / 16777216.0f); }
 
-// Niente mostri, niente ondate, niente boss: la zona resta da ripulire finche' non lo decide la prova.
+// No monsters, no waves, no boss: the zone stays to be cleared until the test decides otherwise.
 static void quiet(void) {
   memset(g.spawn_left, 0, sizeof(g.spawn_left));
   g.spawn_wait = 1000000;
@@ -71,11 +71,11 @@ static void clear_zone(void) {
 static int cell_type(const Level* L, int cx, int cz) { return cx < 0 || cz < 0 || cx >= L->W || cz >= L->H ? (int)C_VOID : (int)L->cell[cz][cx]; }
 static int cell_zone(const Level* L, int cx, int cz) { return cx < 0 || cz < 0 || cx >= L->W || cz >= L->H ? -1 : L->zone[cz][cx]; }
 
-// --- 1) controlli fissi ------------------------------------------------------------------------
+// --- 1) fixed checks ----------------------------------------------------------------------------
 
-// Rifatti qui senza level.cpp: il bordo e' muro o fuori, il fuori e' chiuso dai muri, le zone si
-// toccano (anche in diagonale) solo con un cancello in mezzo, ogni casella che non e' muro, fuori,
-// albero, masso o cancello sta in una zona; dentro ogni zona si arriva a piedi dappertutto.
+// Redone here without level.cpp: the edge is wall or outside, the outside is closed off by walls,
+// zones touch (even diagonally) only with a gate in between, every cell that is not wall, outside,
+// tree, rock or gate is in a zone; inside every zone everything can be reached on foot.
 static bool static_ok(const Level* L, char* why, int n) {
   for (int cz = 0; cz < L->H; ++cz)
     for (int cx = 0; cx < L->W; ++cx) {
@@ -137,7 +137,7 @@ static void parse_rejects(const char* name, const char* grid, const char* want) 
   snprintf(text, sizeof(text), "nome: prova\nmondo: terra\nzona 1: scorpioni 1\nzona 2: scorpioni 1\n---\n%s", grid);
   bool ok = level_parse(&g_lv, text, err, sizeof(err));
   if (ok) {
-    // con una zona sola la riga "zona 2" e' di troppo: si riprova senza
+    // with a single zone the "zona 2" line is one too many: try again without it
     snprintf(text, sizeof(text), "nome: prova\nmondo: terra\nzona 1: scorpioni 1\n---\n%s", grid);
     ok = level_parse(&g_lv, text, err, sizeof(err));
   } else if (strstr(err, "zona 2\" ma la griglia")) {
@@ -161,7 +161,7 @@ TEST_CASE("1) mappe di serie e mappe sbagliate") {
     snprintf(buf, sizeof(buf), "%s: bordo e fuori chiusi, zone separate, tutto nelle zone e raggiungibile a piedi%s%s", MAP_TEXTS[i].id,
              s ? "" : ": ", s ? "" : why);
     EXPECT(s, buf);
-    // Zone grandi come quelle di serie (31 x 21) e niente acqua o cenote sul bordo delle zone fuori dai muri.
+    // Zones as big as the built-in ones (31 x 21) and no water or cenote on zone edges outside the walls.
     if (g_lv.boss == BOSS_NONE) {
       bool sizes = true;
       for (int z = 0; z < g_lv.nzones; ++z) {
@@ -172,7 +172,7 @@ TEST_CASE("1) mappe di serie e mappe sbagliate") {
       EXPECT(sizes && g_lv.nzones == 3, buf);
     }
   }
-  // Mappe che il gioco deve rifiutare (con il loro messaggio nel menu delle mappe).
+  // Maps the game must reject (with their message in the maps menu).
   parse_rejects("acqua sul bordo (il Nilo della 0.5)",
                 "#########\n#......~~\n#......~~\n#......~~\n#......~~\n#......~~\n#..,12,~~\n#########\n", "sul bordo");
   parse_rejects("terreno contro il fuori", "########\n#......#\n#......#\n#......\n#......#\n#......#\n#..12..#\n########\n", "manca il muro");
@@ -194,7 +194,7 @@ TEST_CASE("1) mappe di serie e mappe sbagliate") {
   parse_rejects("cancello che da' solo sull'acqua",
                 "##########\n#........#\n#........#\n#~~~~~~~~#\n####GG####\n#........#\n#..,12,..#\n##########\n", "a piedi");
   {
-    // e una mappa giusta con un angolo fuori (spazi) chiuso dai muri si carica
+    // and a correct map with an outside corner (spaces) closed off by walls loads
     char err[200];
     const bool ok = level_parse(&g_lv,
                                 "nome: prova\nmondo: terra\nzona 1: scorpioni 1\nzona 2: scorpioni 1\n---\n"
@@ -203,9 +203,9 @@ TEST_CASE("1) mappe di serie e mappe sbagliate") {
     snprintf(buf, sizeof(buf), "accettata: mappa con un angolo fuori chiuso dai muri (%s)", ok ? "ok" : err);
     EXPECT(ok, buf);
   }
-  // Cancelli a battente (0.5.4): i battenti si aprono verso la zona che apre il cancello, anche nei
-  // cancelli da nord a sud e in quelli di una casella; un masso davanti ferma il battente che ci
-  // sbatterebbe contro (l'altro si apre del tutto).
+  // Swing gates (0.5.4): the leaves open towards the zone that opens the gate, also in north-south
+  // gates and in one-cell ones; a rock in front stops the leaf that would bang into it (the other
+  // one opens fully).
   {
     char err[200];
     const char* HEAD = "nome: prova\nmondo: terra\nzona 1: scorpioni 1\nzona 2: scorpioni 1\n---\n";
@@ -213,7 +213,7 @@ TEST_CASE("1) mappe di serie e mappe sbagliate") {
     snprintf(text, sizeof(text), "%s%s", HEAD, "##########\n#........#\n#........#\n#........#\n###GGGG###\n#...o....#\n#........#\n#..,12,..#\n##########\n");
     bool ok = level_parse(&g_lv, text, err, sizeof(err));
     const Gate& a = g_lv.gates[0];
-    bool clear = true;      // il battente fermo non tocca il masso
+    bool clear = true;      // the stopped leaf does not touch the rock
     if (ok) {
       Vec3 h, d;
       float len;
@@ -240,13 +240,13 @@ TEST_CASE("1) mappe di serie e mappe sbagliate") {
   }
 }
 
-// --- 2) giocatori a caso ---------------------------------------------------------------------------
+// --- 2) random players -----------------------------------------------------------------------------
 
 struct Walker {
-  float tx, tz;       // dove va
-  int t;              // fotogrammi con questo obiettivo
-  int mode;           // salti: 0 niente, 1 colpetti, 2 tenuti, 3 a caso, 4 continui
-  int idle;           // fermo per un po'
+  float tx, tz;       // where it goes
+  int t;              // frames with this target
+  int mode;           // jumps: 0 none, 1 taps, 2 held, 3 random, 4 continuous
+  int idle;           // standing still for a while
 };
 
 struct Fuzz {
@@ -255,18 +255,18 @@ struct Fuzz {
   char first[200];
 };
 
-// La casella e' un ostacolo "duro" per chi cammina (qualunque sia la quota dei piedi)?
+// Is the cell a "hard" obstacle for someone walking (whatever the height of the feet)?
 static bool hard_block(const Level* L, int cx, int cz) {
   const int c = cell_type(L, cx, cz);
   if (c == C_VOID || c == C_WALL || c == C_TREE || c == C_ROCK || c == C_WATER) return true;
   if (c == C_GATE) {
     const int gi = L->gate_at[cz][cx];
-    return gi < 0 || L->gates[gi].open <= 0.0f;     // chiuso del tutto (mentre si muove le spinte lo risolvono)
+    return gi < 0 || L->gates[gi].open <= 0.0f;     // fully closed (while it moves, the pushes resolve it)
   }
   return false;
 }
 
-// Il cerchio del giocatore tocca qualcosa che non dovrebbe? feet: quota dei piedi con cui si e' mosso.
+// Does the player's circle touch something it should not? feet: height of the feet it moved with.
 static bool overlaps(const Level* L, float x, float z, float feet, char* what, int n) {
   const float r = PL_R - 0.004f;
   const float fx = x + (float)L->W * 0.5f, fz = z + (float)L->H;
@@ -284,8 +284,8 @@ static bool overlaps(const Level* L, float x, float z, float feet, char* what, i
   return false;
 }
 
-// Obiettivo interessante nella zona z (o vicino): muri del bordo della zona, acqua, cancelli,
-// blocchi, piattaforme, muretti, trampolini, cenote, terreno qualsiasi.
+// Interesting target in zone z (or near it): walls on the zone's edge, water, gates, blocks,
+// platforms, low walls, trampolines, cenotes, any ground.
 static void pick_target(const Level* L, int z, uint32_t seed, float* tx, float* tz) {
   const int want = (int)(hmix(seed, 1, 2) % 9u);
   const ZoneDef& zd = L->zones[z];
@@ -345,20 +345,20 @@ static void walker_pads(Walker* w, uint32_t seed, int frame, int target_zone, bo
     float dx = k.tx - p.pos.x, dz = k.tz - p.pos.z;
     const float l = sqrtf(dx * dx + dz * dz);
     if (l > 1e-3f) { dx /= l; dz /= l; }
-    // un po' di zigzag e ogni tanto di traverso, cosi' si struscia contro gli spigoli
+    // a bit of zigzag and now and then sideways, so it rubs against the corners
     const float wob = 0.6f * (hfloat(seed, (uint32_t)(frame / 7), (uint32_t)i + 50u) - 0.5f);
     g_pads[i].lx = clampf(dx - dz * wob, -1.0f, 1.0f);
     g_pads[i].ly = clampf(dz + dx * wob, -1.0f, 1.0f);
     bool jump = false;
     switch (k.mode) {
-      case 1: jump = (frame + i * 7) % 23 < 2; break;                 // colpetti
-      case 2: jump = (frame + i * 11) % 47 < 30; break;               // tenuti (in alto)
+      case 1: jump = (frame + i * 7) % 23 < 2; break;                 // taps
+      case 2: jump = (frame + i * 11) % 47 < 30; break;               // held (high)
       case 3: jump = hfloat(seed, (uint32_t)frame, (uint32_t)i + 99u) < 0.3f; break;
-      case 4: jump = (frame & 1) != 0 || (frame % 61) < 40; break;    // quasi sempre
+      case 4: jump = (frame & 1) != 0 || (frame % 61) < 40; break;    // almost always
       default: break;
     }
     if (jump) g_pads[i].btn |= (uint16_t)(1u << PAD_R2);
-    // ogni tanto una spinta forte come quella di una bomba (verso muri, acqua, cancelli, cenote)
+    // now and then a strong push like a bomb's (towards walls, water, gates, cenotes)
     if (hmix(seed, (uint32_t)frame, (uint32_t)i + 200u) % 97u == 0u) {
       const float a = D_TWO_PI * hfloat(seed, (uint32_t)frame, (uint32_t)i + 300u), k = 3.0f + 7.0f * hfloat(seed, (uint32_t)frame, (uint32_t)i + 400u);
       push_player(g, i, d_cos(a) * k, d_sin(a) * k, 0);
@@ -366,7 +366,7 @@ static void walker_pads(Walker* w, uint32_t seed, int frame, int target_zone, bo
   }
 }
 
-// Un passo della partita con i controlli di ogni giocatore.
+// One step of the game with the checks of every player.
 static void fuzz_step(Fuzz& F, const Walker* w, Vec3* prev, float* prev_y, bool* prev_alive) {
   (void)w;
   for (int i = 0; i < MAX_PLAYERS; ++i) {
@@ -380,7 +380,7 @@ static void fuzz_step(Fuzz& F, const Walker* w, Vec3* prev, float* prev_y, bool*
   if (g.phase == PH_WIPE && phase0 != PH_WIPE) F.wipes++;
   if (getenv("TEST_MAPS_DEBUG") && (g.zone != zone0 || g.phase != phase0))
     printf("    fotogramma %ld: zona %d fase %d -> zona %d fase %d\n", F.frames, zone0 + 1, phase0, g.zone + 1, g.phase);
-  // niente mostri, vite che non finiscono, invulnerabili
+  // no monsters, lives that never run out, invulnerable
   memset(g.spawn_left, 0, sizeof(g.spawn_left));
   g.spawn_wait = 1000000;
   g.boss.alive = false;
@@ -398,7 +398,7 @@ static void fuzz_step(Fuzz& F, const Walker* w, Vec3* prev, float* prev_y, bool*
     const float moved = dist2d(p.pos, prev[i]);
     const bool teleport = moved > 0.5f;
     if (prev_alive[i] && !p.alive) {
-      // invulnerabili: si va a terra solo cadendo nel cenote, con il centro sopra il pozzo
+      // invulnerable: you go down only by falling into the cenote, with the center over the pit
       F.falls++;
       if (!level_pit_at(L, p.pos.x, p.pos.z) || teleport) {
         F.falls_bad++;
@@ -412,7 +412,7 @@ static void fuzz_step(Fuzz& F, const Walker* w, Vec3* prev, float* prev_y, bool*
       if (!F.first[0]) snprintf(F.first, sizeof(F.first), "G%d rientra accanto al cenote a %.2f,%.2f", i + 1, p.pos.x, p.pos.z);
     }
     if (p.leap_n > 0) continue;
-    // nella zona giusta (o nel passaggio di un cancello aperto)
+    // in the right zone (or in the passage of an open gate)
     int cx, cz;
     const bool in = level_cell(L, p.pos.x, p.pos.z, &cx, &cz);
     const int z = in ? L->zone[cz][cx] : -1;
@@ -429,7 +429,7 @@ static void fuzz_step(Fuzz& F, const Walker* w, Vec3* prev, float* prev_y, bool*
                    level_zone_at(L, g.pl[j].pos.x, g.pl[j].pos.z) + 1, prev[j].x, prev[j].z);
       }
     }
-    // da una zona all'altra solo passando dal cancello (che non ha zona)
+    // from one zone to the other only through the gate (which has no zone)
     if (!teleport) {
       const int z0 = level_zone_at(L, prev[i].x, prev[i].z);
       if (z0 >= 0 && z >= 0 && z0 != z) {
@@ -460,15 +460,15 @@ static void fuzz_map(int map, int per_zone, Fuzz& F) {
   const uint32_t seed = 0xC0FFEEu + (uint32_t)map * 7919u + g_seed * 104729u;
   int frame = 0;
   for (int z = 0; z < g.L.nzones; ++z) {
-    // la zona con i cancelli chiusi
+    // the zone with the gates closed
     for (int f = 0; f < per_zone; ++f, ++frame) {
       walker_pads(w, seed, frame, g.zone, false);
       fuzz_step(F, w, prev, prev_y, prev_alive);
     }
-    // (se tutti sono caduti insieme la mappa e' ricominciata: si va avanti dalla zona del gioco)
+    // (if everyone fell together the map restarted: go on from the game's zone)
     if (g.zone + 1 >= g.L.nzones) continue;
     const int next = g.zone + 1;
-    // ripulita: avanti attraverso il cancello (con chi resta indietro a saltare in giro)
+    // cleared: on through the gate (with whoever stays behind jumping around)
     clear_zone();
     for (int i = 0; i < MAX_PLAYERS; ++i) w[i].t = 0;
     int f = 0;
@@ -478,7 +478,7 @@ static void fuzz_map(int map, int per_zone, Fuzz& F) {
       fuzz_step(F, w, prev, prev_y, prev_alive);
     }
     if (!(g.zone == next && g.phase == PH_FIGHT) && g.phase == PH_CLEAR && g.zone + 1 == next) {
-      // non ci sono arrivati da soli (il guinzaglio, un ostacolo): li porta la prova
+      // they did not get there on their own (the leash, an obstacle): the test takes them there
       for (int i = 0; i < MAX_PLAYERS; ++i)
         if (g.pl[i].active && g.pl[i].alive) g.pl[i].pos = g.L.zones[next].start[i];
       for (int k = 0; k < 400 && !(g.phase == PH_FIGHT && g.zone == next); ++k) game_update(g, g_pads);
@@ -500,10 +500,10 @@ TEST_CASE("2) giocatori a caso in ogni zona, 4 giocatori") {
   }
 }
 
-// --- 3) casi mirati ----------------------------------------------------------------------------------
+// --- 3) targeted cases -------------------------------------------------------------------------------
 
-// Tiene il giocatore i in salto e lo fa correre verso (tx, tz) per n fotogrammi; false se esce
-// dalla zona o entra in un ostacolo.
+// Keeps player i jumping and makes them run towards (tx, tz) for n frames; false if they leave
+// the zone or enter an obstacle.
 static bool run_at(int i, float tx, float tz, int n, int jump_mode, char* why, int wn) {
   const int zone = level_zone_at(&g.L, g.pl[i].pos.x, g.pl[i].pos.z);
   for (int f = 0; f < n; ++f) {
@@ -538,7 +538,7 @@ static void fresh(int map, int players) {
   quiet();
 }
 
-// Mette il giocatore 0 al centro della casella, sopra quello che c'e'.
+// Puts player 0 at the center of the cell, on top of whatever is there.
 static void put(int i, int cx, int cz) {
   Player& p = g.pl[i];
   p.pos = cell_center(&g.L, cx, cz);
@@ -552,7 +552,7 @@ static void put(int i, int cx, int cz) {
 TEST_CASE("3) casi mirati") {
   char buf[400], why[200];
   for (int m = 0; m < maps_count(); ++m) {
-    // a) dai blocchi e dalle piattaforme accanto ai muri del bordo della zona, saltando contro il muro
+    // a) from the blocks and platforms next to the walls on the zone's edge, jumping against the wall
     fresh(m, 1);
     int tried = 0, bad = 0;
     why[0] = 0;
@@ -585,7 +585,7 @@ TEST_CASE("3) casi mirati") {
       }
     snprintf(buf, sizeof(buf), "%s: salti da blocchi e piattaforme contro i muri (%d casi)%s%s", maps_name(m), tried, bad ? ": " : "", why);
     EXPECT(bad == 0, buf);
-    // b) contro i cancelli chiusi, saltando e correndo di traverso
+    // b) against the closed gates, jumping and running sideways
     fresh(m, 1);
     bad = 0;
     tried = 0;
@@ -596,7 +596,7 @@ TEST_CASE("3) casi mirati") {
       g.zone = z;
       g.phase = PH_FIGHT;
       for (int x = gt.x0; x <= gt.x1; ++x) {
-        // la casella della zona davanti al cancello
+        // the zone's cell in front of the gate
         int fz = -1;
         if (cell_zone(&g.L, x, gt.z1 + 1) == z) fz = gt.z1 + 1;
         else if (cell_zone(&g.L, x, gt.z0 - 1) == z) fz = gt.z0 - 1;
@@ -615,7 +615,7 @@ TEST_CASE("3) casi mirati") {
     }
     snprintf(buf, sizeof(buf), "%s: salti contro i cancelli chiusi (%d casi)%s%s", maps_name(m), tried, bad ? ": " : "", why);
     EXPECT(bad == 0, buf);
-    // c) verso l'acqua da ogni riva, saltando
+    // c) towards the water from every bank, jumping
     fresh(m, 1);
     bad = 0;
     tried = 0;
@@ -628,7 +628,7 @@ TEST_CASE("3) casi mirati") {
           const int bx = cx + D[d][0], bz = cz + D[d][1];
           const int c = cell_type(&g.L, bx, bz);
           if (c != C_FLOOR && c != C_PATH && c != C_GRASS && c != C_BUSH) continue;
-          if ((cx * 7 + cz * 3 + d) % 3) continue;     // un riva su tre basta
+          if ((cx * 7 + cz * 3 + d) % 3) continue;     // one bank in three is enough
           const int z = g.L.zone[bz][bx];
           g.zone = z;
           g.phase = PH_FIGHT;
@@ -647,7 +647,7 @@ TEST_CASE("3) casi mirati") {
   }
 }
 
-// --- mappe di prova fatte a mano (cartella PUPAZZI_MAPS: sostituiscono terra1) ---------------------
+// --- hand-made test maps (PUPAZZI_MAPS directory: they replace terra1) ------------------------------
 
 static const char* const MAP_ACQUA =
   "nome: Prova acqua\nmondo: terra\nstile: piramidi\nzona 1: scorpioni 1\nzona 2: scorpioni 1\n---\n"
@@ -698,8 +698,8 @@ static void no_custom(void) {
 TEST_CASE("4) mappe di prova: acqua contro il muro tra due zone, cenote, casse, cancelli") {
   char buf[400], why[200];
   {
-    // L'errore della 0.5: acqua contro il muro da tutte e due le parti. Si salta verso l'acqua
-    // della zona 1 da ogni lato: non ci si entra e non si passa nella zona 2.
+    // The 0.5 bug: water against the wall on both sides. Jump towards the water of zone 1 from
+    // every side: you do not get into it and do not pass into zone 2.
     use_custom(MAP_ACQUA);
     fresh(0, 1);
     EXPECT(!strcmp(g.L.name, "Prova acqua") && g.L.nzones == 2, "la mappa di prova con l'acqua si carica");
@@ -712,7 +712,7 @@ TEST_CASE("4) mappe di prova: acqua contro il muro tra due zone, cenote, casse, 
     }
     snprintf(buf, sizeof(buf), "salti continui verso l'acqua contro il muro: si resta nella zona 1%s%s", ok ? "" : ": ", why);
     EXPECT(ok, buf);
-    // Il trampolino lancia verso l'acqua: il volo si ferma alla riva come contro un muro.
+    // The trampoline launches towards the water: the flight stops at the bank as against a wall.
     {
       put(0, 12, 8);
       bool okt = true, launched = false;
@@ -729,9 +729,9 @@ TEST_CASE("4) mappe di prova: acqua contro il muro tra due zone, cenote, casse, 
       snprintf(buf, sizeof(buf), "trampolino verso l'acqua: lanciato (%s), il volo si ferma alla riva", launched ? "si" : "no");
       EXPECT(okt && launched, buf);
     }
-    // Corpo messo a forza dentro l'acqua (come nella 0.5) circondato da acqua e muro: la spinta
-    // non lo manda mai dentro il muro.
-    float x = cell_center(&g.L, 11, 5).x, z = cell_center(&g.L, 11, 5).z - 0.42f;   // vicino al muro
+    // Body forced inside the water (as in 0.5) surrounded by water and wall: the push never sends
+    // it inside the wall.
+    float x = cell_center(&g.L, 11, 5).x, z = cell_center(&g.L, 11, 5).z - 0.42f;   // near the wall
     const float x0 = x, z0 = z;
     level_push_out(&g.L, &x, &z, 0.0f, PL_R, PL_STEP, BODY_WALK);
     int cx, cz;
@@ -740,16 +740,16 @@ TEST_CASE("4) mappe di prova: acqua contro il muro tra due zone, cenote, casse, 
     EXPECT(g.L.cell[cz][cx] != C_WALL && g.L.zone[cz][cx] == 0, buf);
     (void)x0;
     (void)z0;
-    // La guardia: dentro un ostacolo non si entra, si torna dove si era.
+    // The guard: you do not get inside an obstacle, you go back where you were.
     float gx = cell_center(&g.L, 9, 5).x, gz = cell_center(&g.L, 9, 5).z;
     const float ox = gx, oz = gz;
-    gx += 1.0f;   // dentro l'acqua
+    gx += 1.0f;   // inside the water
     const bool took = level_body_guard(&g.L, ox, oz, &gx, &gz, 0.0f, PL_R, PL_STEP, BODY_WALK);
     EXPECT(!took && level_body_ok(&g.L, gx, gz, 0.0f, PL_R, PL_STEP, BODY_WALK), "level_body_guard rifiuta lo spostamento dentro l'acqua");
-    // Chi vola passa sopra l'acqua.
+    // Whoever flies passes over the water.
     EXPECT(level_body_ok(&g.L, cell_center(&g.L, 11, 5).x, cell_center(&g.L, 11, 5).z, 0.0f, 0.26f, PL_STEP, BODY_FLY),
            "chi vola passa sopra l'acqua");
-    // Cancello: uno che resta nel passaggio quando la zona 2 comincia viene riportato dentro.
+    // Gate: someone left in the passage when zone 2 starts is brought back inside.
     clear_zone();
     put(0, 7, 3);
     for (int k = 0; k < 400 && !(g.phase == PH_FIGHT && g.zone == 1); ++k) game_update(g, g_pads);
@@ -763,7 +763,7 @@ TEST_CASE("4) mappe di prova: acqua contro il muro tra due zone, cenote, casse, 
     use_custom(MAP_CENOTE);
     fresh(0, 1);
     EXPECT(!strcmp(g.L.name, "Prova cenote"), "la mappa di prova con il cenote si carica");
-    // a terra dentro il cenote: si perde una vita (da soli: si rifa' la zona)
+    // down inside the cenote: a life is lost (alone: the zone is replayed)
     Player& p = g.pl[0];
     put(0, 5, 6);
     const int lives = p.lives;
@@ -784,7 +784,7 @@ TEST_CASE("4) mappe di prova: acqua contro il muro tra due zone, cenote, casse, 
     for (int k = 0; k < WIPE_ZONE_FRAMES + 5; ++k) game_update(g, g_pads);
     quiet();
     EXPECT(p.alive && !level_pit_near(&g.L, p.pos.x, p.pos.z, PL_R + 0.5f), "si riparte dalla partenza della zona, lontano dal pozzo");
-    // sopra il cenote stretto (una casella) si salta senza cadere
+    // over the narrow cenote (one cell) you jump without falling
     put(0, 10, 4);
     p.yaw = D_HALF_PI;
     bool fell = false, over = false;
@@ -801,16 +801,16 @@ TEST_CASE("4) mappe di prova: acqua contro il muro tra due zone, cenote, casse, 
     level_cell(&g.L, p.pos.x, p.pos.z, &cx, &cz);
     snprintf(buf, sizeof(buf), "salto sopra il cenote largo una casella: passato (casella %d,%d), mai caduto", cx, cz);
     EXPECT(over && !fell && p.alive && cx >= 12, buf);
-    // sull'orlo (centro fuori dalla casella del pozzo) non si cade: l'orlo e' il bordo della casella
+    // on the rim (center outside the pit's cell) you do not fall: the rim is the cell's edge
     put(0, 7, 3);
-    p.pos.x = cell_center(&g.L, 7, 3).x - 0.45f;     // a 5 cm dal pozzo
+    p.pos.x = cell_center(&g.L, 7, 3).x - 0.45f;     // 5 cm from the pit
     for (int k = 0; k < 30; ++k) {
       memset(g_pads, 0, sizeof(g_pads));
       game_update(g, g_pads);
       quiet();
     }
     EXPECT(p.alive, "sull'orlo del cenote, col centro fuori, si resta in piedi");
-    // il mostro spinto dentro cade ed e' sconfitto (la vittoria a chi l'ha spinto)
+    // the monster pushed in falls and is defeated (the kill goes to whoever pushed it)
     put(0, 9, 8);
     const int kills = p.kills;
     Vec3 at = cell_center(&g.L, 7, 3);
@@ -834,7 +834,7 @@ TEST_CASE("4) mappe di prova: acqua contro il muro tra due zone, cenote, casse, 
     }
     snprintf(buf, sizeof(buf), "mostro spinto nel cenote: sconfitto (%s), la vittoria va a G1 (%d -> %d)", dead ? "si" : "no", kills, p.kills);
     EXPECT(dead && p.kills == kills + 1, buf);
-    // e quello che cammina da solo non ci entra: insegue un giocatore dall'altra parte del pozzo
+    // and one walking on its own does not go in: it chases a player on the other side of the pit
     quiet();
     put(0, 2, 3);
     at = cell_center(&g.L, 8, 3);
@@ -855,11 +855,11 @@ TEST_CASE("4) mappe di prova: acqua contro il muro tra due zone, cenote, casse, 
       }
     }
     EXPECT(alive, "un mostro che cammina non entra nel cenote da solo (lo gira)");
-    // in due: chi cade rientra accanto al compagno, mai sul pozzo ne' accanto
+    // two players: whoever falls comes back next to the teammate, never on the pit or next to it
     quiet();
     fresh(0, 2);
     put(0, 7, 3);
-    g.pl[0].pos.x -= 0.4f;                       // G1 sull'orlo
+    g.pl[0].pos.x -= 0.4f;                       // G1 on the rim
     put(1, 5, 6);
     for (int k = 0; k < 200 && g.pl[1].alive; ++k) {
       memset(g_pads, 0, sizeof(g_pads));
@@ -873,7 +873,7 @@ TEST_CASE("4) mappe di prova: acqua contro il muro tra due zone, cenote, casse, 
     bool back = false, safe = true;
     for (int k = 0; k < RESPAWN_FRAMES + 200; ++k) {
       memset(g_pads, 0, sizeof(g_pads));
-      if (k == RESPAWN_FRAMES + 60) g.pl[0].pos = cell_center(&g.L, 13, 8);   // G1 si allontana dall'orlo
+      if (k == RESPAWN_FRAMES + 60) g.pl[0].pos = cell_center(&g.L, 13, 8);   // G1 moves away from the rim
       game_update(g, g_pads);
       quiet();
       g.pl[0].invuln = 1000;
@@ -884,7 +884,7 @@ TEST_CASE("4) mappe di prova: acqua contro il muro tra due zone, cenote, casse, 
     }
     snprintf(buf, sizeof(buf), "G2 rientra lontano dal cenote (a %.2f,%.2f)", g.pl[1].pos.x, g.pl[1].pos.z);
     EXPECT(back && safe, buf);
-    // casse che tornano su chi ci sta sopra quando la zona ricomincia: si riparte dalla partenza
+    // crates that come back on whoever stands there when the zone restarts: restart from the start
     fresh(0, 1);
     const int d = g.L.dyn_at[6][3];
     if (d >= 0) g.L.dyn[d].hp = 0.0f;

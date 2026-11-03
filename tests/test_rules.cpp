@@ -1,11 +1,11 @@
-// Prove delle regole (0.5): vite (da soli: zona rifatta, finite le vite mappa da capo; in piu'
-// giocatori rientro dopo 5 secondi, senza vite fuori, tutti a terra insieme mappa da capo), chi
-// esce e rientra, VITA EXTRA, terza stella, giri dei pianeti aperti con le stelle, difficolta' del
-// giro, mappe aperte per pianeta e salvataggio della 0.4; dalla 0.5.4 i bonus delle casse. Usa il gioco senza frontend (come
-// test_aim) e un salvataggio in una cartella temporanea.
+// Rules tests (0.5): lives (alone: zone replayed, out of lives: map restarted; with more players:
+// back in after 5 seconds, out of lives: out, all down together: map restarted), who leaves and
+// comes back, VITA EXTRA, third star, planet rounds unlocked with the stars, difficulty of the
+// round, maps unlocked per planet and the 0.4 save; since 0.5.4 the power-ups in the crates. Uses
+// the game without a frontend (like test_aim) and a save in a temporary directory.
 //   make build/native/test_rules && ./build/native/test_rules [--immagini CARTELLA]
-// Con --immagini scrive anche le schermate dell'HUD (PPM a 640x480, renderer software): icone
-// dei giocatori con uno a terra e uno senza vite, arena, menu delle mappe, fine dell'arena.
+// With --immagini it also writes the HUD screens (PPM at 640x480, software renderer): player
+// icons with one down and one out of lives, arena, maps menu, end of the arena.
 #include "game/sim/game_int.h"
 #include "game/view/view.h"
 #include "game/sim/maps.h"
@@ -42,7 +42,7 @@ static void press(int i, int b) {
   memset(g_pads, 0, sizeof(g_pads));
 }
 
-// Carte (0.5.4): passato il banner, A per vedere le carte e A per prendere quella col cursore.
+// Cards (0.5.4): once past the banner, A to see the cards and A to take the one under the cursor.
 static void pick_card(int i) {
   memset(g_pads, 0, sizeof(g_pads));
   while (g.cards_open && g.cards_age <= CARDS_BANNER_MIN) step();
@@ -50,7 +50,7 @@ static void pick_card(int i) {
   press(i, PAD_A);
 }
 
-// Niente mostri e niente ondate: le cadute le decide la prova.
+// No monsters and no waves: the test decides the falls.
 static void quiet(void) {
   memset(g.spawn_left, 0, sizeof(g.spawn_left));
   g.spawn_wait = 1000000;
@@ -59,8 +59,8 @@ static void quiet(void) {
   memset(g.mk, 0, sizeof(g.mk));
 }
 
-// Un colpo che lo manda a terra, poi un fotogramma: il gioco vede chi e' a terra (e se lo sono
-// tutti comincia la ripartenza).
+// A hit that knocks them down, then a frame: the game sees who is down (and if everyone is, the
+// restart begins).
 static void kill_player(int i) {
   Player& p = g.pl[i];
   p.invuln = 0;
@@ -70,7 +70,7 @@ static void kill_player(int i) {
   step();
 }
 
-// La zona in corso ripulita (resta da andare avanti, o la mappa e' finita).
+// The current zone cleared (what is left is to go on, or the map is over).
 static void clear_zone(void) {
   memset(g.spawn_left, 0, sizeof(g.spawn_left));
   g.wave = g.L.zones[g.zone].nwaves - 1;
@@ -80,7 +80,7 @@ static void clear_zone(void) {
   for (int k = 0; k < 10 && g.phase != PH_CLEAR && g.phase != PH_MAP_DONE; ++k) step();
 }
 
-// Avanti fino al combattimento della zona dopo (i giocatori in piedi portati alla sua partenza).
+// On to the fight of the next zone (the players still standing are taken to its start).
 static bool enter_next(void) {
   const int z = g.zone + 1;
   clear_zone();
@@ -92,7 +92,7 @@ static bool enter_next(void) {
   return g.phase == PH_FIGHT && g.zone == z;
 }
 
-// Tutte le zone, fino alla festa di fine mappa.
+// All the zones, up to the end-of-map celebration.
 static bool complete_map(void) {
   for (int k = 0; k < 8 && g.phase != PH_MAP_DONE; ++k) {
     if (g.zone + 1 < g.L.nzones) {
@@ -110,7 +110,7 @@ static int boss_map(void) {
   return -1;
 }
 
-// Come nel gioco: le impostazioni, poi la partita 1 (caricata o, se non c'e', nuova).
+// As in the game: the settings, then game 1 (loaded or, if there is none, new).
 static void open_game(const char* dir) {
   save_open(dir);
   if (!save_slot_load(0)) save_slot_new(0);
@@ -135,7 +135,7 @@ static const char* save_dir(const char* name) {
   return p;
 }
 
-// Schermata del gioco come la vedrebbe il giocatore (640x480, renderer software).
+// Game screen as the player would see it (640x480, software renderer).
 static void shot(const char* name) {
   if (!g_shots) return;
   static Hud hud;
@@ -208,7 +208,7 @@ TEST_CASE("1) da soli: una caduta costa una vita e si rifa' la zona") {
              !strcmp(g.msg, "SI RICOMINCIA!"),
          buf);
   EXPECT(g.map_wipes == 1 && g.restarts == 1 && p.deaths == 3, "conta per la terza stella; le cadute della mappa restano");
-  // Finita dopo la mappa da capo: niente terza stella.
+  // Finished after the map restarted: no third star.
   quiet();
   const bool done = complete_map();
   snprintf(buf, sizeof(buf), "finita dopo averla ricominciata: stelle %d (senza la terza)", g.stars_got);
@@ -287,7 +287,7 @@ TEST_CASE("5) in piu' giocatori: si rientra dopo 5 secondi accanto a un compagno
   EXPECT(b.out && b.lives == 0 && b.respawn == 0 && !strcmp(g.msg, "G2 SENZA VITE!") && g.phase == PH_FIGHT, buf);
   step(RESPAWN_FRAMES + 60);
   EXPECT(!b.alive && b.out && b.down > OUT_VANISH && a.alive && g.phase == PH_FIGHT, "non rientra piu' (e sparisce)");
-  // Il corpo lontano non trattiene G1 e non sposta la telecamera; un mostro accanto lo ignora.
+  // The distant body does not hold G1 back or move the camera; a monster next to it ignores it.
   const ZoneDef& zd = g.L.zones[g.zone];
   const Vec3 mid = v3(0.5f * (zd.wx0 + zd.wx1), 0.0f, 0.5f * (zd.wz0 + zd.wz1));
   b.pos = v3(a.pos.x < mid.x ? a.pos.x - SPAN_X - 4.0f : a.pos.x + SPAN_X + 4.0f, 0.0f, a.pos.z);
@@ -366,7 +366,7 @@ TEST_CASE("9) chi esce e rientra nella stessa mappa ha le vite che aveva") {
   player_join(g, 2, 2, true);
   EXPECT(g.pl[2].lives == START_LIVES && g.pl[2].alive, "un giocatore nuovo entra con 3 vite");
   player_leave(g, 2);
-  // G2 esce: G1 resta da solo e quando cade valgono le regole di chi gioca da solo.
+  // G2 leaves: G1 is left alone and when they fall the rules for playing alone apply.
   player_leave(g, 1);
   kill_player(0);
   step();
@@ -375,8 +375,8 @@ TEST_CASE("9) chi esce e rientra nella stessa mappa ha le vite che aveva") {
   step(WIPE_ZONE_FRAMES);
   quiet();
   EXPECT(g.pl[0].alive && g.pl[0].lives == 2, "e si riparte con le vite che aveva");
-  // G1 a terra che aspetta di rientrare, G3 (l'unico in piedi) esce: G1 resta da solo e si rifa'
-  // la zona senza perdere un'altra vita.
+  // G1 down and waiting to come back, G3 (the only one standing) leaves: G1 is left alone and the
+  // zone is replayed without losing another life.
   player_join(g, 2, 2, true);
   kill_player(0);
   const bool waits = g.phase == PH_FIGHT && !g.pl[0].alive && g.pl[0].respawn > 0 && g.pl[0].lives == 1;
@@ -386,7 +386,7 @@ TEST_CASE("9) chi esce e rientra nella stessa mappa ha le vite che aveva") {
   EXPECT(waits && g.phase == PH_WIPE && !g.wipe_map && g.pl[0].lives == 1, buf);
   step(WIPE_ZONE_FRAMES);
   quiet();
-  // Mappa da capo (vite finite di G1): chi rientra dopo ha di nuovo 3 vite.
+  // Map restarted (G1 out of lives): whoever comes back afterwards has 3 lives again.
   kill_player(0);
   step(WIPE_MAP_FRAMES + 1);
   player_join(g, 1, 1, true);
@@ -397,7 +397,7 @@ TEST_CASE("9b) chi esce e rientra: VITA EXTRA non si riprende, le statistiche re
   open_game(save_dir("noveb"));
   fresh(0, 2, "01");
   Player& b = g.pl[1];
-  b.cards |= 1u << CA_VITA;          // presa all'inizio della mappa
+  b.cards |= 1u << CA_VITA;          // taken at the start of the map
   b.lives = START_LIVES + 1;
   b.kills = 7;
   b.deaths = 1;
@@ -406,8 +406,8 @@ TEST_CASE("9b) chi esce e rientra: VITA EXTRA non si riprende, le statistiche re
   player_join(g, 1, 1, true);
   EXPECT(b.lives == START_LIVES + 1 && has_card(b, CA_VITA), "rientra con 4 vite e VITA EXTRA gia' presa (non torna tra le carte)");
   EXPECT(b.kills == 7 && b.deaths == 1 && b.dmg_done == 250.0f, "e con le sue statistiche della mappa");
-  // Mappa da capo mentre e' fuori: rientra con 3 vite, VITA EXTRA di nuovo possibile, statistiche
-  // della visita tenute.
+  // Map restarted while they are out: they come back with 3 lives, VITA EXTRA possible again, the
+  // statistics of the visit kept.
   player_leave(g, 1);
   g.pl[0].lives = 1;
   kill_player(0);
@@ -422,8 +422,8 @@ TEST_CASE("9c) boss battuto mentre cade l'ultimo giocatore: la mappa e' vinta") 
   fresh(bm, 1, "3");
   g.spawn_wait = 0;
   g.boss.hp = 30.0f;
-  // La bolla di lava di Zolfo arriva sul boss nello stesso fotogramma in cui Zolfo cade (i colpi
-  // si muovono dopo il turno del boss: il boss senza vita cade al fotogramma dopo).
+  // Zolfo's lava bubble reaches the boss in the same frame in which Zolfo falls (shots move after
+  // the boss's turn: the boss with no health left falls on the next frame).
   Shot* s = shot_new(g, SK_LAVA, 0, g.boss.pos + v3(0, 1.0f, 0), v3(0, -1.0f, 0));
   EXPECT(s != NULL, "bolla di lava sul boss");
   if (s) {
@@ -439,8 +439,8 @@ TEST_CASE("9c) boss battuto mentre cade l'ultimo giocatore: la mappa e' vinta") 
   step(3);
   snprintf(buf, sizeof(buf), "il gladiatore cade, mappa finita, niente ripartenza (fase %d, boss %d)", g.phase, (int)g.boss.alive);
   EXPECT(!g.boss.alive && g.phase == PH_MAP_DONE && g.map_wipes == 0, buf);
-  // Tutti a terra (in due): un colpo che arriva durante il conto alla rovescia non batte il boss,
-  // che poi tornerebbe in piedi con la mappa da capo.
+  // All down (two players): a hit that lands during the countdown does not beat the boss, which
+  // would then be back on its feet with the map restarted.
   fresh(bm, 2, "01");
   g.boss.hp = 5.0f;
   kill_player(0);
@@ -478,7 +478,7 @@ TEST_CASE("10) giri: dopo il boss con almeno 10 stelle si apre il giro dopo") {
   shot("fine_arena_giro_aperto");
   press(0, PAD_A);
   EXPECT(g.screen == SC_CHARS && g.map_sel == world_first_map(WORLD_TERRA), "A: si torna alla prima mappa della Terra");
-  // Difficolta': la mappa dopo comincia al giro 2.
+  // Difficulty: the next map starts at round 2.
   fresh(0, 1, "0");
   Vec3 at = g.L.zones[0].start[0] + v3(0, 0, -5.0f);
   monster_spawn(g, MO_SCORPIONE, false, &at);
@@ -533,7 +533,7 @@ TEST_CASE("12) mappe aperte per pianeta; il salvataggio della 0.4 ricomincia dal
   const char* dir = save_dir("dodici");
   char path[256], old[256];
   snprintf(path, sizeof(path), "%s/partita1.sav", dir);
-  snprintf(old, sizeof(old), "%s/pupazzi.sav", dir);       // il file della 0.4: diventa la partita 1
+  snprintf(old, sizeof(old), "%s/pupazzi.sav", dir);       // the 0.4 file: it becomes game 1
   FILE* f = fopen(old, "wb");
   if (f) {
     fputs("versione=1\nmappe_sbloccate=4\nstoria_vista=1\nstelle.prateria1=7\nstelle.prateria2=7\nstelle.prateria3=7\n"
@@ -553,7 +553,7 @@ TEST_CASE("12) mappe aperte per pianeta; il salvataggio della 0.4 ricomincia dal
              file_has(path, "\nmappe_sbloccate=4\n"),
          "finita la prima si apre la seconda (mappe.terra=2; mappe_sbloccate resta com'era)");
   EXPECT(!map_unlocked(-1) && !map_unlocked(maps_count()), "fuori dai limiti: chiusa");
-  // Giro 3 dal salvataggio: si gioca al giro 3.
+  // Round 3 from the save: the game is played at round 3.
   save_data()->giro[WORLD_TERRA] = 3;
   fresh(0, 1, "0");
   EXPECT(g.loop == 2 && diff_hp(g) == 1.0f + 0.6f * 2.0f, "giro 3 nel salvataggio: mostri del giro 3");
@@ -599,7 +599,7 @@ TEST_CASE("14) partita con due giocatori automatici: si ripete uguale") {
       game_bot_pads(g, pads, 2);
       game_update(g, pads);
       if (f == 1500) {
-        // Una caduta a meta': rientro e vite dentro la partita ripetuta.
+        // A fall halfway through: coming back and lives inside the repeated game.
         g.pl[1].invuln = 0;
         g.pl[1].shield = false;
         if (g.pl[1].alive && g.pl[1].leap_n == 0) hurt_player(g, 1, 100000.0f, g.pl[1].pos, 0.0f);
@@ -615,7 +615,8 @@ TEST_CASE("14) partita con due giocatori automatici: si ripete uguale") {
 
 TEST_CASE("14b) bonus delle casse (0.5.4): VELOCITA', FURIA, INVINCIBILE, CARICA") {
   open_game(save_dir("bonus"));
-  // Ogni cassa 'x' dentro le zone ha un bonus; le casse con il talismano e la capsula no.
+  // Every 'x' crate inside the zones has a power-up; the crates with the talisman and the
+  // capsule do not.
   for (int m = 0; m < maps_count(); ++m) {
     fresh(m, 1, "0");
     int crates = 0, powers = 0, wrong = 0;
@@ -633,7 +634,7 @@ TEST_CASE("14b) bonus delle casse (0.5.4): VELOCITA', FURIA, INVINCIBILE, CARICA
     snprintf(buf, sizeof(buf), "%s: %d casse vuote, %d bonus dentro", maps_id(m), crates, powers);
     EXPECT(crates > 0 && powers == crates && wrong == 0, buf);
   }
-  // Rompere le casse: il bonus salta fuori, a caso tra i quattro (con le proporzioni giuste).
+  // Breaking the crates: the power-up pops out, random among the four (with the right proportions).
   fresh(0, 1, "0");
   int seen[NPOWERS] = { 0, 0, 0, 0 }, total = 0;
   for (int round = 0; round < 60; ++round) {
@@ -652,7 +653,7 @@ TEST_CASE("14b) bonus delle casse (0.5.4): VELOCITA', FURIA, INVINCIBILE, CARICA
   snprintf(buf, sizeof(buf), "%d casse rotte: VELOCITA' %d, FURIA %d, INVINCIBILE %d, CARICA %d", total, seen[0], seen[1], seen[2], seen[3]);
   EXPECT(total >= 400 && seen[0] > total / 5 && seen[1] > total / 6 && seen[2] > total / 8 && seen[3] > total / 6 && seen[0] < total / 2, buf);
 
-  // Il bonus si prende passandoci sopra (dopo il salto fuori dalla cassa).
+  // The power-up is taken by walking over it (after its jump out of the crate).
   auto first_power = [&](int pw) {
     fresh(0, 2, "01");
     for (int it = 0; it < g.L.nitems; ++it) {
@@ -676,7 +677,7 @@ TEST_CASE("14b) bonus delle casse (0.5.4): VELOCITA', FURIA, INVINCIBILE, CARICA
     snprintf(buf, sizeof(buf), "%s: non subito (salta fuori), poi preso da chi ci passa", PW_NAME[pw]);
     EXPECT(early && got, buf);
   }
-  // CARICA con lo speciale gia' pronto resta per gli altri.
+  // CARICA, when the special is already ready, stays for the others.
   {
     const int it = first_power(PW_CHARGE);
     const MapItem& mi = g.L.items[it];
@@ -688,7 +689,7 @@ TEST_CASE("14b) bonus delle casse (0.5.4): VELOCITA', FURIA, INVINCIBILE, CARICA
     step(2);
     EXPECT(stays && !g.item_on[it] && g.pl[1].charge >= pl_special_cost(g.pl[1]), "CARICA: chi ha gia' lo speciale pronto la lascia, la prende un compagno");
   }
-  // VELOCITA': si corre il 40% in piu'.
+  // VELOCITA': you run 40% faster.
   {
     float dist[2];
     for (int k = 0; k < 2; ++k) {
@@ -703,7 +704,7 @@ TEST_CASE("14b) bonus delle casse (0.5.4): VELOCITA', FURIA, INVINCIBILE, CARICA
     snprintf(buf, sizeof(buf), "VELOCITA': in 40 fotogrammi %.2f m invece di %.2f (x%.2f)", (double)dist[1], (double)dist[0], (double)(dist[1] / dist[0]));
     EXPECT(dist[1] > dist[0] * 1.3f && dist[1] < dist[0] * 1.5f, buf);
   }
-  // FURIA: danni doppi; INVINCIBILE: nessun danno, finche' dura.
+  // FURIA: double damage; INVINCIBILE: no damage, while it lasts.
   {
     fresh(0, 1, "0");
     monster_spawn(g, MO_SCORPIONE, false, 0);
@@ -728,7 +729,7 @@ TEST_CASE("14b) bonus delle casse (0.5.4): VELOCITA', FURIA, INVINCIBILE, CARICA
     hurt_player(g, 0, 30.0f, p.pos + v3(1, 0, 0), 0.0f);
     EXPECT(none && p.pw_t[PW_INVINCIBLE] == 0 && p.hp == h0 - 30.0f, "INVINCIBILE: niente danni finche' dura, poi di nuovo");
   }
-  // Il tempo dei bonus si ferma in pausa; cadendo i bonus finiscono; contano nell'impronta.
+  // Power-up time stops in pause; falling ends the power-ups; they count in the hash.
   {
     fresh(0, 2, "01");
     g.pl[0].pw_t[PW_FURY] = 100;
@@ -745,7 +746,7 @@ TEST_CASE("14b) bonus delle casse (0.5.4): VELOCITA', FURIA, INVINCIBILE, CARICA
     snprintf(buf, sizeof(buf), "in pausa resta %d, poi %d; a terra niente bonus; impronta diversa", still, after);
     EXPECT(still == 100 && after == 70 && h1 != h0 && g.pl[0].pw_t[PW_FURY] == 0 && g.pl[0].pw_t[PW_SPEED] == 0, buf);
   }
-  // Zona rifatta (da soli): le casse tornano intere, con il bonus di nuovo dentro.
+  // Zone replayed (alone): the crates come back whole, with the power-up inside again.
   {
     fresh(0, 1, "0");
     int it = -1;
@@ -769,7 +770,7 @@ TEST_CASE("14c) cancelli a battente (0.5.4): si aprono verso chi aspetta e lo sp
     fresh(m, 4, "0123");
     if (g.L.ngates == 0) continue;
     const char* name = maps_name(m);
-    // Verso la zona che apre il cancello, e del tutto: nelle mappe di serie davanti c'e' posto.
+    // Towards the zone that opens the gate, and fully: in the built-in maps there is room in front.
     bool dir_ok = true;
     for (int gi = 0; gi < g.L.ngates; ++gi) {
       const Gate& gt = g.L.gates[gi];
@@ -781,8 +782,8 @@ TEST_CASE("14c) cancelli a battente (0.5.4): si aprono verso chi aspetta e lo sp
     const Gate& gt = g.L.gates[gi];
     const Vec3 mid = (cell_center(&g.L, gt.x0, gt.z0) + cell_center(&g.L, gt.x1, gt.z1)) * 0.5f;
     const Vec3 mm = v3(gt.mx, 0.0f, gt.mz), eu = gt.horiz ? v3(1, 0, 0) : v3(0, 0, 1);
-    // Si apre con 4 giocatori davanti, in tante prove: fermi, che vanno verso il cancello, che si
-    // allontanano.
+    // It opens with 4 players in front, in many trials: standing still, going towards the gate,
+    // moving away.
     int open_min = 1000, open_max = 0, bad_cells = 0, bad_body = 0, pushed = 0, tries = 0;
     float worst = 1e9f;
     for (int trial = 0; trial < 24; ++trial) {
@@ -833,7 +834,7 @@ TEST_CASE("14c) cancelli a battente (0.5.4): si aprono verso chi aspetta e lo sp
     snprintf(buf, sizeof(buf), "%s: in %d prove chi e' davanti viene spinto via (%d spinti), mai dentro un battente che gira (al minimo %.2f m dal centro, ne servono %.2f) ne' in un ostacolo (%d)",
              name, tries, pushed, (double)worst, (double)rr, bad_body);
     EXPECT(worst >= rr - 0.005f && bad_body == 0 && pushed >= 8, buf);
-    // Tutti nella zona dopo: si chiude alle loro spalle, sbattendo una volta sola.
+    // Everyone in the next zone: it closes behind them, slamming only once.
     for (int i = 0; i < 4; ++i) g.pl[i].pos = g.L.zones[1].start[i];
     int f = 0, close_f = -1, hit_f = -1, still_f = -1, puffs = 0, slams = 0;
     float top = 0.0f, shake = 0.0f;
@@ -862,8 +863,8 @@ TEST_CASE("14c) cancelli a battente (0.5.4): si aprono verso chi aspetta e lo sp
     const uint64_t h1 = game_state_hash(g);
     g.L.gates[gi].vel = 0.0f;
     EXPECT(h0 != h1 && game_state_hash(g) == h0, "l'impronta della partita comprende i cancelli");
-    // Revisione 0.5.4: entrati tutti, chi torna subito indietro non resta chiuso fuori (le ante
-    // partono piano: il passaggio si chiude appena cominciano a girare), anche con VELOCITA'.
+    // 0.5.4 review: once everyone is in, whoever turns right back is not shut out (the leaves
+    // start slowly: the passage closes as soon as they start to swing), even with VELOCITA'.
     int out = 0, tries2 = 0;
     for (int delay = 0; delay <= 6; ++delay)
       for (int sp = 0; sp < 2; ++sp) {
@@ -892,7 +893,8 @@ TEST_CASE("14c) cancelli a battente (0.5.4): si aprono verso chi aspetta e lo sp
     snprintf(buf, sizeof(buf), "%s: chi torna indietro appena entrato non resta chiuso fuori (%d casi su %d)", name, out, tries2);
     EXPECT(out == 0, buf);
   }
-  // Chi si ritrova in una zona di prima a cancello chiuso torna alla sua partenza nella zona in corso.
+  // Whoever ends up in an earlier zone with the gate closed goes back to their start in the
+  // current zone.
   fresh(0, 2, "01");
   const bool in2 = enter_next();
   g.pl[1].pos = g.L.zones[0].start[1];
@@ -907,7 +909,7 @@ int main(int argc, char** argv) {
   plat_log_open("/dev/null");
   for (int i = 1; i + 1 < argc; ++i) {
     if (!strcmp(argv[i], "--immagini")) g_shots = argv[i + 1];
-    // --lingua xx: le schermate in un'altra lingua (le prove dei messaggi sono scritte per l'italiano)
+    // --lingua xx: the screens in another language (the message tests are written for Italian)
     if (!strcmp(argv[i], "--lingua"))
       for (int l = 0; l < NLANGS; ++l)
         if (!strcmp(argv[i + 1], save_lang_id(l))) lang_set(l);
@@ -938,7 +940,7 @@ int main(int argc, char** argv) {
     kill_player(1);
     step(110);
     shot("hud_4_giocatori");
-    // Bonus (0.5.4): due bonus in corso su G1 (uno quasi finito), uno su G4; monete fuori dalle casse.
+    // Power-ups (0.5.4): two active on G1 (one almost over), one on G4; coins out of the crates.
     fresh(0, 4, "0123");
     g.pl[0].pw_t[PW_SPEED] = 500;
     g.pl[0].pw_t[PW_FURY] = 90;
@@ -954,7 +956,7 @@ int main(int argc, char** argv) {
     step(40);
     shot("hud_bonus");
 
-    // Telecamera con il gruppo sparso nella zona 1 (ai bordi deve vedersi poco oltre la zona).
+    // Camera with the group spread over zone 1 (at the edges, little beyond the zone must show).
     printf("16) telecamera\n");
     fresh(0, 4, "0123");
     const ZoneDef& z = g.L.zones[0];

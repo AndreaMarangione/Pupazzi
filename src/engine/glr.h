@@ -1,17 +1,17 @@
-// Renderer GPU (OpenGL ES 2) per il contesto hardware fornito dal frontend libretro.
-// Le funzioni GL vengono risolte a tempo di esecuzione: la libreria non dipende da libGLESv2
-// e si carica anche dove la GPU non c'e'.
+// GPU renderer (OpenGL ES 2) for the hardware context provided by the libretro frontend.
+// The GL functions are resolved at run time: the library does not depend on libGLESv2
+// and loads even where there is no GPU.
 #pragma once
 #include "engine/render.h"
 
 typedef void (*glr_proc_t)(void);
 typedef glr_proc_t (*glr_get_proc_t)(const char* sym);
 
-bool glr_init(glr_get_proc_t get_proc);   // da chiamare in context_reset
-void glr_context_lost(void);              // da chiamare in context_destroy: gli oggetti GL non esistono piu'
-void glr_shutdown(void);                  // libera la memoria di lavoro (allo scaricamento del core)
+bool glr_init(glr_get_proc_t get_proc);   // to be called in context_reset
+void glr_context_lost(void);              // to be called in context_destroy: the GL objects no longer exist
+void glr_shutdown(void);                  // frees the working memory (when the core is unloaded)
 void glr_render(const FrameDesc* f, unsigned fbo, RenderStats* st, bool finish);
 const char* glr_info(void);               // "RENDERER | VERSION"
-bool glr_aa_available(void);              // la GPU sa fare l'antialias (FrameDesc::aa lo chiede)
-int glr_aa_max(void);                     // (0.5.4) campioni al massimo: 0 (niente), 2, 4 o 8
+bool glr_aa_available(void);              // the GPU can do antialiasing (FrameDesc::aa requests it)
+int glr_aa_max(void);                     // (0.5.4) maximum samples: 0 (none), 2, 4 or 8
 int glr_depth_bits(void);

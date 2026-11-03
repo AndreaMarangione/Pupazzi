@@ -1,17 +1,17 @@
-// Renderer software.
+// Software renderer.
 //
-// Percorso di un fotogramma:
-//  1. per ogni oggetto: scarto se fuori vista, vertici in spazio di clip, scarto delle facce
-//     rivolte altrove, luce per faccia, ritaglio sul piano vicino e sulla banda di guardia,
-//     proiezione e preparazione del triangolo (pendenze dei lati, piano della profondita');
-//  2. i triangoli vengono distribuiti in bande orizzontali;
-//  3. le bande vengono rasterizzate in parallelo: ogni banda e' di un solo thread, quindi non
-//     servono lucchetti e il risultato e' identico qualunque sia il numero di thread.
+// Path of a frame:
+//  1. for each object: culled if out of view, vertices in clip space, culling of the faces
+//     turned away, per-face lighting, clipping against the near plane and the guard band,
+//     projection and triangle setup (edge slopes, depth plane);
+//  2. the triangles are distributed into horizontal bands;
+//  3. the bands are rasterized in parallel: each band belongs to a single thread, so no
+//     locks are needed and the result is identical whatever the number of threads.
 //
-// Profondita': si memorizza znear / w (piu' grande = piu' vicino), lineare sullo schermo.
-// Copertura: un pixel appartiene al triangolo se il suo centro e' dentro; i lati condivisi
-// vengono valutati con la stessa identica espressione dai due triangoli, quindi non restano
-// fessure ne' pixel disegnati due volte (serve -ffp-contract=off).
+// Depth: znear / w is stored (larger = closer), linear on screen.
+// Coverage: a pixel belongs to the triangle if its center is inside; shared edges are
+// evaluated with the very same expression by both triangles, so no cracks remain
+// and no pixel is drawn twice (requires -ffp-contract=off).
 #include "engine/swr.h"
 #include "platform/plat.h"
 #include <pthread.h>
@@ -29,20 +29,20 @@
 
 #define SWR_MAX_THREADS 8
 #define SWR_MAX_BANDS 64
-#define SWR_GUARD 4.0f              // banda di guardia: quante volte lo schermo
+#define SWR_GUARD 4.0f              // guard band: how many times the screen
 #define SWR_MAX_TRIS (1 << 17)
 
 namespace {
 
-struct SV { float x, y, z; };       // vertice a schermo: pixel, z = znear / w
-struct CV { float x, y, w; };       // vertice in spazio di clip
+struct SV { float x, y, z; };       // screen vertex: pixels, z = znear / w
+struct CV { float x, y, w; };       // vertex in clip space
 
 struct RTri {
-  float ax, ay, bx, by;             // vertice piu' alto e vertice intermedio
-  float sl, su, sb;                 // dx/dy del lato lungo (a-c), superiore (a-b), inferiore (b-c)
-  int16_t iy0, iy1, iy2, pad;       // righe [iy0, iy1) con il lato superiore, [iy1, iy2) con l'inferiore
+  float ax, ay, bx, by;             // topmost vertex and middle vertex
+  float sl, su, sb;                 // dx/dy of the long edge (a-c), upper edge (a-b), lower edge (b-c)
+  int16_t iy0, iy1, iy2, pad;       // rows [iy0, iy1) with the upper edge, [iy1, iy2) with the lower one
   uint32_t color;
-  double z0, dzdx, dzdy;            // piano della profondita', riferito al vertice a
+  double z0, dzdx, dzdy;            // depth plane, relative to vertex a
 };
 
 enum {
@@ -60,7 +60,7 @@ uint32_t* g_bin;
 size_t g_bin_cap;
 int g_band_start[SWR_MAX_BANDS + 1];
 int g_band_px[SWR_MAX_BANDS];
-const Hud* g_hud;      // interfaccia del fotogramma in corso (o nessuna)
+const Hud* g_hud;      // interface of the current frame (or none)
 int g_hud_k;
 uint32_t* g_row_color;
 uint8_t* g_row_band;
@@ -89,15 +89,15 @@ inline int iceil(float v) {
   return i + (v > (float)i);
 }
 
-// --- campate --------------------------------------------------------------
-// Per ogni pixel: z = z0 + i * dz; se e' piu' vicino di quello gia' presente, scrive profondita'
-// e colore. Quattro pixel per volta con NEON (ARM) o SSE2 (PC); le istruzioni vettoriali
-// fanno le stesse operazioni, nello stesso ordine, della versione scalare, quindi il risultato
-// e' identico bit per bit. Su ARM a 32 bit il compilatore non vettorizza da solo i calcoli in
-// virgola mobile, per questo le istruzioni sono scritte a mano.
-// "room" e' quanti pixel restano fino alla fine della riga: la coda della campata viene
-// elaborata con una maschera solo se i quattro pixel toccati stanno tutti nella stessa riga
-// (righe diverse possono appartenere a thread diversi).
+// --- spans ----------------------------------------------------------------
+// For each pixel: z = z0 + i * dz; if it is closer than the one already there, writes depth
+// and color. Four pixels at a time with NEON (ARM) or SSE2 (PC); the vector instructions
+// do the same operations, in the same order, as the scalar version, so the result
+// is identical bit for bit. On 32-bit ARM the compiler does not vectorize floating-point
+// computations by itself, which is why the instructions are written by hand.
+// "room" is how many pixels remain up to the end of the row: the tail of the span is
+// processed with a mask only if the four pixels touched all lie in the same row
+// (different rows can belong to different threads).
 inline __attribute__((always_inline))
 void span_flat(uint32_t* __restrict c, float* __restrict zb, int n, int room, float z0, float dz, uint32_t color) {
   int i = 0;
@@ -219,7 +219,7 @@ void raster_band(int b) {
     raster_rows(t, ys, ye, px);
   }
   g_band_px[b] = px;
-  // L'interfaccia sopra, nella stessa striscia (le strisce vanno in parallelo).
+  // The interface on top, in the same strip (the strips run in parallel).
   if (g_hud && !g_count) hud_draw_sw(g_hud, g_color, W, g_H, g_hud_k, y0, y1);
 }
 
@@ -269,7 +269,7 @@ void raster_all(void) {
   }
 }
 
-// --- geometria ------------------------------------------------------------
+// --- geometry -------------------------------------------------------------
 inline void project(const CV& c, SV* s) {
   const float inv = 1.0f / c.w;
   s->x = (c.x * inv * 0.5f + 0.5f) * g_Wf;
@@ -286,7 +286,7 @@ inline void emit_tri(const SV& p0, const SV& p1, const SV& p2, uint32_t color) {
   if (c->y < a->y) { t = a; a = c; c = t; }
   if (c->y < b->y) { t = b; b = c; c = t; }
   const int iy0 = iceil(a->y - 0.5f), iy2 = iceil(c->y - 0.5f);
-  if (iy0 >= iy2) return;                         // non tocca il centro di nessuna riga
+  if (iy0 >= iy2) return;                         // does not touch the center of any row
   const int y0 = iy0 < 0 ? 0 : iy0;
   const int y2 = iy2 > g_H ? g_H : iy2;
   if (y0 >= y2) return;
@@ -302,7 +302,7 @@ inline void emit_tri(const SV& p0, const SV& p1, const SV& p2, uint32_t color) {
   if (g_ntris >= SWR_MAX_TRIS) { g_overflow++; return; }
   RTri& r = g_tris[g_ntris++];
   r.ax = a->x; r.ay = a->y; r.bx = b->x; r.by = b->y;
-  // Ogni lato e' descritto dal suo vertice piu' alto e da dx/dy calcolato sempre allo stesso modo.
+  // Each edge is described by its topmost vertex and by dx/dy, always computed the same way.
   r.sl = (float)(acx / acy);
   r.su = aby > 0.0 ? (float)(abx / aby) : 0.0f;
   const float bcy = c->y - b->y;
@@ -329,8 +329,8 @@ inline float plane_dist(const CV& v, int pl) {
   }
 }
 
-// Intersezione sempre calcolata dal vertice interno verso quello esterno: due triangoli che
-// condividono il lato ottengono lo stesso identico punto.
+// Intersection always computed from the inside vertex toward the outside one: two triangles
+// that share the edge get the very same point.
 inline CV isect(const CV& in, const CV& out, float din, float dout) {
   const float t = din / (din - dout);
   CV r;
@@ -407,15 +407,15 @@ void draw_item(const DrawItem& it, const FrameDesc& f, RenderStats* st) {
     else project(c, &g_sv[i]);
     g_oc[i] = (uint16_t)oc;
   }
-  // Camera portata nello spazio dell'oggetto e cofattori per le normali: valgono anche con la
-  // scala, e sono gli stessi calcoli del renderer GPU (stessi colori).
+  // Camera brought into object space and cofactors for the normals: they hold also with
+  // scale, and they are the same computations as the GPU renderer's (same colors).
   ItemSpace sp;
   item_space(it.xf, f.cam.eye, &sp);
   for (int i = 0; i < m.nt; ++i) {
     const MeshTri& t = m.t[i];
     const unsigned oa = g_oc[t.a], ob = g_oc[t.b], oc = g_oc[t.c];
-    if (oa & ob & oc & OC_FRUSTUM) continue;                 // tutto fuori dallo stesso lato
-    if (!tri_facing(t, m.v, sp)) continue;                   // faccia rivolta altrove
+    if (oa & ob & oc & OC_FRUSTUM) continue;                 // all outside on the same side
+    if (!tri_facing(t, m.v, sp)) continue;                   // face turned away
     const uint32_t color = shade_tri(t, sp, f.light, it.flash, it.dim);
     if (!((oa | ob | oc) & OC_CLIP)) emit_tri(g_sv[t.a], g_sv[t.b], g_sv[t.c], color);
     else clip_emit(g_cv[t.a], g_cv[t.b], g_cv[t.c], color);
@@ -481,12 +481,12 @@ bool swr_init(int max_w, int max_h) {
   if (!g_color || !g_depth || !g_tris || !g_row_color || !g_row_band) return false;
   g_W = g_H = 0;
   g_count = false;
-  // Si contano le CPU presenti, non quelle accese in questo momento: alcuni kernel spengono i
-  // core quando il sistema e' fermo e li riaccendono sotto carico. I thread in piu' dormono.
+  // Count the CPUs present, not the ones online right now: some kernels switch the cores off
+  // when the system is idle and back on under load. The extra threads sleep.
   long ncpu = sysconf(_SC_NPROCESSORS_CONF);
   const long online = sysconf(_SC_NPROCESSORS_ONLN);
   if (online > ncpu) ncpu = online;
-  // PUPAZZI_MAX_THREADS: forza il massimo (serve alle prove su macchine con poche CPU).
+  // PUPAZZI_MAX_THREADS: forces the maximum (needed by the tests on machines with few CPUs).
   const char* forced = getenv("PUPAZZI_MAX_THREADS");
   if (forced && *forced) ncpu = atol(forced);
   if (ncpu < 1) ncpu = 1;
@@ -561,7 +561,7 @@ const uint32_t* swr_render(const FrameDesc* f, RenderStats* st) {
   g_hud = f->hud;
   g_hud_k = f->hud_scale;
   if (g_hud) hud_prepare();
-  raster_all();      // con l'interfaccia, striscia per striscia
+  raster_all();      // with the interface, strip by strip
   g_hud = 0;
   const double t2 = plat_now_ms();
   const double t3 = t2;

@@ -1,14 +1,14 @@
-// Descrizione di un fotogramma, comune al renderer software e a quello GPU.
+// Description of a frame, shared by the software renderer and the GPU one.
 #pragma once
 #include "engine/vmath.h"
 #include "engine/mesh.h"
 #include "engine/hud.h"
 
-enum { ITEM_STATIC = 1 };   // geometria che non cambia mai (il renderer GPU la carica una volta sola)
+enum { ITEM_STATIC = 1 };   // geometry that never changes (the GPU renderer uploads it only once)
 
-// flash: 0..255, quanto il colore va verso il bianco (lampeggio di chi viene colpito);
-// dim: 0..255, quanto va verso un grigio freddo (chi e' a terra).
-// Valgono solo per gli oggetti mobili: quelli fissi il renderer GPU li carica una volta sola.
+// flash: 0..255, how far the color goes toward white (flashing of whoever is hit);
+// dim: 0..255, how far it goes toward a cool gray (whoever is down).
+// They apply only to moving objects: the GPU renderer uploads the fixed ones only once.
 struct DrawItem { const Mesh* mesh; Xform xf; uint32_t flags; uint8_t flash = 0; uint8_t dim = 0; };
 
 struct Camera { Vec3 eye; Mat4 view, proj, vp; float znear, zfar; };
@@ -17,17 +17,17 @@ struct FrameDesc {
   int w, h;
   Camera cam;
   const DrawItem* items; int nitems;
-  Vec3 light;                    // direzione unitaria dalla superficie verso la luce
-  uint32_t sky_top, sky_bot;     // sfumatura del cielo
+  Vec3 light;                    // unit direction from the surface toward the light
+  uint32_t sky_top, sky_bot;     // sky gradient
   const Hud* hud; int hud_scale;
-  int aa = 0;                    // campioni dell'antialias: 0 (niente), 4 o 8 (solo renderer GPU, fin dove la GPU arriva)
+  int aa = 0;                    // antialiasing samples: 0 (none), 4 or 8 (GPU renderer only, as far as the GPU goes)
 };
 
 struct RenderStats {
   int items_in, items_drawn;
   int tris_in, tris_drawn;
   int draw_calls, overflow;
-  int pixels;                    // pixel esaminati dal rasterizzatore (misura del ridisegno)
+  int pixels;                    // pixels examined by the rasterizer (a measure of overdraw)
   double ms_geo, ms_ras, ms_hud;
 };
 
@@ -40,9 +40,9 @@ static inline void camera_setup(Camera* c, Vec3 eye, Vec3 target, float fovy, fl
   c->vp = mat4_mul(c->proj, c->view);
 }
 
-// Spazio dell'oggetto per luce e scarto delle facce, valido anche con scala (squash & stretch):
-// C sono i cofattori della parte 3x3 (C * n = normale in spazio mondo, a meno della lunghezza)
-// e cam_m la camera portata nello spazio dell'oggetto con l'inversa vera.
+// Object space for lighting and face culling, valid also with scale (squash & stretch):
+// C are the cofactors of the 3x3 part (C * n = normal in world space, up to its length)
+// and cam_m is the camera brought into object space with the true inverse.
 struct ItemSpace { float C[9]; Vec3 cam_m; };
 
 static inline void item_space(const Xform& x, Vec3 eye, ItemSpace* s) {
@@ -59,13 +59,13 @@ static inline void item_space(const Xform& x, Vec3 eye, ItemSpace* s) {
                 (C[2] * d.x + C[5] * d.y + C[8] * d.z) * k);
 }
 
-// Faccia rivolta verso la camera?
+// Face turned toward the camera?
 static inline bool tri_facing(const MeshTri& t, const Vec3* v, const ItemSpace& s) {
   return dot(t.n, v[t.a] - s.cam_m) < 0.0f;
 }
 
-// Luce da cartone: tre toni netti (in luce, mezzaombra, ombra fredda). Le facce TRI_UNLIT
-// hanno il loro colore pieno e non lampeggiano. flash: 0..255 verso il bianco; dim: verso il grigio.
+// Cartoon lighting: three sharp tones (lit, half shadow, cool shadow). TRI_UNLIT faces
+// keep their full color and do not flash. flash: 0..255 toward white; dim: toward gray.
 static inline uint32_t shade_tri(const MeshTri& t, const ItemSpace& s, Vec3 light, unsigned flash, unsigned dim) {
   uint32_t r = t.r, g = t.g, b = t.bl;
   if (dim) {
@@ -83,9 +83,9 @@ static inline uint32_t shade_tri(const MeshTri& t, const ItemSpace& s, Vec3 ligh
   const float l2 = dot(n, n);
   const float ndl = l2 > 0.0f ? dot(n, light) / sqrtf(l2) : 0.0f;
   uint32_t kr, kg, kb;
-  if (ndl > 0.45f) { kr = 256; kg = 252; kb = 244; }        // in luce, appena calda
-  else if (ndl > -0.05f) { kr = 206; kg = 204; kb = 214; }  // mezzaombra
-  else { kr = 146; kg = 148; kb = 176; }                     // ombra, fredda
+  if (ndl > 0.45f) { kr = 256; kg = 252; kb = 244; }        // lit, slightly warm
+  else if (ndl > -0.05f) { kr = 206; kg = 204; kb = 214; }  // half shadow
+  else { kr = 146; kg = 148; kb = 176; }                     // shadow, cool
   r = (r * kr) >> 8; g = (g * kg) >> 8; b = (b * kb) >> 8;
   if (r > 255) r = 255;
   if (g > 255) g = 255;

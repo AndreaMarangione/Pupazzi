@@ -1,10 +1,10 @@
-// Giocatori automatici, solo per le prove (PUPAZZI_BOT=n): giocano da soli con i comandi veri
-// (levetta sinistra, mira con la levetta destra, R1, L1, L2, R2, A) per verificare regole,
-// prestazioni e determinismo senza nessuno ai tasti. Decidono solo in base allo stato del
-// gioco (mai con g.rng), quindi la partita resta identica su ogni processore. A terra o senza
-// vite non fanno nulla; quando la zona o la mappa ricominciano ripartono da dove sono messi.
-// Contro il gladiatore (0.5.1) escono dal settore del fendente e dalla corsia della carica e per il
-// resto gli girano attorno da 5 a 8 m, sparando.
+// Bots, only for tests (PUPAZZI_BOT=n): they play on their own with the real controls
+// (left stick, aim with the right stick, R1, L1, L2, R2, A) to check rules, performance and
+// determinism with nobody at the buttons. They decide only from the game state (never with
+// g.rng), so the game stays identical on every processor. When down or out of lives they do
+// nothing; when the zone or the map restarts they start again from where they are placed.
+// Against the gladiator (0.5.1) they get out of the sweep sector and of the charge lane, and
+// otherwise they circle around him at 5 to 8 m, shooting.
 #include "game/sim/game_int.h"
 #include <string.h>
 
@@ -12,9 +12,9 @@ namespace {
 
 
 
-// Carte: ognuno preme A sul banner per vedere le sue carte (dalla 0.5.4), aspetta un po' (30-60
-// fotogrammi, diverso per giocatore), a volte sposta il cursore e conferma con A. Le scelte vengono
-// da un miscuglio di numeri della partita: g.rng non si tocca.
+// Cards: each one presses A on the banner to see their cards (since 0.5.4), waits a bit (30-60
+// frames, different per player), sometimes moves the cursor and confirms with A. The choices come
+// from a mix of numbers of the game: g.rng is not touched.
 void bot_cards(Game& g, int i, Pad& pad) {
   Bot& b = g.session.bot[i];
   const CardOffer& o = g.offer[i];
@@ -30,7 +30,7 @@ void bot_cards(Game& g, int i, Pad& pad) {
     b.card_wait = 30 + (int)((h >> 8) % 31u);
   }
   b.card_t++;
-  if (!o.shown) {                       // il banner: A (premuto a fotogrammi alterni, ogni volta di nuovo)
+  if (!o.shown) {                       // the banner: A (pressed on alternate frames, anew each time)
     if (b.card_t >= 20 + (b.card_wait - 30) / 2 && (b.card_t & 1)) pad.btn = (uint16_t)(1u << PAD_A);
     return;
   }
@@ -41,7 +41,7 @@ void bot_cards(Game& g, int i, Pad& pad) {
   if (b.card_t >= b.card_wait && (b.card_t & 1)) pad.btn = (uint16_t)(1u << PAD_A);
 }
 
-// Bersaglio: il mostro piu' vicino (o il boss), con la distanza.
+// Target: the nearest monster (or the boss), with the distance.
 bool nearest_target(Game& g, const Player& p, Vec3* where, float* dist, int* type) {
   float bd = 1e30f;
   bool found = false;
@@ -72,7 +72,7 @@ bool nearest_item(Game& g, const Player& p, int kind, float maxd, Vec3* out) {
   bool found = false;
   for (int it = 0; it < g.L.nitems; ++it) {
     if (!g.item_on[it] || g.L.items[it].kind != kind) continue;
-    // Bonus delle casse: CARICA solo a chi non ha gia' lo speciale pronto (gli altri non la prendono).
+    // Crate power-ups: CARICA only if the special isn't ready yet (the others don't take it).
     if (kind == IT_POWER && g.item_pw[it] == PW_CHARGE && p.charge >= pl_special_cost(p)) continue;
     const MapItem& mi = g.L.items[it];
     Vec3 c = cell_center(&g.L, mi.cx, mi.cz);
@@ -83,9 +83,9 @@ bool nearest_item(Game& g, const Player& p, int kind, float maxd, Vec3* out) {
   return found;
 }
 
-// Zona appena ripulita con l'esploratore ancora nella capsula: si va a salvarlo (per al massimo
-// 20 secondi, poi avanti), cosi' le prove coprono anche la capsula e le stelle. goal: la casella
-// libera accanto alla capsula piu' vicina; capsule: il centro della capsula.
+// Zone just cleared with the explorer still in the capsule: go and rescue him (for at most
+// 20 seconds, then move on), so the tests also cover the capsule and the stars. goal: the nearest
+// free cell next to the capsule; capsule: the center of the capsule.
 bool capsule_goal(Game& g, const Player& p, Bot& b, Vec3* goal, Vec3* capsule) {
   if (g.phase != PH_CLEAR || g.L.capsule_dyn < 0 || g.explorer_free) { b.cage_t = 0; return false; }
   const DynCell& dc = g.L.dyn[g.L.capsule_dyn];
@@ -105,20 +105,20 @@ bool capsule_goal(Game& g, const Player& p, Bot& b, Vec3* goal, Vec3* capsule) {
   return ok;
 }
 
-// Si puo' fare un passo da 1,6 m in quella direzione (niente muri, rocce, casse alte)?
+// Can a 1.6 m step be taken in that direction (no walls, rocks, tall crates)?
 bool step_ok(Game& g, const Player& p, float dx, float dz) {
   return walk_clear(g, p.pos, v3(p.pos.x + dx * 1.6f, 0.0f, p.pos.z + dz * 1.6f), PL_R, false);
 }
 
-// Gladiatore: dentro il settore del fendente o la corsia della carica mentre si preparano (o mentre
-// corre)? In (ox, oz) la via d'uscita piu' corta: dal settore all'indietro o dal lato piu' vicino,
-// dalla corsia di lato; se da quella parte c'e' un ostacolo, l'altra.
+// Gladiator: inside the sweep sector or the charge lane while they are being prepared (or while he
+// runs)? In (ox, oz) the shortest way out: from the sector backwards or by the nearest side, from
+// the lane sideways; if there is an obstacle on that side, the other one.
 bool boss_escape(Game& g, const Player& p, int i, float* ox, float* oz) {
   for (int k = 0; k < MAX_MARKERS; ++k) {
     const Marker& m = g.mk[k];
     if (!m.alive || (m.kind != MK_SWEEP && m.kind != MK_LANE) || m.t < g.session.bot_lag) continue;
     const float vx = p.pos.x - m.pos.x, vz = p.pos.z - m.pos.z;
-    float ax, az, bx, bz;                      // la via migliore e l'altra
+    float ax, az, bx, bz;                      // the best way and the other one
     if (m.kind == MK_SWEEP) {
       if (m.t > m.fire_at) continue;
       const float d = sqrtf(vx * vx + vz * vz), half = BOSS_SWEEP_HALF + 0.3f;
@@ -126,7 +126,7 @@ bool boss_escape(Game& g, const Player& p, int i, float* ox, float* oz) {
       if (d > m.r + PL_R + 0.6f || fabsf(off) > half) continue;
       const float ux = d > 0.3f ? vx / d : d_sin(m.yaw), uz = d > 0.3f ? vz / d : d_cos(m.yaw);
       const float s = off >= 0.0f ? 1.0f : -1.0f;
-      const float tx = uz * s, tz = -ux * s;   // di lato, verso il bordo piu' vicino del settore
+      const float tx = uz * s, tz = -ux * s;   // sideways, toward the nearest edge of the sector
       const float out_r = m.r + PL_R + 0.6f - d, out_s = d * d_sin(fminf(half - fabsf(off), D_HALF_PI));
       if (out_r <= out_s) { ax = ux; az = uz; bx = tx; bz = tz; }
       else { ax = tx + ux * 0.3f; az = tz + uz * 0.3f; bx = ux; bz = uz; }
@@ -134,7 +134,7 @@ bool boss_escape(Game& g, const Player& p, int i, float* ox, float* oz) {
       const float dx = d_sin(m.yaw), dz = d_cos(m.yaw);
       const float along = vx * dx + vz * dz, lat = vx * dz - vz * dx;
       if (along < -1.5f || along > m.len + 1.2f || fabsf(lat) > m.r + PL_R + 0.7f) continue;
-      // Gia' corso oltre: dietro di lui non si rischia piu'.
+      // Already run past: behind him there is no more risk.
       if (g.boss.alive && g.boss.act == BA_RUSH && (g.boss.pos.x - m.pos.x) * dx + (g.boss.pos.z - m.pos.z) * dz > along + 1.8f) continue;
       const float s = lat > 0.05f ? 1.0f : (lat < -0.05f ? -1.0f : ((i & 1) ? 1.0f : -1.0f));
       ax = dz * s; az = -dx * s;
@@ -148,10 +148,10 @@ bool boss_escape(Game& g, const Player& p, int i, float* ox, float* oz) {
   return false;
 }
 
-// Gladiatore vicino: gli si gira attorno alla distanza giusta per colpirlo (da 5 a 8 m dal centro).
-// Il verso del giro si sceglie dallo spazio libero davanti e da quanto porta verso il centro
-// dell'arena (negli angoli si resta chiusi e lui arriva col fendente); se dietro c'e' un muro non
-// ci si allontana: si scivola di lato attorno a lui.
+// Gladiator nearby: circle around him at the right distance to hit him (5 to 8 m from the center).
+// The direction of the circling is chosen from the free space ahead and from how much it leads
+// toward the center of the arena (in the corners you stay trapped and he comes with the sweep); if
+// there is a wall behind, don't move away: slide sideways around him.
 void boss_orbit(Game& g, const Player& p, Bot& b, int i, float range, float* mx, float* mz) {
   const Boss& bs = g.boss;
   const float dx = p.pos.x - bs.pos.x, dz = p.pos.z - bs.pos.z, d = fmaxf(sqrtf(dx * dx + dz * dz), 1e-3f);
@@ -175,7 +175,7 @@ void boss_orbit(Game& g, const Player& p, Bot& b, int i, float range, float* mx,
     float score = (nx * ex + nz * ez) * 0.8f * fminf(el / 8.0f, 1.5f);
     if (step_ok(g, p, nx, nz)) score += 2.0f;
     if (walk_clear(g, p.pos, v3(p.pos.x + nx * 3.2f, 0.0f, p.pos.z + nz * 3.2f), PL_R, false)) score += 1.0f;
-    if ((float)s == b.orbit) score += 0.6f;      // senza cambiare a ogni passo
+    if ((float)s == b.orbit) score += 0.6f;      // without switching at every step
     if (score > best) {
       best = score;
       pick = (float)s;
@@ -187,33 +187,33 @@ void boss_orbit(Game& g, const Player& p, Bot& b, int i, float range, float* mx,
   }
   *mx = ux * rad - uz * b.orbit * 0.9f;
   *mz = uz * rad + ux * b.orbit * 0.9f;
-  if (el > 8.0f) {                              // lontano dal centro: un po' verso il centro
+  if (el > 8.0f) {                              // far from the center: a bit toward the center
     const float k = fminf((el - 8.0f) * 0.15f, 0.6f);
     *mx += ex * k;
     *mz += ez * k;
   }
 }
 
-// I comandi del giocatore automatico i in questo fotogramma.
+// The controls of bot i in this frame.
 void bot_one(Game& g, int i, Pad& pad) {
   {
     memset(&pad, 0, sizeof(pad));
     Bot& b = g.session.bot[i];
     if (g.screen != SC_PLAY) {
-      // Menu: A ogni tanto (avanti dalle statistiche, pronto nella scelta dei personaggi).
+      // Menu: A every now and then (forward from the statistics, ready in the character choice).
       if (++b.menu_t >= 40) {
         b.menu_t = 0;
         pad.btn = 1u << PAD_A;
       }
       return;
     }
-    if (g.cards_open) {               // scelta delle carte: il gioco e' fermo
+    if (g.cards_open) {               // card choice: the game is frozen
       bot_cards(g, i, pad);
       return;
     }
     const Player& p = g.pl[i];
     if (!p.active) {
-      if (g.tick > 30u + 20u * (unsigned)i) pad.btn = (g.tick & 8u) ? (uint16_t)(1u << PAD_A) : 0;   // entra in partita
+      if (g.tick > 30u + 20u * (unsigned)i) pad.btn = (g.tick & 8u) ? (uint16_t)(1u << PAD_A) : 0;   // joins the game
       return;
     }
     if (!p.alive || g.paused || p.leap_n > 0) return;
@@ -226,10 +226,10 @@ void bot_one(Game& g, int i, Pad& pad) {
     bool have_goal = false, jumpy = false, fire = false, to_capsule = false;
     Vec3 goal = p.pos, capsule = p.pos;
     float mx = 0.0f, mz = 0.0f;
-    const float range = pl_range(p), cost = pl_special_cost(p);   // con le carte (LUNGA GITTATA, SUPER CARICA)
+    const float range = pl_range(p), cost = pl_special_cost(p);   // with the cards (LUNGA GITTATA, SUPER CARICA)
     const float want = range * 0.75f;
-    // Talismano per curarsi; se in 10 secondi non lo prendono (uno su una piattaforma da un lato
-    // stretto) lo lasciano stare per 15 secondi.
+    // Talisman to heal; if they don't get it within 10 seconds (one on a platform, from a narrow
+    // side) they leave it alone for 15 seconds.
     if (b.heal_off > 0) b.heal_off--;
     const bool heal = b.heal_off == 0 && p.hp < p.hp_max * 0.45f && nearest_item(g, p, IT_TALISMAN, 14.0f, &it);
     if (!heal) b.heal_t = 0;
@@ -241,11 +241,11 @@ void bot_one(Game& g, int i, Pad& pad) {
     } else if (p.bombs < pl_bombs_cap(p) && nearest_item(g, p, IT_BOMB, 5.0f, &it) && (!have || td > 4.0f)) {
       goal = it;
       have_goal = true;
-    } else if (nearest_item(g, p, IT_POWER, 7.0f, &it) && (!have || td > 3.5f)) {   // bonus delle casse (0.5.4)
+    } else if (nearest_item(g, p, IT_POWER, 7.0f, &it) && (!have || td > 3.5f)) {   // crate power-ups (0.5.4)
       goal = it;
       have_goal = true;
     } else if (g.boss.alive && dist2d(g.boss.pos, p.pos) < 16.0f) {
-      boss_orbit(g, p, b, i, range, &mx, &mz);   // gladiatore: gli si gira attorno sparando (i mostri si colpiscono lo stesso)
+      boss_orbit(g, p, b, i, range, &mx, &mz);   // gladiator: circle around him shooting (monsters get hit anyway)
     } else if (have) {
       const float ux = (tp.x - p.pos.x) / (td > 1e-3f ? td : 1.0f), uz = (tp.z - p.pos.z) / (td > 1e-3f ? td : 1.0f);
       if (--b.strafe_t <= 0) { b.strafe_t = 70; b.strafe = b.strafe > 0.0f ? -1.0f : 1.0f; }
@@ -288,8 +288,8 @@ void bot_one(Game& g, int i, Pad& pad) {
         }
       }
     }
-    // Pericoli segnati a terra: fendente e carica del gladiatore prima di tutto, poi giavellotti in
-    // arrivo e crepe che stanno per spaccarsi.
+    // Dangers marked on the ground: the gladiator's sweep and charge first of all, then incoming
+    // javelins and cracks about to break open.
     float ex = 0.0f, ez = 0.0f;
     const bool escape = boss_escape(g, p, i, &ex, &ez);
     if (escape) {
@@ -315,7 +315,7 @@ void bot_one(Game& g, int i, Pad& pad) {
     const float l = sqrtf(mx * mx + mz * mz);
     if (l > 1e-4f) { mx /= l; mz /= l; }
 
-    // Bloccato contro qualcosa: salta e scansa di lato.
+    // Stuck against something: jump and dodge sideways.
     if (++b.check_t >= 30) {
       b.check_t = 0;
       if (l > 1e-4f && dist2d(p.pos, b.last) < 0.35f) {
@@ -327,7 +327,7 @@ void bot_one(Game& g, int i, Pad& pad) {
     }
     if (b.side_t > 0) {
       b.side_t--;
-      const float k = escape ? 0.4f : 1.0f;     // scappando dal gladiatore si scansa poco
+      const float k = escape ? 0.4f : 1.0f;     // when fleeing the gladiator, dodge only a little
       const float sx = mx - mz * b.side * k, sz = mz + mx * b.side * k;
       const float sl = sqrtf(sx * sx + sz * sz);
       if (sl > 1e-4f) { mx = sx / sl; mz = sz / sl; }
@@ -337,9 +337,9 @@ void bot_one(Game& g, int i, Pad& pad) {
       b.jump_t--;
       if (b.jump_t > 0) pad.btn |= 1u << PAD_R2;
     }
-    // Cenote (0.5.1): schivando, indietreggiando o scansando di lato non ci si butta dentro. Si
-    // guarda il tratto davanti fino a 1,5 m con il proprio raggio; se c'e' il pozzo si gira di 90
-    // gradi da una parte o dall'altra (o si torna indietro); vicino al pozzo niente salti.
+    // Cenote (0.5.1): while dodging, backing off or sidestepping, don't throw yourself in. Check
+    // the stretch ahead up to 1.5 m with your own radius; if the pit is there, turn by 90 degrees
+    // to one side or the other (or go back); near the pit, no jumps.
     if (level_pit_near(&g.L, p.pos.x, p.pos.z, 2.2f)) {
       pad.btn &= (uint16_t)~(1u << PAD_R2);
       if (mx != 0.0f || mz != 0.0f) {
@@ -359,12 +359,12 @@ void bot_one(Game& g, int i, Pad& pad) {
     pad.lx = mx;
     pad.ly = mz;
 
-    // Mira con la levetta destra e attacchi.
+    // Aim with the right stick, and attacks.
     if (have && td < fmaxf(range, cd.sp_range) + 1.5f) {
       const float dx = tp.x - p.pos.x, dz = tp.z - p.pos.z, dl = sqrtf(dx * dx + dz * dz);
       float k = 1.0f;
-      // Speciale a parabola quasi carico: la levetta si porta in anticipo all'inclinazione giusta,
-      // cosi' quando parte la gittata ha gia' seguito la levetta (come farebbe un giocatore).
+      // Lobbed special almost charged: the stick is moved in advance to the right tilt, so when it
+      // goes off the range has already followed the stick (as a player would do).
       if (cd.aim_sp == AIM_LOB && p.charge >= cost * 0.85f) k = clampf(td / cd.sp_range, 0.2f, 1.0f);
       if (dl > 1e-3f) {
         const float on = aim_tune(g, i).on;
@@ -384,12 +384,12 @@ void bot_one(Game& g, int i, Pad& pad) {
           default: sp = td < cd.sp_range; break;
         }
       }
-      // A parabola si lancia solo quando la gittata mostrata a terra e' quella voluta.
+      // A lob is thrown only when the range shown on the ground is the wanted one.
       if (cd.aim_sp == AIM_LOB && (!p.aiming || fabsf(p.aim_k - k) > 0.1f)) sp = false;
       if (sp && !b.l1_prev) pad.btn |= 1u << PAD_L;
       b.l1_prev = sp && !b.l1_prev;
     }
-    // La capsula dell'esploratore: da vicino la si mira e le si spara.
+    // The explorer's capsule: from close by, aim at it and shoot it.
     if (to_capsule && !have && dist2d(capsule, p.pos) < range) {
       const float dx = capsule.x - p.pos.x, dz = capsule.z - p.pos.z, dl = sqrtf(dx * dx + dz * dz);
       if (dl > 1e-3f) {

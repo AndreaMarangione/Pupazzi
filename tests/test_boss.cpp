@@ -1,17 +1,17 @@
-// Prove del Gladiatore gigante (0.5.1): insegue camminando e gira attorno agli ostacoli, fendente
-// davanti e non dietro, carica evitata uscendo dalla corsia, carica contro un ostacolo (stordito e
-// piu' danni), fasi con ruggito e rinforzi, boss rimesso a posto quando si ricomincia, mai bloccato
-// con gli eroi che gli corrono attorno, la stessa partita due volte. Usa il gioco senza frontend
-// (come test_rules) e un salvataggio in una cartella temporanea.
+// Tests of the giant Gladiator (0.5.1): chases by walking and goes around obstacles, slash in
+// front and not behind, charge dodged by leaving the lane, charge into an obstacle (stunned and
+// more damage), phases with roar and reinforcements, boss reset when restarting, never stuck with
+// the heroes running around it, the same game twice. Uses the game without a frontend (like
+// test_rules) and a save in a temporary directory.
 //   make build/native/test_boss && ./build/native/test_boss [--immagini CARTELLA] [--lotte [N]] [--ritardo F]
 //                                                          [--solo PERSONAGGI] [--traccia N]
-// --immagini: anche le schermate delle mosse (PPM 640x480, renderer software) in CARTELLA (e in
-//   boss.txt dove sta il boss in ogni immagine, per ritagliarle).
-// --lotte: anche partite intere contro il boss con 4, 2 e 1 giocatori automatici (N per gruppo,
-//   di serie 1): quanto ci mettono, cadute, mappe da capo, attacchi. --ritardo F: nelle lotte i
-//   giocatori automatici vedono i segni a terra F fotogrammi dopo che compaiono (come una persona).
-//   --solo PERSONAGGI (per esempio 01): solo quella lotta, senza le prove. --traccia N: una riga
-//   ogni N fotogrammi con boss e giocatori.
+// --immagini: also the screens of the moves (PPM 640x480, software renderer) in CARTELLA (and in
+//   boss.txt where the boss is in each image, to crop them).
+// --lotte: also whole games against the boss with 4, 2 and 1 bots (N per group, default 1): how
+//   long they take, falls, map restarts, attacks. --ritardo F: in the fights the bots see the
+//   ground markers F frames after they appear (like a person).
+//   --solo PERSONAGGI (for example 01): only that fight, without the tests. --traccia N: one line
+//   every N frames with boss and players.
 #include "game/sim/game_int.h"
 #include "game/view/view.h"
 #include "game/sim/maps.h"
@@ -32,10 +32,10 @@ static Pad g_pads[MAX_PLAYERS];
 static const char* g_shots;             // --immagini
 static char g_base[64] = "/tmp/pupazzi_test_boss_XXXXXX";
 static char buf[512];
-static int g_trace;                     // --traccia N: nelle lotte una riga ogni N fotogrammi
-static const char* g_only;              // --solo PERSONAGGI: solo le lotte con questi personaggi (e salta le prove)
+static int g_trace;                     // --traccia N: in the fights one line every N frames
+static const char* g_only;              // --solo PERSONAGGI: only the fights with these characters (and skips the tests)
 
-// Come nel gioco: le impostazioni, poi la partita 1 (caricata o, se non c'e', nuova).
+// As in the game: the settings, then game 1 (loaded or, if there is none, new).
 static void open_game(const char* dir) {
   save_open(dir);
   if (!save_slot_load(0)) save_slot_new(0);
@@ -60,7 +60,7 @@ static const char* save_dir(const char* name) {
   return p;
 }
 
-// Niente mostri, colpi e segni: restano gli eroi e il boss.
+// No monsters, shots or markers: the heroes and the boss remain.
 static void quiet(void) {
   memset(g.spawn_left, 0, sizeof(g.spawn_left));
   g.spawn_wait = 1000000;
@@ -69,8 +69,8 @@ static void quiet(void) {
   memset(g.mk, 0, sizeof(g.mk));
 }
 
-// L'arena con n giocatori (personaggi chars), senza carte; il boss non attacca da solo (pausa
-// lunghissima) finche' la prova non lo vuole.
+// The arena with n players (characters chars), without cards; the boss does not attack on its own
+// (very long pause) until the test wants it to.
 static void arena(int n, const char* chars) {
   game_init(g);
   memset(g_pads, 0, sizeof(g_pads));
@@ -98,7 +98,7 @@ static void put_boss(float x, float z, float face) {
   b.cd = 1000000;
 }
 
-// Il cerchio di raggio r sta in (x, z) senza toccare ostacoli per chi cammina?
+// Does the circle of radius r fit at (x, z) without touching obstacles for walkers?
 static bool fits(float x, float z, float r) {
   const float fx = x + (float)g.L.W * 0.5f, fz = z + (float)g.L.H;
   for (int cz = (int)floorf(fz - r); cz <= (int)floorf(fz + r); ++cz)
@@ -130,7 +130,7 @@ static bool has_float(const char* txt) {
   return false;
 }
 
-// Schermata del gioco come la vedrebbe il giocatore (640x480, renderer software).
+// Game screen as the player would see it (640x480, software renderer).
 static void shot(const char* name) {
   if (!g_shots) return;
   static Hud hud;
@@ -148,7 +148,7 @@ static void shot(const char* name) {
     fwrite(px, 1, 3, f);
   }
   fclose(f);
-  // Dove sta il boss nell'immagine (per ritagliarla): punti dello schermo virtuale 320x240.
+  // Where the boss is in the image (to crop it): points of the 320x240 virtual screen.
   int sx = 0, sy = 0;
   if (to_screen(fd.cam, g.boss.pos + v3(0, 2.4f, 0), &sx, &sy)) {
     snprintf(path, sizeof(path), "%s/boss.txt", g_shots);
@@ -160,7 +160,7 @@ static void shot(const char* name) {
   }
 }
 
-// --- prove -----------------------------------------------------------------------------------
+// --- tests -----------------------------------------------------------------------------------
 
 TEST_CASE("1) cammina verso il bersaglio, piu' piano degli eroi, e gira attorno alle statue") {
   arena(1, "0");
@@ -183,13 +183,13 @@ TEST_CASE("1) cammina verso il bersaglio, piu' piano degli eroi, e gira attorno 
   g.boss.stage = 0;
   snprintf(buf, sizeof(buf), "piu' svelto a ogni fase: %.1f e %.1f m/s (gli eroi da 4,7 a 5)", (double)v1, (double)v2);
   EXPECT(v1 > 2.65f && v1 < 2.75f && v2 > 2.95f && v2 < 3.05f && v2 < CHARS[CH_MOCHI].speed, buf);
-  // Il bersaglio si sposta di lato: il gladiatore si gira e lo segue.
+  // The target moves sideways: the gladiator turns and follows it.
   put(0, spawn.x + 9.0f, g.boss.pos.z + 1.0f);
   step(60);
   const float f2 = fabsf(d_wrap_pi(g.boss.face - yaw_to(g.boss.pos, g.pl[0].pos)));
   snprintf(buf, sizeof(buf), "il bersaglio va di lato: un secondo dopo lo guarda di nuovo (%.2f rad)", (double)f2);
   EXPECT(f2 < 0.3f, buf);
-  // Dietro una statua (blocco di muro 2x2 staccato): la strada dritta e' chiusa, ci gira attorno.
+  // Behind a statue (detached 2x2 wall block): the straight path is blocked, it goes around it.
   bool found = false;
   Vec3 from = v3(0, 0, 0), to = v3(0, 0, 0);
   for (int cz = 1; cz + 2 < g.L.H && !found; ++cz)
@@ -230,8 +230,8 @@ TEST_CASE("2) fendente: colpisce chi gli sta davanti, non chi sta dietro") {
   const Vec3 c = v3(g.L.boss_pos.x - 4.5f, 0, g.L.boss_pos.z + 2.5f);
   EXPECT(fits(c.x, c.z, boss_r()) && fits(c.x + 0.3f, c.z + 2.6f, PL_R) && fits(c.x, c.z - 2.6f, PL_R), "posto libero per la prova");
   put_boss(c.x, c.z, 0.0f);
-  put(0, c.x + 0.3f, c.z + 2.6f);     // davanti (verso sud)
-  put(1, c.x, c.z - 2.6f);            // dietro
+  put(0, c.x + 0.3f, c.z + 2.6f);     // in front (towards the south)
+  put(1, c.x, c.z - 2.6f);            // behind
   g.boss.target = 0;
   g.boss.target_t = 0;
   const float h0 = g.pl[0].hp, h1 = g.pl[1].hp;
@@ -252,7 +252,7 @@ TEST_CASE("2) fendente: colpisce chi gli sta davanti, non chi sta dietro") {
   step(10);
   snprintf(buf, sizeof(buf), "chi e' colpito vola via (%.2f m)", (double)(g.pl[0].pos.z - z0));
   EXPECT(g.pl[0].pos.z - z0 > 0.5f, buf);
-  // Di lato al limite del settore (75 gradi) si prende, a 110 gradi no; nell'ultima fase si prepara piu' in fretta.
+  // Sideways at the sector's edge (75 degrees) you get hit, at 110 degrees not; in the last phase it winds up faster.
   arena(2, "01");
   put_boss(c.x, c.z, 0.0f);
   put(0, c.x + 3.0f * d_sin(1.3f), c.z + 3.0f * d_cos(1.3f));
@@ -260,7 +260,7 @@ TEST_CASE("2) fendente: colpisce chi gli sta davanti, non chi sta dietro") {
   g.boss.stage = 2;
   g.boss.target = 0;
   boss_force_act(g, BA_SWEEP);
-  g.boss.act_yaw = 0.0f;              // il settore verso sud: uno a 75 gradi, l'altro a 110
+  g.boss.act_yaw = 0.0f;              // the sector towards the south: one at 75 degrees, the other at 110
   const int w2 = g.boss.wind;
   const float a0 = g.pl[0].hp, a1 = g.pl[1].hp;
   step(w2 + 1);
@@ -286,7 +286,7 @@ TEST_CASE("3) carica: chi resta nella corsia la prende e vola di lato, chi ne es
                m ? (double)(2.0f * m->r) : 0.0, m ? (double)m->len : 0.0, wind, g.boss.crash ? "si" : "no");
       EXPECT(m && fabsf(m->yaw) < 0.01f && m->r > 1.15f && m->r < 1.3f && lane > 9.0f && lane <= 15.0f && wind == 48, buf);
     }
-    if (dodge) g_pads[0].lx = 1.0f;     // appena vede la corsia esce di lato
+    if (dodge) g_pads[0].lx = 1.0f;     // as soon as they see the lane they step out sideways
     int f = 0;
     for (; f < 400 && g.boss.act == BA_RUSH && g.boss.run < g.boss.lane; ++f) {
       step();
@@ -298,7 +298,7 @@ TEST_CASE("3) carica: chi resta nella corsia la prende e vola di lato, chi ne es
       snprintf(buf, sizeof(buf), "restando nella corsia: %.0f di danni, spinto di lato di %.1f m; lui corre %.1f m in %d fotogrammi", (double)(h0 - g.pl[0].hp),
                (double)fabsf(g.pl[0].pos.x - s.x), (double)ran, f);
       EXPECT(fabsf(h0 - g.pl[0].hp - 25.0f) < 0.01f && fabsf(g.pl[0].pos.x - s.x) > 1.0f && fabsf(ran - lane) < 0.05f, buf);
-      // Si e' fermato senza sbattere: poco dopo i giavellotti.
+      // It stopped without crashing: shortly after, the javelins.
       int t = 0;
       for (; t < 120 && g.boss.act != BA_JAVELIN; ++t) step();
       snprintf(buf, sizeof(buf), "fermo senza sbattere: dopo %d fotogrammi lancia i giavellotti", t);
@@ -314,7 +314,7 @@ TEST_CASE("4) carica contro un ostacolo: stordito per 1,5 secondi, intanto i col
   arena(1, "1");
   const Vec3 s = g.L.boss_pos;
   put_boss(s.x, s.z, D_HALF_PI);
-  put(0, s.x + 8.0f, s.z);            // verso est: la colonna o il muro dell'arena
+  put(0, s.x + 8.0f, s.z);            // towards the east: the column or the arena wall
   g.pl[0].invuln = 100000;
   g.boss.target = 0;
   boss_force_act(g, BA_RUSH);
@@ -323,7 +323,7 @@ TEST_CASE("4) carica contro un ostacolo: stordito per 1,5 secondi, intanto i col
   const float lane = g.boss.lane;
   int f = 0;
   for (; f < 300 && g.boss.act == BA_RUSH; ++f) step();
-  const Vec3 ahead = g.boss.pos + dir_yaw(g.boss.face) * 0.3f;   // ancora un passo e toccherebbe l'ostacolo
+  const Vec3 ahead = g.boss.pos + dir_yaw(g.boss.face) * 0.3f;   // one more step and it would touch the obstacle
   snprintf(buf, sizeof(buf), "la corsia finisce contro un ostacolo dopo %.1f m: dopo %d fotogrammi e' stordito (\"STORDITO!\")", (double)lane, f);
   EXPECT(crash && g.boss.act == BA_STUN && has_float("STORDITO!") && !fits(ahead.x, ahead.z, boss_r()), buf);
   const float hp0 = g.boss.hp;
@@ -354,7 +354,7 @@ TEST_CASE("5) a 2/3 e a 1/3 della vita ruggisce (prende poco) e chiama i rinforz
   const int n1 = count_monsters(g);
   snprintf(buf, sizeof(buf), "poi chiama i rinforzi: %d mostri dalle botole", n1);
   EXPECT(calls && n1 >= 3 && n1 <= 10, buf);
-  // Altri mostri in campo: il massimo resta 10.
+  // More monsters on the field: the maximum stays 10.
   for (int k = 0; k < 6; ++k) monster_spawn(g, MO_SCARABEO, false, 0);
   for (int k = 0; k < 400 && b.act != BA_NONE; ++k) step();
   b.cd = 1000000;
@@ -364,7 +364,7 @@ TEST_CASE("5) a 2/3 e a 1/3 della vita ruggisce (prende poco) e chiama i rinforz
   step(115);
   snprintf(buf, sizeof(buf), "a 1/3: fase %d (\"È FURIOSO!\"), mostri in campo %d (al massimo 10)", b.stage + 1, count_monsters(g));
   EXPECT(roar2 && count_monsters(g) <= 10, buf);
-  // Un attacco a meta' non si interrompe: la fase cambia quando e' finito.
+  // An attack halfway through is not interrupted: the phase changes when it is over.
   arena(1, "0");
   put(0, g.boss.pos.x, g.boss.pos.z + 3.0f);
   g.boss.target = 0;
@@ -382,10 +382,10 @@ TEST_CASE("6) bersaglio: il piu' vicino, tenuto almeno 3 secondi; passa a chi lo
   put_boss(s.x, s.z, 0.0f);
   put(0, s.x - 2.0f, s.z + 7.0f);
   put(1, s.x + 3.0f, s.z + 9.5f);
-  g.boss.target = -1;                 // come appena comparso
+  g.boss.target = -1;                 // as if it just appeared
   step(2);
   const bool first = g.boss.target == 0;
-  put(1, s.x + 1.5f, g.boss.pos.z + 6.5f);      // un po' piu' vicino di G1 (che sta a circa 7 m)
+  put(1, s.x + 1.5f, g.boss.pos.z + 6.5f);      // a bit closer than G1 (which is about 7 m away)
   put(0, g.boss.pos.x - 2.0f, g.boss.pos.z + 7.0f);
   step(30);
   const bool kept = g.boss.target == 0;
@@ -396,13 +396,13 @@ TEST_CASE("6) bersaglio: il piu' vicino, tenuto almeno 3 secondi; passa a chi lo
   }
   snprintf(buf, sizeof(buf), "prima G1 (il piu' vicino), tiene G1 con G2 appena piu' vicino, dopo 3 secondi passa a G2 (bersaglio G%d)", g.boss.target + 1);
   EXPECT(first && kept && g.boss.target == 1 && g.boss.target_t < 5, buf);
-  // G1 lontano lo picchia forte: il gladiatore va da lui.
+  // G1, far away, hits it hard: the gladiator goes after G1.
   step(70);
   for (int k = 0; k < 4; ++k) damage_boss(g, 60.0f, 0, false);
   step(2);
   snprintf(buf, sizeof(buf), "G1 da lontano gli toglie 240 in un attimo: insegue G1 (bersaglio G%d)", g.boss.target + 1);
   EXPECT(g.boss.target == 0, buf);
-  // Giavellotti: 1, 2 e 3 secondo la fase (con due eroi: uno a testa, il terzo di lato al bersaglio).
+  // Javelins: 1, 2 and 3 by phase (with two heroes: one each, the third to the side of the target).
   int n[3];
   for (int st = 0; st < 3; ++st) {
     arena(2, "01");
@@ -444,7 +444,7 @@ TEST_CASE("7) si ricomincia: il gladiatore torna al suo posto con la vita piena"
   EXPECT(wipe && g.phase == PH_FIGHT && b.alive && dist2d(b.pos, spawn) < 0.01f && b.hp == b.hp_max && b.stage == 0 && b.act == BA_NONE &&
              count_markers(MK_SWEEP) == 0 && count_markers(MK_LANE) == 0,
          buf);
-  // In due: chi cade rientra dopo 5 secondi, il boss resta com'era.
+  // Two players: whoever falls comes back after 5 seconds, the boss stays as it was.
   arena(2, "01");
   g.boss.hp = g.boss.hp_max * 0.8f;
   const float hp = g.boss.hp;
@@ -454,7 +454,7 @@ TEST_CASE("7) si ricomincia: il gladiatore torna al suo posto con la vita piena"
   step(RESPAWN_FRAMES + 2);
   snprintf(buf, sizeof(buf), "in due, G2 cade e rientra: il boss non torna al suo posto (%.1f m) e tiene la sua vita", (double)dist2d(g.boss.pos, spawn));
   EXPECT(g.pl[1].alive && g.boss.hp == hp && dist2d(g.boss.pos, spawn) > 2.0f && dist2d(g.boss.pos, at) < 8.0f, buf);
-  // Tutti a terra: mappa da capo, boss da capo.
+  // All down: map restarted, boss restarted.
   g.pl[0].invuln = g.pl[1].invuln = 0;
   hurt_player(g, 0, 1e6f, g.pl[0].pos + v3(1, 0, 0), 0.0f);
   hurt_player(g, 1, 1e6f, g.pl[1].pos + v3(1, 0, 0), 0.0f);
@@ -465,9 +465,9 @@ TEST_CASE("7) si ricomincia: il gladiatore torna al suo posto con la vita piena"
   EXPECT(map && g.phase == PH_FIGHT && g.boss.hp == g.boss.hp_max && dist2d(g.boss.pos, spawn) < 0.01f && g.map_wipes == 1, buf);
 }
 
-// Due eroi che corrono in cerchio attorno al centro dell'arena (invulnerabili, senza sparare): il
-// gladiatore li insegue e attacca per n fotogrammi. Mai fermo a lungo mentre vuole camminare, mai
-// dentro un ostacolo o fuori dalla zona.
+// Two heroes running in a circle around the center of the arena (invulnerable, not shooting): the
+// gladiator chases and attacks them for n frames. Never still for long while it wants to walk,
+// never inside an obstacle or outside the zone.
 TEST_CASE("8) 20000 fotogrammi con due eroi che gli corrono attorno: mai bloccato, mai dentro un ostacolo") {
   const int n = 20000;
   arena(2, "01");
@@ -480,7 +480,7 @@ TEST_CASE("8) 20000 fotogrammi con due eroi che gli corrono attorno: mai bloccat
   int jump[MAX_PLAYERS] = { 0 };
   for (int i = 0; i < MAX_PLAYERS; ++i) last_p[i] = g.pl[i].pos;
   for (int f = 0; f < n; ++f) {
-    if (f == n * 3 / 10) g.boss.hp = g.boss.hp_max * 0.6f;      // fasi e rinforzi lungo la prova
+    if (f == n * 3 / 10) g.boss.hp = g.boss.hp_max * 0.6f;      // phases and reinforcements during the test
     if (f == n * 6 / 10) g.boss.hp = g.boss.hp_max * 0.3f;
     memset(g_pads, 0, sizeof(g_pads));
     for (int i = 0; i < 2; ++i) {
@@ -495,7 +495,7 @@ TEST_CASE("8) 20000 fotogrammi con due eroi che gli corrono attorno: mai bloccat
         g_pads[i].ly = dz / l;
       }
       if (f % 30 == 0) {
-        if (dist2d(p.pos, last_p[i]) < 0.3f) jump[i] = 12;      // fermo contro qualcosa: salta
+        if (dist2d(p.pos, last_p[i]) < 0.3f) jump[i] = 12;      // stuck against something: jump
         last_p[i] = p.pos;
       }
       if (jump[i] > 0 && jump[i]-- > 1) g_pads[i].btn |= 1u << PAD_R2;
@@ -523,10 +523,10 @@ TEST_CASE("8) 20000 fotogrammi con due eroi che gli corrono attorno: mai bloccat
   EXPECT(acts[BA_SWEEP] > 0 && acts[BA_RUSH] > 0 && acts[BA_SLAM] > 0 && acts[BA_JAVELIN] > 0 && acts[BA_SUMMON] == 2, buf);
 }
 
-// Partita con n giocatori automatici dalla mappa del boss; restituisce l'impronta di tutti i fotogrammi.
+// Game with n bots from the boss map; returns the hash of all the frames.
 static uint64_t bot_run(int n, const char* chars, int frames, int pre, uint64_t* last) {
   game_init(g);
-  for (int k = 0; k < pre; ++k) {          // qualche fotogramma nel titolo: generatore casuale diverso
+  for (int k = 0; k < pre; ++k) {          // a few frames in the title: a different random generator
     Pad pads[MAX_PLAYERS];
     memset(pads, 0, sizeof(pads));
     game_update(g, pads);
@@ -557,13 +557,13 @@ TEST_CASE("9) la stessa lotta due volte: la stessa partita fotogramma per fotogr
   EXPECT(h[0] == h[1] && e[0] == e[1], buf);
 }
 
-// --- lotte: partite intere con i giocatori automatici ---------------------------------------------
+// --- fights: whole games with the bots ----------------------------------------------------------
 
 struct Fight {
   bool won;
   int frames, deaths, wipes, restarts, hits;
   int acts[BA_COUNT];
-  float boss_hp;            // vita del boss alla fine (0 se battuto)
+  float boss_hp;            // boss health at the end (0 if beaten)
 };
 
 static Fight fight(int n, const char* chars, int max_frames, int pre) {
@@ -635,9 +635,9 @@ static void fights(int per, int lag) {
   game_set_cards_enabled(g, false);
 }
 
-// --- schermate --------------------------------------------------------------------------------
+// --- screens ----------------------------------------------------------------------------------
 
-// Tre eroi attorno al boss in mezzo all'arena.
+// Three heroes around the boss in the middle of the arena.
 static void scene(const char* chars) {
   arena((int)strlen(chars), chars);
   const Vec3 s = g.L.boss_pos;
@@ -646,13 +646,13 @@ static void scene(const char* chars) {
   for (int i = 0; i < (int)strlen(chars); ++i) put(i, s.x + P[i][0], s.z + 3.0f + P[i][1]);
   for (int i = 0; i < MAX_PLAYERS; ++i) g.pl[i].invuln = 100000;
   g.boss.target = 0;
-  g.msg_t = 0;                       // niente scritta della mappa sopra
+  g.msg_t = 0;                       // no map caption over it
   view_camera(v, g, CAM_CUT);
 }
 
 static void pictures(void) {
   printf("schermate in %s\n", g_shots);
-  // Camminata: quattro momenti del passo.
+  // Walk: four moments of the stride.
   scene("012");
   put(0, g.boss.pos.x + 1.0f, g.boss.pos.z + 11.0f);
   g.boss.cd = 1000000;
@@ -666,7 +666,7 @@ static void pictures(void) {
       shot(name);
     }
   }
-  // Fendente: preparazione e colpo.
+  // Slash: wind-up and hit.
   scene("012");
   put(0, g.boss.pos.x + 0.5f, g.boss.pos.z + 3.0f);
   boss_force_act(g, BA_SWEEP);
@@ -678,7 +678,7 @@ static void pictures(void) {
   shot("04_fendente_colpo");
   step(4);
   shot("05_fendente_dopo");
-  // Carica: preparazione, corsa, contro il muro e stordito.
+  // Charge: wind-up, run, into the wall and stunned.
   scene("012");
   put(0, g.boss.pos.x - 1.0f, g.boss.pos.z + 9.5f);
   boss_force_act(g, BA_RUSH);
@@ -702,7 +702,7 @@ static void pictures(void) {
   shot("10_stordito");
   step(30);
   shot("11_stordito_dopo");
-  // Giavellotti (ultima fase: tre), spaccaterra, ruggito, rinforzi, sconfitto.
+  // Javelins (last phase: three), ground slam, roar, reinforcements, defeated.
   scene("012");
   g.boss.stage = 2;
   put(0, g.boss.pos.x + 2.0f, g.boss.pos.z + 10.0f);

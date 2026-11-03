@@ -1,5 +1,5 @@
-// Colpi, danni, esplosioni, bombe, talismani, casse che si rompono (con i bonus dalla 0.5.4) ed
-// effetti (particelle, numeri dei danni, segni a terra, scossone dello schermo).
+// Shots, damage, explosions, bombs, talismans, breakable crates (with power-ups since 0.5.4) and
+// effects (particles, damage numbers, marks on the ground, screen shake).
 #include "game/sim/game_int.h"
 #include "platform/plat.h"
 #include <stdio.h>
@@ -38,7 +38,7 @@ int shot_col(const Shot& s) {
   }
 }
 
-// Pezzi del colore del mostro sconfitto.
+// Pieces in the color of the defeated monster.
 int monster_col(int type) {
   switch (type) {
     case MO_SCORPIONE: return PC_SCORPION;
@@ -57,7 +57,7 @@ Bomb* bomb_new(Game& g) {
   return 0;
 }
 
-// Una bomba della mappa colpita da qualcuno: si accende e scoppia dopo 3 secondi.
+// A map bomb hit by someone: it is lit and explodes after 3 seconds.
 void light_item_bomb(Game& g, int it, int owner, int fuse) {
   if (!g.item_on[it]) return;
   Bomb* b = bomb_new(g);
@@ -81,7 +81,7 @@ void kill_monster(Game& g, int k, int owner) {
   Monster& m = g.mo[k];
   m.alive = false;
   g.kills++;
-  // Sconfitto: pezzi del suo colore, scintille e uno sbuffo.
+  // Defeated: pieces of its color, sparks and a puff.
   const Vec3 c = monster_center(m);
   burst(g, c + v3(0, 0.4f, 0), 6, PC_GOLD, 3.5f);
   burst(g, c, 8, monster_col(m.type), 3.5f);
@@ -96,15 +96,15 @@ void kill_monster(Game& g, int k, int owner) {
   }
 }
 
-// RIMBALZO: muri, massi e alberi rimandano indietro i colpi.
+// RIMBALZO: walls, boulders and trees send the shots back.
 bool bounces_on(Game& g, int cx, int cz) {
   if (cx < 0 || cz < 0 || cx >= g.L.W || cz >= g.L.H) return false;
   const int c = g.L.cell[cz][cx];
   return c == C_WALL || c == C_ROCK || c == C_TREE;
 }
 
-// Riflette il colpo sulla faccia della casella (cx, cz) da cui e' entrato in hp: quella piu' vicina
-// al punto tra le facce verso cui va il colpo.
+// Reflects the shot off the face of cell (cx, cz) through which it entered at hp: the one nearest
+// to the point among the faces the shot is heading toward.
 void bounce_shot(Game& g, Shot& s, Vec3 hp, int cx, int cz) {
   const float gx = hp.x + (float)g.L.W * 0.5f, gz = hp.z + (float)g.L.H;
   const float fx = s.vel.x > 0.0f ? fabsf(gx - (float)cx) : (s.vel.x < 0.0f ? fabsf(gx - (float)(cx + 1)) : 1e30f);
@@ -150,7 +150,7 @@ void update_straight(Game& g, Shot& s) {
     else if (s.kind != SK_FLAME) burst(g, s.pos, 2, shot_col(s), 1.0f);
     return;
   }
-  // Bombe della mappa: un colpo qualunque le accende.
+  // Map bombs: any shot lights them.
   for (int it = 0; it < g.L.nitems; ++it) {
     const MapItem& mi = g.L.items[it];
     if (!g.item_on[it] || mi.kind != IT_BOMB) continue;
@@ -174,12 +174,12 @@ void update_straight(Game& g, Shot& s) {
         m.slow_k = 0.6f;
         puff(g, s.pos, PK_SNOW, PC_SNOW, v3(0, 0.6f, 0), 1.0f, 18);
       }
-      if (m.alive) card_shot_hit(g, k, s);        // combo: bruciature, rallentamento, vapore
+      if (m.alive) card_shot_hit(g, k, s);        // combo: burns, slowdown, vapor
       if (s.kind == SK_FLAME) {
         s.hit |= 1ull << k;
         continue;
       }
-      if (s.pierce > 0) {                       // PERFORANTE: passa oltre questo mostro
+      if (s.pierce > 0) {                       // PERFORANTE: goes past this monster
         s.pierce--;
         s.hit |= 1ull << k;
         burst(g, s.pos, 2, shot_col(s), 1.5f);
@@ -214,7 +214,7 @@ void update_straight(Game& g, Shot& s) {
   }
 }
 
-// Razzi di Astro: si allargano, poi inseguono ognuno un mostro diverso.
+// Astro's rockets: they spread out, then each one chases a different monster.
 void update_crow(Game& g, Shot& s, int idx) {
   if (s.life > 10) {
     bool ok = false;
@@ -249,7 +249,7 @@ void update_crow(Game& g, Shot& s, int idx) {
   const float speed = fminf(12.0f, 6.5f + 0.12f * (float)s.life);
   s.vel = dir_yaw(s.yaw) * speed;
   s.pos = s.pos + s.vel * DT;
-  if ((s.life & 3) == 0) puff(g, s.pos, PK_PUFF, PC_WHITE, v3(0, 0.3f, 0), 0.5f, 18);   // scia di fumo del razzo
+  if ((s.life & 3) == 0) puff(g, s.pos, PK_PUFF, PC_WHITE, v3(0, 0.3f, 0), 0.5f, 18);   // rocket smoke trail
   for (int k = 0; k < MAX_MONSTERS; ++k) {
     Monster& m = g.mo[k];
     if (!m.alive || m.rise > 0) continue;
@@ -271,7 +271,7 @@ void update_crow(Game& g, Shot& s, int idx) {
   }
 }
 
-// Colpi a parabola: bolle di lava di Zolfo e giavellotti del gladiatore.
+// Lobbed shots: Zolfo's lava bubbles and the gladiator's javelins.
 void update_lob(Game& g, Shot& s) {
   s.vel.y -= GRAVITY * DT;
   s.pos = s.pos + s.vel * DT;
@@ -290,14 +290,14 @@ void update_lob(Game& g, Shot& s) {
     explode(g, p, 1.6f, s.dmg, s.owner, 3.5f, false, EL_FIRE);
     return;
   }
-  // Giavellotto: fa male ai giocatori vicini.
+  // Javelin: hurts nearby players.
   for (int j = 0; j < MAX_PLAYERS; ++j) {
     const Player& q = g.pl[j];
     if (!q.active || !q.alive) continue;
     if (dist2d(q.pos, p) > 1.4f + PL_R || q.pos.y > p.y + 1.6f) continue;
     hurt_player(g, j, s.dmg, p, 5.0f);
   }
-  burst(g, p + v3(0, 0.2f, 0), 10, PC_SAND, 4.0f);       // giavellotto piantato: sabbia e polvere
+  burst(g, p + v3(0, 0.2f, 0), 10, PC_SAND, 4.0f);       // planted javelin: sand and dust
   for (int k = 0; k < 5; ++k) puff(g, p + v3(0, 0.3f, 0), PK_PUFF, PC_SAND, rng_vec(g, 2.0f, 1.0f, 0.0f, 2.0f), 1.1f, 24);
   Marker* mk = marker_new(g, MK_BLAST, p, 1.4f, 12);
   (void)mk;
@@ -305,10 +305,10 @@ void update_lob(Game& g, Shot& s) {
   ev_sound(g, SND_JAVELIN, p);
 }
 
-// Frecce degli arcieri di terracotta: a parabola come i giavellotti (passano sopra muretti e casse),
-// con una scia leggera. Dove cadono fanno male a chi sta nel cerchio rosso (raggio s.r), alzano un
-// po' di polvere e restano piantate per ARROW_STUCK fotogrammi: life negativa, conta fino a 0
-// (shots_update la fa salire di uno a ogni fotogramma; il disegno la affonda alla fine).
+// Arrows of the terracotta archers: lobbed like the javelins (they pass over low walls and crates),
+// with a light trail. Where they land they hurt whoever is in the red circle (radius s.r), raise a
+// bit of dust and stay stuck in the ground for ARROW_STUCK frames: negative life, counting up to 0
+// (shots_update raises it by one every frame; the drawing code sinks it at the end).
 const int ARROW_STUCK = 40;
 
 void update_arrow(Game& g, Shot& s) {
@@ -325,7 +325,7 @@ void update_arrow(Game& g, Shot& s) {
     if ((s.life & 1) == 0) puff(g, s.pos, PK_PUFF, PC_WHITE, v3(0, 0, 0), 0.32f, 12);
     return;
   }
-  if (level_pit_at(&g.L, s.pos.x, s.pos.z)) {   // finita nel cenote: sparisce giu' nel pozzo
+  if (level_pit_at(&g.L, s.pos.x, s.pos.z)) {   // landed in the cenote: disappears down the pit
     s.alive = false;
     return;
   }
@@ -345,7 +345,7 @@ void update_arrow(Game& g, Shot& s) {
 
 }  // namespace
 
-// --- effetti --------------------------------------------------------------------
+// --- effects --------------------------------------------------------------------
 
 void add_shake(Game& g, float a) {
   if (a > g.shake) g.shake = a > 0.6f ? 0.6f : a;
@@ -377,8 +377,8 @@ void burst(Game& g, Vec3 p, int n, int col, float speed) {
   }
 }
 
-// key identifica il bersaglio: un numero comparso da poco sullo stesso bersaglio si aggiorna invece
-// di aggiungerne un altro sopra (sign: '-', '+' o 0 per nessun segno).
+// key identifies the target: a number that appeared recently on the same target is updated
+// instead of adding another one on top (sign: '-', '+' or 0 for no sign).
 void add_float(Game& g, Vec3 p, uint32_t rgb, int key, int value, char sign) {
   int slot = -1, oldest = 1 << 30;
   for (int i = 0; i < MAX_FLOATS; ++i) {
@@ -410,7 +410,7 @@ void add_float_text(Game& g, Vec3 p, uint32_t rgb, const char* txt) {
   FloatText& f = g.ft[slot];
   f.alive = true;
   f.life = 70;
-  f.key = -1;          // non si somma con nessun numero
+  f.key = -1;          // not added up with any number
   f.value = 0;
   f.rgb = rgb;
   f.pos = p;
@@ -418,8 +418,8 @@ void add_float_text(Game& g, Vec3 p, uint32_t rgb, const char* txt) {
 }
 
 namespace {
-const int HELP_PERIOD = 170;        // ogni quanto chiama aiuto (fotogrammi)
-const float HELP_DIST = 10.0f;      // ...se qualcuno e' entro questa distanza
+const int HELP_PERIOD = 170;        // how often it calls for help (frames)
+const float HELP_DIST = 10.0f;      // ...if someone is within this distance
 }
 
 void explorer_rescue(Game& g, Vec3 c) {
@@ -433,7 +433,7 @@ void explorer_rescue(Game& g, Vec3 c) {
   add_float_text(g, v3(c.x, 1.9f, c.z), 0xFFE14D, N_("GRAZIE!"));
   show_msg(g, tr("ESPLORATORE SALVATO!"), tr("una stella in più per questa mappa"), 0xFFE14D, 2, 150);
   ev_sound(g, SND_RESCUE, c);
-  if (g.phase == PH_MAP_DONE) stars_late_explorer(g);     // la mappa era gia' finita: la stella arriva lo stesso
+  if (g.phase == PH_MAP_DONE) stars_late_explorer(g);     // the map was already finished: the star comes anyway
   plat_log("esploratore salvato (mappa %d, zona %d)", g.map_idx + 1, g.zone + 1);
 }
 
@@ -442,7 +442,7 @@ void explorer_update(Game& g) {
   const DynCell& dc = g.L.dyn[g.L.capsule_dyn];
   const Vec3 c = cell_center(&g.L, dc.cx, dc.cz);
   if (!g.explorer_free) {
-    // Nella capsula: chiama aiuto quando qualcuno passa abbastanza vicino.
+    // In the capsule: calls for help when someone passes close enough.
     if (g.help_t > 0) { g.help_t--; return; }
     for (int j = 0; j < MAX_PLAYERS; ++j) {
       const Player& p = g.pl[j];
@@ -455,7 +455,7 @@ void explorer_update(Game& g) {
     return;
   }
   if (g.expl_t < 0) return;
-  // Libero: salta fuori, festeggia, poi se ne va saltellando verso la partenza della mappa.
+  // Free: jumps out, celebrates, then hops away toward the start of the map.
   g.expl_t++;
   if (g.expl_t > 70) {
     const Vec3 home = g.L.zones[0].start[0];
@@ -470,7 +470,7 @@ void explorer_update(Game& g) {
       g.expl_yaw = yaw_of(d.x, d.z);
     }
   } else {
-    g.expl_yaw = 0.0f;     // verso la telecamera
+    g.expl_yaw = 0.0f;     // toward the camera
   }
   if (g.expl_t >= 220) {
     puff(g, v3(g.expl_pos.x, 0.5f, g.expl_pos.z), PK_PUFF, PC_WHITE, v3(0, 0.8f, 0), 1.0f, 20);
@@ -532,7 +532,7 @@ void effects_update(Game& g) {
   if (g.msg_t > 0) g.msg_t--;
   g.shake *= 0.86f;
   if (g.shake < 0.004f) g.shake = 0.0f;
-  // Cespugli ed erba alta si schiacciano quando qualcuno ci passa in mezzo.
+  // Bushes and tall grass get squashed when someone walks through them.
   for (int d = 0; d < g.L.ndyn; ++d) {
     const DynCell& dc = g.L.dyn[d];
     if (g.crate_hit[d] > 0) g.crate_hit[d]--;
@@ -548,9 +548,9 @@ void effects_update(Game& g) {
   }
 }
 
-// --- danni ------------------------------------------------------------------------
+// --- damage -----------------------------------------------------------------------
 
-// FURIA (bonus delle casse): i danni di quel giocatore sono doppi, qualunque cosa li faccia.
+// FURIA (crate power-up): that player's damage is doubled, whatever deals it.
 static float fury(Game& g, float dmg, int owner) {
   return owner >= 0 && owner < MAX_PLAYERS && g.pl[owner].pw_t[PW_FURY] > 0 ? dmg * PW_FURY_K : dmg;
 }
@@ -560,7 +560,7 @@ void damage_monster(Game& g, int k, float dmg, int owner, Vec3 dir, float knock,
   if (!m.alive) return;
   dmg = fury(g, dmg, owner);
   m.hp -= dmg;
-  const int hurt = dmg >= 4.0f ? 8 : 2;      // danni piccoli e continui (bufera): appena un guizzo
+  const int hurt = dmg >= 4.0f ? 8 : 2;      // small, continuous damage (blizzard): just a twitch
   if (m.hurt < hurt) m.hurt = hurt;
   m.shown = 150;
   m.reveal = 60;
@@ -568,11 +568,11 @@ void damage_monster(Game& g, int k, float dmg, int owner, Vec3 dir, float knock,
   const float kk = m.type == MO_GUERRIERO ? 0.35f : (m.type == MO_SCARABEO ? 1.6f : 1.0f);
   m.kx += dir.x * knock * kk;
   m.kz += dir.z * knock * kk;
-  if (knock > 0.0f) m.push_by = (int8_t)(owner >= 0 && owner < MAX_PLAYERS ? owner + 1 : 0);   // chi l'ha spinto (cenote, monsters.cpp)
+  if (knock > 0.0f) m.push_by = (int8_t)(owner >= 0 && owner < MAX_PLAYERS ? owner + 1 : 0);   // who pushed it (cenote, monsters.cpp)
   if (dmg > 0.0f)
     add_float(g, v3(m.pos.x, m.pos.y + (MONS[m.type].flying ? m.fly + 0.5f : monster_h(m) + 0.4f), m.pos.z), charges ? 0xFFFFFF : 0xFFE14D,
               1 + k, (int)(dmg + 0.5f), 0);
-  if (owner >= 0 && dmg >= 4.0f && m.hp > 0.0f) ev_sound(g, SND_HIT, m.pos);   // i danni piccoli e continui non fanno rumore
+  if (owner >= 0 && dmg >= 4.0f && m.hp > 0.0f) ev_sound(g, SND_HIT, m.pos);   // small, continuous damage makes no noise
   if (owner >= 0 && owner < MAX_PLAYERS) {
     Player& p = g.pl[owner];
     p.dmg_done += dmg;
@@ -588,12 +588,12 @@ void damage_monster(Game& g, int k, float dmg, int owner, Vec3 dir, float knock,
 
 void damage_boss(Game& g, float dmg, int owner, bool charges) {
   Boss& b = g.boss;
-  if (!b.alive || g.phase == PH_WIPE) return;   // tutti a terra: si ricomincia, i colpi in volo non contano
+  if (!b.alive || g.phase == PH_WIPE) return;   // everyone down: restarting, shots in flight don't count
   dmg = fury(g, dmg, owner);
-  if (b.roar > 0) dmg *= 0.25f;      // mentre ruggisce tra una fase e l'altra prende poco
-  else if (b.act == BA_STUN) dmg *= BOSS_STUN_DMG;   // stordito dopo una carica contro un ostacolo: prende di piu'
+  if (b.roar > 0) dmg *= 0.25f;      // while roaring between one phase and the next, takes little
+  else if (b.act == BA_STUN) dmg *= BOSS_STUN_DMG;   // stunned after a charge into an obstacle: takes more
   b.hp -= dmg;
-  if (owner >= 0 && owner < MAX_PLAYERS) b.aggro[owner] += dmg;   // chi lo picchia forte se lo tira dietro
+  if (owner >= 0 && owner < MAX_PLAYERS) b.aggro[owner] += dmg;   // whoever hits him hard gets chased
   if (b.hurt == 0 && dmg >= 4.0f) ev_sound(g, SND_HIT, b.pos);
   b.hurt = 6;
   b.shown = 150;
@@ -634,7 +634,7 @@ void explode(Game& g, Vec3 p, float radius, float dmg, int owner, float knock, b
       const float f = 1.0f - 0.6f * clampf(d / radius, 0.0f, 1.0f);
       push_player(g, j, dir.x * knock * f, dir.z * knock * f, 0);
     }
-  // Le altre bombe vicine si accendono e scoppiano subito dopo.
+  // The other nearby bombs are lit and explode right after.
   for (int it = 0; it < g.L.nitems; ++it) {
     const MapItem& mi = g.L.items[it];
     if (g.item_on[it] && mi.kind == IT_BOMB && dist2d(cell_center(&g.L, mi.cx, mi.cz), p) < radius + 0.4f) light_item_bomb(g, it, owner, 15);
@@ -643,7 +643,7 @@ void explode(Game& g, Vec3 p, float radius, float dmg, int owner, float knock, b
     Bomb& b = g.bo[i];
     if (b.alive && b.fuse > 15 && dist2d(b.pos, p) < radius + 0.4f) b.fuse = 15;
   }
-  // Casse.
+  // Crates.
   const int r = (int)ceilf(radius);
   int pcx, pcz;
   if (level_cell(&g.L, p.x, p.z, &pcx, &pcz))
@@ -672,7 +672,7 @@ void explode(Game& g, Vec3 p, float radius, float dmg, int owner, float knock, b
   ev_sound(g, big ? SND_EXPLODE : SND_EXPLODE_SMALL, p);
 }
 
-// --- bombe, talismani, casse ------------------------------------------------------
+// --- bombs, talismans, crates -----------------------------------------------------
 
 bool bomb_drop(Game& g, int i) {
   Player& p = g.pl[i];
@@ -709,7 +709,7 @@ void bombs_update(Game& g) {
     const int before = g.kills;
     float radius = BOMB_RADIUS, dmg = BOMB_DMG;
     if (b.item < 0 && b.owner >= 0 && b.owner < MAX_PLAYERS && has_card(g.pl[b.owner], CA_BOMBE)) {
-      radius *= 1.35f;                                // BOMBE GIGANTI: solo quelle lasciate da chi ha la carta
+      radius *= 1.35f;                                // BOMBE GIGANTI: only those dropped by the card holder
       dmg *= 1.5f;
     }
     explode(g, b.pos + v3(0, 0.3f, 0), radius, dmg, b.owner, BOMB_KNOCK, true);
@@ -737,7 +737,7 @@ void items_update(Game& g) {
       Player& p = g.pl[j];
       if (!p.active || !p.alive) continue;
       const float d = dist2d(p.pos, c);
-      // CALAMITA: anche da 3 metri, se niente si mette in mezzo.
+      // CALAMITA: also from 3 meters, if nothing gets in the way.
       if (d > PICK_DIST && !(has_card(p, CA_CALAMITA) && d <= MAGNET_DIST &&
                              !level_blocked(&g.L, player_chest(p), v3(c.x, mi.y + 0.5f, c.z)))) continue;
       if (fabsf(p.pos.y - mi.y) > 0.8f) continue;
@@ -749,12 +749,12 @@ void items_update(Game& g) {
         ev_sound(g, SND_PICK_TALISMAN, c);
         plat_log("giocatore %d prende un talismano (vita %d)", j + 1, (int)p.hp);
       } else if (mi.kind == IT_POWER) {
-        if (g.item_t[it] < 20) continue;             // prima salta fuori dalla cassa
-        if (!power_take(g, j, g.item_pw[it])) continue;  // CARICA con lo speciale gia' pronto: resta a chi serve
+        if (g.item_t[it] < 20) continue;             // first it pops out of the crate
+        if (!power_take(g, j, g.item_pw[it])) continue;  // CARICA with special already ready: left for who needs it
         g.item_on[it] = false;
         burst(g, v3(c.x, mi.y + 0.7f, c.z), 14, PC_WHITE, 3.0f);
       } else {
-        if (p.bombs >= pl_bombs_cap(p)) continue;     // BOMBAROLO: fino a 4
+        if (p.bombs >= pl_bombs_cap(p)) continue;     // BOMBAROLO: up to 4
         g.item_on[it] = false;
         p.bombs++;
         ev_sound(g, SND_PICK_BOMB, c);
@@ -771,7 +771,7 @@ void crate_damage(Game& g, int d, float dmg, Vec3 from) {
   DynCell& dc = g.L.dyn[d];
   if (dc.type != C_BREAK || dc.hp <= 0.0f) return;
   dc.hp -= dmg;
-  const bool sound = g.crate_hit[d] <= 6;      // i colpi a raffica fanno un rumore solo
+  const bool sound = g.crate_hit[d] <= 6;      // rapid-fire hits make a single sound
   g.crate_hit[d] = 10;
   const Vec3 c = cell_center(&g.L, dc.cx, dc.cz);
   if (dc.hp > 0.0f) {
@@ -794,7 +794,7 @@ void crate_damage(Game& g, int d, float dmg, Vec3 from) {
       g.item_on[it] = true;
       g.item_t[it] = 0;
       if (g.L.items[it].kind == IT_POWER) {
-        // Quale bonus: VELOCITA' 30%, FURIA 25%, CARICA 25%, INVINCIBILE 20%.
+        // Which power-up: VELOCITA' 30%, FURIA 25%, CARICA 25%, INVINCIBILE 20%.
         const uint32_t r = rng_next(g) % 100u;
         pw = r < 30u ? PW_SPEED : (r < 55u ? PW_FURY : (r < 80u ? PW_CHARGE : PW_INVINCIBLE));
         g.item_pw[it] = (uint8_t)pw;
@@ -805,8 +805,8 @@ void crate_damage(Game& g, int d, float dmg, Vec3 from) {
   else plat_log("cassa rotta (riga %d, colonna %d)", dc.cz + 1, dc.cx + 1);
 }
 
-// Il giocatore j prende il bonus pw: VELOCITA', FURIA e INVINCIBILE ripartono da pieni, CARICA
-// riempie lo speciale. false se non gli serve (CARICA con lo speciale gia' pronto).
+// Player j takes power-up pw: VELOCITA', FURIA and INVINCIBILE restart from full, CARICA fills
+// the special. false if they don't need it (CARICA with the special already ready).
 bool power_take(Game& g, int j, int pw) {
   Player& p = g.pl[j];
   if (pw < 0 || pw >= NPOWERS) return false;
@@ -823,7 +823,7 @@ bool power_take(Game& g, int j, int pw) {
   return true;
 }
 
-// --- colpi --------------------------------------------------------------------------
+// --- shots --------------------------------------------------------------------------
 
 Shot* shot_new(Game& g, int kind, int owner, Vec3 pos, Vec3 vel) {
   for (int i = 0; i < MAX_SHOTS; ++i)

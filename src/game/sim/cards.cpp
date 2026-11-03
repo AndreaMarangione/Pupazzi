@@ -1,9 +1,10 @@
-// Carte (0.4): all'inizio di ogni mappa e dopo ogni zona ripulita, se ne segue un'altra, ogni
-// giocatore sceglie 1 carta su 3, che vale fino alla fine della mappa (resta anche se la zona si
-// rifa'; se la mappa ricomincia da capo si riparte senza carte). Mentre la scelta e' aperta il
-// gioco e' fermo come nella pausa; ognuno sceglie sul suo riquadro con su/giu' e A (o START
-// breve); chi e' senza vite non sceglie. Qui ci sono anche gli effetti che non stanno meglio
-// altrove: scudo, vita extra, speciale generoso, bruciature e vapore delle combo.
+// Cards (0.4): at the start of every map and after every cleared zone, if another one follows,
+// each player picks 1 card out of 3, which lasts until the end of the map (it stays even if the
+// zone is replayed; if the map is restarted from the start, everyone starts again without cards).
+// While the choice is open the game is frozen as in the pause; everyone picks on their own panel
+// with up/down and A (or a short START press); a player out of lives does not pick. Here are also
+// the effects that don't fit better elsewhere: shield, extra life, generous special, burns and
+// the vapor of the combos.
 #include "game/sim/game_int.h"
 #include "platform/plat.h"
 #include <math.h>
@@ -40,25 +41,25 @@ const CardDef CARDS[NCARDS] = {
 namespace {
 
 
-const float BURN_DMG = 1.0f;            // ogni BURN_EVERY fotogrammi: 4 al secondo per 3 secondi
+const float BURN_DMG = 1.0f;            // every BURN_EVERY frames: 4 per second for 3 seconds
 const int BURN_FRAMES = 180, BURN_EVERY = 15;
-const float ICE_SLOW = 0.7f;            // combo di ghiaccio: -30% per 1,5 s (Marzio: -40%)
+const float ICE_SLOW = 0.7f;            // ice combo: -30% for 1.5 s (Marzio: -40%)
 const int ICE_FRAMES = 90;
 const float VAPOR_DMG = 30.0f, VAPOR_R = 1.6f;
-const int VAPOR_CD = 90;                // lo stesso mostro scoppia al massimo ogni 1,5 s
+const int VAPOR_CD = 90;                // the same monster bursts at most once every 1.5 s
 const float GENEROUS_R = 6.0f, GENEROUS_HP = 25.0f;
-const int SHIELD_INVULN = 45;           // dopo lo scudo: niente secondo colpo dallo stesso attacco
+const int SHIELD_INVULN = 45;           // after the shield: no second hit from the same attack
 
-// --- proposta ---------------------------------------------------------------------
+// --- offer ------------------------------------------------------------------------
 
-// Un compagno con il personaggio ch ancora in gioco (chi e' senza vite non conta: non rientra).
+// A teammate with character ch still in play (a player out of lives doesn't count: won't return).
 bool partner(Game& g, int i, int ch) {
   for (int j = 0; j < MAX_PLAYERS; ++j)
     if (j != i && g.pl[j].active && !g.pl[j].out && g.pl[j].ch == ch) return true;
   return false;
 }
 
-// Chi tiene VAPORE (vale per tutta la squadra): chi ha colpito, se ce l'ha, se no il primo.
+// Who holds VAPORE (it counts for the whole team): the hitter, if they have it, else the first.
 int vapor_owner(Game& g, int hitter) {
   if (hitter >= 0 && hitter < MAX_PLAYERS && g.pl[hitter].active && has_card(g.pl[hitter], CA_VAPORE)) return hitter;
   for (int j = 0; j < MAX_PLAYERS; ++j)
@@ -71,19 +72,19 @@ bool eligible(Game& g, int i, int c) {
   if (has_card(p, c)) return false;
   switch (c) {
     case CA_GENEROSO: return count_in_play(g) >= 2;
-    case CA_PERFORANTE: case CA_RIMBALZO: return p.ch != CH_ZOLFO;   // la fiamma attraversa gia'
+    case CA_PERFORANTE: case CA_RIMBALZO: return p.ch != CH_ZOLFO;   // flame already goes through
     case CA_COLPI_FUOCO: return p.ch == CH_ASTRO && partner(g, i, CH_ZOLFO);
     case CA_COLPI_GELO: return p.ch == CH_ASTRO && partner(g, i, CH_MARZIO);
     case CA_SCHEGGE_FUOCO: return p.ch == CH_MOCHI && partner(g, i, CH_ZOLFO);
     case CA_SCHEGGE_GELO: return p.ch == CH_MOCHI && partner(g, i, CH_MARZIO);
     case CA_VAPORE:
-      if (vapor_owner(g, -1) >= 0) return false;                        // c'e' gia' per tutti
+      if (vapor_owner(g, -1) >= 0) return false;                        // already there for all
       return (p.ch == CH_MARZIO && partner(g, i, CH_ZOLFO)) || (p.ch == CH_ZOLFO && partner(g, i, CH_MARZIO));
     default: return true;
   }
 }
 
-// Toglie a caso una carta dall'elenco (una sola chiamata al generatore).
+// Removes a random card from the list (a single call to the generator).
 uint8_t draw_from(Game& g, uint8_t* list, int* n) {
   const int k = (int)(rng_next(g) % (uint32_t)*n);
   const uint8_t c = list[k];
@@ -101,7 +102,7 @@ void make_offer(Game& g, int i) {
     if (CARDS[c].combo) combo[nc++] = (uint8_t)c;
     else basic[nb++] = (uint8_t)c;
   }
-  // Con almeno una combo possibile, meta' delle volte una delle tre e' una combo.
+  // With at least one possible combo, half of the time one of the three is a combo.
   bool one_combo = false;
   if (nc > 0) one_combo = rng_f(g) < 0.5f;
   while (o.n < (one_combo ? 2 : 3) && nb > 0) o.card[o.n++] = draw_from(g, basic, &nb);
@@ -110,7 +111,7 @@ void make_offer(Game& g, int i) {
     o.card[o.n++] = draw_from(g, combo, &nc);
     got_combo = true;
   }
-  if (got_combo && o.n > 1) {          // la combo non sempre in fondo
+  if (got_combo && o.n > 1) {          // the combo not always last
     const int pos = (int)(rng_next(g) % (uint32_t)o.n);
     const uint8_t t = o.card[pos];
     o.card[pos] = o.card[o.n - 1];
@@ -136,7 +137,7 @@ void card_take(Game& g, int i, int c) {
       break;
     case CA_PELLE:
       p.hp_max += 30.0f;
-      if (p.alive) p.hp = p.hp_max;     // chi e' a terra la trova quando rientra
+      if (p.alive) p.hp = p.hp_max;     // a player who is down finds it when they come back
       break;
     case CA_SUPER:
       if (p.charge > pl_special_cost(p)) p.charge = pl_special_cost(p);
@@ -145,7 +146,7 @@ void card_take(Game& g, int i, int c) {
       p.shield = true;
       break;
     case CA_VITA:
-      p.lives++;                         // subito, per questa mappa
+      p.lives++;                         // right away, for this map
       plat_log("G%d: una vita in piu' (vite %d)", i + 1, p.lives);
       break;
     default: break;
@@ -153,7 +154,7 @@ void card_take(Game& g, int i, int c) {
   plat_log("G%d (%s) prende la carta %s", i + 1, CHARS[p.ch].name, CARDS[c].name);
 }
 
-// --- interfaccia ----------------------------------------------------------------------
+// --- interface ------------------------------------------------------------------------
 
 void game_set_cards_enabled(Game& g, bool on) { g.session.cards_on = on; }
 bool cards_enabled(Game& g) { return g.session.cards_on; }
@@ -174,7 +175,7 @@ void cards_offer(Game& g) {
   if (!g.session.cards_on || g.screen != SC_PLAY) return;
   bool any = false;
   for (int i = 0; i < MAX_PLAYERS; ++i) {
-    if (!g.pl[i].active || g.pl[i].out) {     // senza vite: niente carte, non rientra in questa mappa
+    if (!g.pl[i].active || g.pl[i].out) {     // out of lives: no cards, won't return in this map
       memset(&g.offer[i], 0, sizeof(CardOffer));
       continue;
     }
@@ -231,17 +232,17 @@ void card_shot_mods(Game& g, int i, Shot* s) {
 
 void card_shot_hit(Game& g, int k, const Shot& s) {
   Monster& m = g.mo[k];
-  // VAPORE: prima si guarda com'era il mostro, poi si aggiunge quello che porta questo colpo.
+  // VAPORE: first look at how the monster was, then add what this shot brings.
   if (s.kind == SK_FLAME || (s.fx & SFX_BURN)) card_elem_hit(g, k, s.owner, EL_FIRE);
   if (m.alive && (s.kind == SK_FROST || (s.fx & SFX_SLOW))) card_elem_hit(g, k, s.owner, EL_SNOW);
   if (!m.alive) return;
   if (s.fx & SFX_BURN) {
     if (m.burn_t <= 0) puff(g, monster_center(m), PK_FLAME, PC_FIRE, v3(0, 1.5f, 0), 0.8f, 16);
-    m.burn_t = BURN_FRAMES;            // si rinnova, non si somma
+    m.burn_t = BURN_FRAMES;            // renewed, not added up
     m.burn_by = s.owner;
   }
   if (s.fx & SFX_SLOW) {
-    if (m.slow_t <= 0 || m.slow_k >= ICE_SLOW) {    // non toglie un rallentamento piu' forte
+    if (m.slow_t <= 0 || m.slow_k >= ICE_SLOW) {    // doesn't remove a stronger slowdown
       m.slow_k = ICE_SLOW;
       if (m.slow_t < ICE_FRAMES) m.slow_t = ICE_FRAMES;
     }
@@ -255,7 +256,7 @@ void card_elem_hit(Game& g, int k, int owner, int elem) {
   if (elem == EL_FIRE ? m.slow_t <= 0 : (elem != EL_SNOW || m.burn_t <= 0)) return;
   const int by = vapor_owner(g, owner);
   if (by < 0) return;
-  // Il mostro rallentato che brucia scoppia in vapore: danni a chi gli sta intorno (lui compreso).
+  // The slowed, burning monster bursts into vapor: damage to those around it (itself included).
   m.vapor_t = VAPOR_CD;
   const Vec3 at = m.pos, c = monster_center(m);
   int hit = 0;
@@ -267,7 +268,7 @@ void card_elem_hit(Game& g, int k, int owner, int elem) {
     damage_monster(g, j, VAPOR_DMG, by, dir, 2.0f, false);
     hit++;
   }
-  for (int q = 0; q < 10; ++q) {         // nuvola bianca che si allarga e sale
+  for (int q = 0; q < 10; ++q) {         // white cloud that spreads and rises
     const float a = D_TWO_PI * (float)q / 10.0f;
     puff(g, c, PK_PUFF, PC_WHITE, v3(d_cos(a) * 3.4f, 1.2f + 0.3f * (float)(q & 1), d_sin(a) * 3.4f), 2.4f, 28);
   }
@@ -281,13 +282,13 @@ void card_elem_hit(Game& g, int k, int owner, int elem) {
 void card_burn_tick(Game& g, int k) {
   Monster& m = g.mo[k];
   m.burn_t--;
-  if (m.burn_t % 5 == 0) {             // fiammelle che salgono dal mostro
+  if (m.burn_t % 5 == 0) {             // small flames rising from the monster
     const float a = (float)(g.tick + (unsigned)k * 7u) * 1.7f, r = monster_r(m) * 0.7f;
     puff(g, monster_center(m) + v3(d_cos(a) * r, 0.15f, d_sin(a) * r), PK_FLAME, PC_FIRE, v3(0, 1.6f, 0), 1.2f, 16);
   }
   if (m.burn_t % BURN_EVERY != 0) return;
   const int by = m.burn_by >= 0 && m.burn_by < MAX_PLAYERS && g.pl[m.burn_by].active ? m.burn_by : -1;
-  damage_monster(g, k, BURN_DMG, by, v3(0, 0, 0), 0.0f, false);     // le bruciature non caricano lo speciale
+  damage_monster(g, k, BURN_DMG, by, v3(0, 0, 0), 0.0f, false);     // burns don't charge the special
   if (m.alive) card_elem_hit(g, k, by, EL_FIRE);
 }
 

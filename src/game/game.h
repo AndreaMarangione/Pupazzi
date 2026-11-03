@@ -1,8 +1,8 @@
-// Gioco: cooperativa da 1 a 4 giocatori, mappe fatte di zone da ripulire dai mostri.
+// Game: co-op for 1 to 4 players, maps made of zones to clear of monsters.
 #pragma once
 #include "engine/render.h"
 
-#define PUPAZZI_VERSION "0.5.4"   // unico posto: core, menu e Makefile la leggono da qui
+#define PUPAZZI_VERSION "0.5.4"   // the only place: core, menus and Makefile read it from here
 #define MAX_PLAYERS 4
 
 // The whole state of a game (defined in game/sim/game_int.h). The frontend creates one with

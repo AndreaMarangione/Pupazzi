@@ -1,6 +1,6 @@
-// Matematica deterministica: stessi risultati bit per bit su x86, ARM a 32 bit e ARM a 64 bit.
-// Niente funzioni trigonometriche di libm (possono differire tra piattaforme); sqrtf e' esatta
-// ovunque. Tutto il progetto va compilato con -ffp-contract=off.
+// Deterministic math: the same results bit for bit on x86, 32-bit ARM and 64-bit ARM.
+// No trigonometric functions from libm (they can differ between platforms); sqrtf is exact
+// everywhere. The whole project must be compiled with -ffp-contract=off.
 #pragma once
 #include <math.h>
 #include <stdint.h>
@@ -9,14 +9,14 @@
 #define D_TWO_PI  6.28318530717958647692f
 #define D_HALF_PI 1.57079632679489661923f
 
-// Riporta un angolo in [-pi, pi].
+// Brings an angle back into [-pi, pi].
 static inline float d_wrap_pi(float x) {
   float k = x * (1.0f / D_TWO_PI);
   k = (float)(int)(k + (k >= 0.0f ? 0.5f : -0.5f));
   return x - k * D_TWO_PI;
 }
 
-// Errore massimo circa 4e-6.
+// Maximum error about 4e-6.
 static inline float d_sin(float x) {
   x = d_wrap_pi(x);
   if (x > D_HALF_PI) x = D_PI - x;
@@ -27,7 +27,7 @@ static inline float d_sin(float x) {
 
 static inline float d_cos(float x) { return d_sin(x + D_HALF_PI); }
 
-// atan su [-1, 1], errore massimo circa 1e-5 rad.
+// atan on [-1, 1], maximum error about 1e-5 rad.
 static inline float d_atan_unit(float z) {
   const float z2 = z * z;
   return z * (0.99997726f + z2 * (-0.33262347f + z2 * (0.19354346f + z2 * (-0.11643287f + z2 * (0.05265332f + z2 * -0.01172120f)))));

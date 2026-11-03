@@ -10,7 +10,7 @@ void mb_init(MeshBuilder* b) { memset(b, 0, sizeof(*b)); }
 int mesh_overflow_count(void) { return g_overflow; }
 
 int mb_vert(MeshBuilder* b, Vec3 p) {
-  if (b->nv >= 65535) {          // gli indici sono a 16 bit: oltre si corromperebbe la mesh
+  if (b->nv >= 65535) {          // indices are 16-bit: beyond that the mesh would be corrupted
     g_overflow++;
     return 0;
   }
@@ -38,7 +38,7 @@ void mb_quad(MeshBuilder* b, int i0, int i1, int i2, int i3, uint32_t rgb) {
   mb_tri(b, i0, i2, i3, rgb);
 }
 
-// Parallelepipedo allineato agli assi, facce rivolte verso l'esterno.
+// Axis-aligned cuboid, faces turned outward.
 void mb_box(MeshBuilder* b, Vec3 mn, Vec3 mx, uint32_t rgb) {
   int i[8];
   for (int k = 0; k < 8; ++k)
@@ -84,9 +84,9 @@ void mesh_free(Mesh* m) {
   memset(m, 0, sizeof(*m));
 }
 
-// --- forme ------------------------------------------------------------------
+// --- shapes-----------------------------------------------------------------
 
-// Triangolo di un solido convesso, girato in modo da guardare lontano da ctr.
+// Triangle of a convex solid, turned so that it faces away from ctr.
 static void tri_out(MeshBuilder* b, int i0, int i1, int i2, Vec3 ctr, uint32_t rgb) {
   const Vec3 n = cross(b->v[i1] - b->v[i0], b->v[i2] - b->v[i0]);
   const Vec3 mid = (b->v[i0] + b->v[i1] + b->v[i2]) * (1.0f / 3.0f);
@@ -140,13 +140,13 @@ void mb_cylinder(MeshBuilder* b, Vec3 base, float r0, float r1, float h, int seg
     }
   for (int j = 0; j < seg; ++j) {
     const int j1 = (j + 1) % seg;
-    tri_out(b, bc, lo + j1, lo + j, ctr, rgb);                 // fondo
+    tri_out(b, bc, lo + j1, lo + j, ctr, rgb);                 // bottom
     if (r1 > 0.0f) {
       tri_out(b, lo + j, lo + j1, hi + j1, ctr, rgb);
       tri_out(b, lo + j, hi + j1, hi + j, ctr, rgb);
-      tri_out(b, tc, hi + j, hi + j1, ctr, rgb);              // coperchio
+      tri_out(b, tc, hi + j, hi + j1, ctr, rgb);              // lid
     } else {
-      tri_out(b, lo + j, lo + j1, tc, ctr, rgb);              // cono
+      tri_out(b, lo + j, lo + j1, tc, ctr, rgb);              // cone
     }
   }
 }
@@ -156,8 +156,8 @@ void mb_bevel_box(MeshBuilder* b, Vec3 mn, Vec3 mx, float bev, uint32_t rgb) {
   float bv = bev;
   for (int a = 0; a < 3; ++a)
     if (bv > 0.45f * (hi[a] - lo[a])) bv = 0.45f * (hi[a] - lo[a]);
-  // 24 vertici: 4 per faccia, rientrati di bv sugli altri due assi.
-  int idx[3][2][2][2];   // [asse][lato][segno asse (a+1)%3][segno asse (a+2)%3]
+  // 24 vertices: 4 per face, inset by bv on the other two axes.
+  int idx[3][2][2][2];   // [axis][side][sign of axis (a+1)%3][sign of axis (a+2)%3]
   for (int a = 0; a < 3; ++a)
     for (int s = 0; s < 2; ++s)
       for (int su = 0; su < 2; ++su)
@@ -170,7 +170,7 @@ void mb_bevel_box(MeshBuilder* b, Vec3 mn, Vec3 mx, float bev, uint32_t rgb) {
           idx[a][s][su][sw] = mb_vert(b, v3(p[0], p[1], p[2]));
         }
   const Vec3 ctr = (mn + mx) * 0.5f;
-  // Vertice della faccia (a, s) che sta dalla parte "segni" sugli altri due assi.
+  // Vertex of face (a, s) that lies on the "signs" side on the other two axes.
   auto V = [&](int a, int s, const int sg[3]) { return idx[a][s][sg[(a + 1) % 3]][sg[(a + 2) % 3]]; };
   for (int a = 0; a < 3; ++a)
     for (int s = 0; s < 2; ++s) {
@@ -207,7 +207,7 @@ void mb_disc(MeshBuilder* b, Vec3 c, float r, int seg, uint32_t rgb) {
     const float ph = D_TWO_PI * (float)j / (float)seg;
     mb_vert(b, v3(c.x + r * d_cos(ph), c.y, c.z + r * d_sin(ph)));
   }
-  for (int j = 0; j < seg; ++j) mb_tri(b, ci, first + (j + 1) % seg, first + j, rgb);   // verso l'alto
+  for (int j = 0; j < seg; ++j) mb_tri(b, ci, first + (j + 1) % seg, first + j, rgb);   // facing up
 }
 
 void mb_ring(MeshBuilder* b, Vec3 c, float r0, float r1, int seg, uint32_t rgb) {

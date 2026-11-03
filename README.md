@@ -299,7 +299,7 @@ hanno).
 
 Tutti i testi stanno in `lang/testi.txt`, un blocco per testo con l'italiano e le sei traduzioni:
 per correggere una traduzione si cambia lì, poi `python3 tools/make_lang.py` (rigenera
-`src/lang_data.h` e controlla che non manchi nulla e che i `%d` siano gli stessi) e, se ci sono
+`src/engine/lang_data.h` e controlla che non manchi nulla e che i `%d` siano gli stessi) e, se ci sono
 caratteri cinesi, giapponesi o parole hindi nuove, `python3 tools/make_font.py` (vedi **Compilare**).
 
 ## Mappe personalizzate
@@ -434,7 +434,7 @@ Per la console serve zig come compilatore incrociato (provato con la versione 0.
 
 `dist/` non è nel repository: è nell'archivio di ogni release (vedi **Pubblicare una versione**).
 
-I caratteri dell'interfaccia (`src/font_hud.h` e `src/font_hud_data.h`) e i testi (`src/lang_data.h`)
+I caratteri dell'interfaccia (`src/engine/font_hud.h` e `src/engine/font_hud_data.h`) e i testi (`src/engine/lang_data.h`)
 sono già generati. Per rifarli: `python3 tools/make_lang.py` e `python3 tools/make_font.py`, che
 vuole Pillow con raqm, `pip install uharfbuzz freetype-py` e i caratteri Noto Sans CJK del sistema
 (pacchetto `fonts-noto-cjk`, oppure la cartella in `PUPAZZI_NOTO_CJK`).
@@ -443,7 +443,7 @@ vuole Pillow con raqm, `pip install uharfbuzz freetype-py` e i caratteri Noto Sa
 
 Le release si fanno da GitHub (GitHub Actions, `.github/workflows/`):
 
-1. Nel codice: il numero in `src/game.h` (`PUPAZZI_VERSION`) e la sezione della versione in
+1. Nel codice: il numero in `src/game/game.h` (`PUPAZZI_VERSION`) e la sezione della versione in
    `CHANGELOG.md` (le note della release vengono da lì).
 2. Andrea crea la release, con un comando solo:
 
@@ -459,39 +459,48 @@ A ogni modifica su `main` la CI (**CI** in **Actions**) compila e fa tutte le pr
 
 ## Com'è fatto
 
+Le cartelle, i livelli e gli schemi usati (Model-View, Observer, State, Strategy) sono spiegati in
+[docs/ARCHITETTURA.md](docs/ARCHITETTURA.md). File per file:
+
 | File | Contenuto |
 |---|---|
-| `src/game.cpp` | schermate, campagna, giri, zone, ondate, cancelli, vite, stelle, musica, telecamera |
-| `src/player.cpp` | eroi: movimento, mira, colpi, speciali, bombe, cadute e rientri, ingresso e uscita |
-| `src/combat.cpp` | colpi, danni, esplosioni, bombe, talismani, casse e capsula, esploratore |
-| `src/monsters.cpp` | mostri della Terra e Gladiatore gigante |
-| `src/cards.cpp` | carte: proposte, scelta, effetti (scudo, vita extra, bruciature, vapore) |
-| `src/flow.cpp` | percorsi dei mostri attorno agli ostacoli |
-| `src/menu.cpp` | menu (con la tastiera per il nome e le pagine del gioco in rete), stelle e giri, pausa, finestre per entrare a partita iniziata |
-| `src/game_draw.cpp` | animazioni, oggetti da disegnare, HUD con le tessere dei giocatori |
-| `src/audio.cpp` | sonoro: sintetizzatore, effetti, musiche, mixer con limitatore |
-| `src/save.cpp` | salvataggi: impostazioni in `pupazzi.sav`, quattro partite; lettura tollerante, scrittura atomica |
-| `src/lang.cpp`, `lang/testi.txt` | lingue: i testi in 7 lingue (`src/lang_data.h`, generato da `tools/make_lang.py`) |
-| `src/hud.cpp`, `font_hud.h` | testi (latino, cinese, giapponese, hindi), disegni (cuori, facce degli eroi, stelle) e forme (pannelli con gli angoli tagliati, aloni, sfumature) sopra l'immagine, uguali nei due renderer; caratteri generati da `tools/make_font.py` in `font_hud_data.h` |
-| `src/ui.cpp` | stile dell'interfaccia (Orbita, colori Tramonto): pannelli, voce scelta, titoli, tasti, piede dei menu, margine per i televisori |
-| `src/level.cpp`, `maps.cpp` | mappe: lettura del testo, zone, collisioni |
-| `src/level_mesh.cpp` | geometria delle mappe: terreno morbido, stili della Terra, paesaggio attorno |
+| `src/platform/core.cpp` | interfaccia libretro: fotogrammi, comandi (anche dalle altre console), pausa, uscita, opzioni, riquadro delle prestazioni, registro |
+| `src/platform/plat.cpp`, `sysinfo.cpp` | registro e orologio; batteria e carico della CPU letti da `/sys` e `/proc` |
+| `src/game/game.h` | l'API del gioco per il core: partita, eventi, gioco in rete |
+| `src/game/save.cpp` | salvataggi: impostazioni in `pupazzi.sav`, quattro partite; lettura tollerante, scrittura atomica |
+| `src/game/sim/game.cpp` | la partita: campagna, giri, zone, ondate, cancelli, vite, stelle, impronta |
+| `src/game/sim/player.cpp` | eroi: movimento, mira, colpi, speciali, bombe, cadute e rientri, ingresso e uscita |
+| `src/game/sim/combat.cpp` | colpi, danni, esplosioni, bombe, talismani, casse e capsula, esploratore, bonus |
+| `src/game/sim/monsters.cpp` | mostri della Terra e Gladiatore gigante |
+| `src/game/sim/cards.cpp` | carte: proposte ed effetti (scudo, vita extra, bruciature, vapore) |
+| `src/game/sim/flow.cpp` | percorsi dei mostri attorno agli ostacoli |
+| `src/game/sim/level.cpp`, `maps.cpp` | mappe: lettura del testo, zone, collisioni, elenco delle mappe |
+| `src/game/sim/bot.cpp` | giocatori automatici, solo per le prove |
+| `src/game/screens/` | le schermate, una per file (titolo, salvataggi, tastiera per il nome, lingua, gioco in rete, modalità, mappe, eroi, fine mappa), la pausa e la scelta delle carte; `screens.cpp` ha la tabella delle schermate |
+| `src/game/view/view.cpp`, `camera.cpp` | la vista di questa console: telecamera, da dove vengono i suoni, musica |
+| `src/game/view/game_draw.cpp` | animazioni, oggetti da disegnare, HUD con le tessere dei giocatori |
+| `src/game/view/models.cpp` | modelli in stile cartone con il contorno scuro |
+| `src/game/view/level_mesh.cpp` | geometria delle mappe: terreno morbido, stili della Terra, paesaggio attorno |
+| `src/engine/glr.cpp`, `swr.cpp` | renderer OpenGL ES 2 con antialias (console) e software (riserva e prove) |
+| `src/engine/hud.cpp`, `font_hud.h` | testi (latino, cinese, giapponese, hindi), disegni (cuori, facce degli eroi, stelle) e forme (pannelli con gli angoli tagliati, aloni, sfumature) sopra l'immagine, uguali nei due renderer; caratteri generati da `tools/make_font.py` in `font_hud_data.h` |
+| `src/engine/ui.cpp` | stile dell'interfaccia (Orbita, colori Tramonto): pannelli, voce scelta, titoli, tasti, piede dei menu, margine per i televisori |
+| `src/engine/lang.cpp`, `lang/testi.txt` | lingue: i testi in 7 lingue (`src/engine/lang_data.h`, generato da `tools/make_lang.py`) |
+| `src/engine/audio.cpp` | sonoro: sintetizzatore, effetti, musiche, mixer con limitatore |
+| `src/engine/mesh.cpp`, `vmath.h`, `dmath.h` | mesh, matematica, trigonometria uguale su ogni processore |
+| `src/net/net.cpp` | gioco in rete: ricerca delle partite, sala d'attesa, comandi di tutti a ogni fotogramma, controllo dell'impronta |
 | `maps/` | le mappe di serie (incorporate nel core da `tools/embed_maps.sh`) |
-| `src/models.cpp`, `mesh.cpp` | modelli in stile cartone con il contorno scuro |
-| `src/bot.cpp` | giocatori automatici, solo per le prove |
-| `src/core.cpp` | interfaccia libretro, comandi dalle altre console, pausa, uscita, riquadro delle prestazioni, registro |
-| `src/net.cpp` | gioco in rete: ricerca delle partite, sala d'attesa, comandi di tutti a ogni fotogramma, controllo dell'impronta |
-| `src/sysinfo.cpp` | batteria e carico della CPU letti da `/sys` e `/proc` |
-| `src/glr.cpp`, `swr.cpp` | renderer OpenGL ES 2 con antialias (console) e software (riserva e prove) |
 | `tools/host.cpp` | frontend libretro minimo per le prove |
 | `tests/test_aim.cpp` | prove della mira (direzione, soglia, tremolio, scatti, rilascio, ventagli, pausa) e delle carte |
-| `tests/test_rules.cpp` | prove di vite, zone e mappe da capo, rientri, giri e stelle, mappe aperte |
+| `tests/test_rules.cpp` | prove di vite, zone e mappe da capo, rientri, giri e stelle, mappe aperte, bonus, cancelli |
 | `tests/test_maps.cpp` | prove delle mappe: chiuse, tutte giocabili, niente passaggi tra le zone (anche saltando e spinti), cenote |
 | `tests/test_boss.cpp` | prove del gladiatore: inseguimento, fendente, carica, stordito, giavellotti, fasi, niente blocchi |
 | `tests/test_save.cpp` | prove dei salvataggi: file rotti, troncati, enormi, chiavi sconosciute, salvataggi della 0.4 e della 0.5.2, partite nuove, copiate, eliminate |
 | `tests/test_lang.cpp` | prove delle lingue: ogni testo in ogni lingua si disegna, a capo e puntini (anche cinese, giapponese, hindi) |
 | `tests/test_audio.cpp` | prove del sonoro: livelli, picchi, voci, tempi, equilibrio musica/effetti; scrive i WAV |
+| `tests/test_raster.cpp` | prova del renderer software: ogni pixel di una stanza chiusa disegnato una volta sola |
+| `tests/test_netin.cpp` | prove dei comandi che arrivano a chi ha creato la partita in rete |
 | `tests/test_net.sh` | prove del gioco in rete con più copie del gioco (stessa partita bit per bit, perdite e ritardi, uscite, rifiuti, dai menu) |
+| `tests/test_gl.sh` | prove del renderer GPU su Mesa (stesse immagini del software, antialias) |
 | `tests/test_sys.cpp` | prove di batteria e carico della CPU con una `/sys` e una `/proc` finte |
 | `tools/remote_send.py`, `tests/test_remote.py` | finto Remote RetroPad e prove dei comandi dalla rete |
 | `console/`, `deploy.sh` | voce di menu, script di avvio, icona; installazione dal PC |
@@ -512,7 +521,7 @@ per forzare un modo; `prova` percorso della Mali con un solo campione, per le pr
 `PUPAZZI_AA_ADATTA=0` (niente passaggio da solo da 8 a 4 campioni), `PUPAZZI_BATTERIA` (per esempio
 `40` o `80c` in carica, al posto di leggerla), e per il gioco in rete `PUPAZZI_RETE` (`crea[:N]` o
 `unisciti`), `PUPAZZI_RETE_DOPO`, `PUPAZZI_RETE_PORTA`, `PUPAZZI_RETE_PERDITA`, `PUPAZZI_RETE_RITARDO`,
-`PUPAZZI_RETE_ATTESA`, `PUPAZZI_RETE_VERSIONE` (spiegate in `src/net.h`).
+`PUPAZZI_RETE_ATTESA`, `PUPAZZI_RETE_VERSIONE` (spiegate in `src/net/net.h`).
 
 ## Stato delle verifiche
 
@@ -626,7 +635,7 @@ i comandi dalle altre console sul Wi-Fi vero.
   riferimento è `arm32`. Quello a 64 bit c'è per confronto (`run.sh gpu64`).
 - Con la Mali, RetroArch non sa ricreare il contesto grafico: il core non cambia mai risoluzione.
 - Il gioco avanza a passi fissi di 1/60 di secondo, con `-ffp-contract=off`, trigonometria
-  propria (`src/dmath.h`) e chiamate al generatore casuale sempre in istruzioni separate: stessa
+  propria (`src/engine/dmath.h`) e chiamate al generatore casuale sempre in istruzioni separate: stessa
   partita su ogni processore e con ogni compilatore (base per il gioco in rete e per i replay).
 - La geometria fissa della mappa è divisa in blocchi da 8×8 caselle: la GPU disegna solo quelli
   inquadrati; eroi e mostri sono trasformati e illuminati sulla CPU in un solo buffer. Il terreno
@@ -643,7 +652,7 @@ i comandi dalle altre console sul Wi-Fi vero.
   forme calcolate pixel per pixel dalla distanza dal bordo, con la stessa matematica nel renderer
   software (a strisce, in parallelo) e nello shader della GPU (un solo disegno per fotogramma, con
   l'interno pieno dei pannelli grandi senza calcoli). `make test-gl` confronta le due.
-- Gioco in rete (dalla 0.5.4, `src/net.cpp`): UDP senza connessione, porte 55410-55419 (chi crea
+- Gioco in rete (dalla 0.5.4, `src/net/net.cpp`): UDP senza connessione, porte 55410-55419 (chi crea
   prende la prima libera; chi cerca chiede a tutta la rete, agli indirizzi di broadcast di ogni
   scheda e a 127.0.0.1). Chi ha creato la partita non aspetta mai: a ogni suo fotogramma mette
   insieme i suoi comandi e il prossimo di ogni altra console (se manca ripete l'ultimo; se ne ha

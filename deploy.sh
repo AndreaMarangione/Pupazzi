@@ -9,31 +9,31 @@
 #   ./deploy.sh togli-mappa NOME [IP]   toglie la mappa modificata: torna quella di serie
 #
 # IP predefinito 192.168.1.228 (o variabile PUPAZZI_IP); utente root, password root (o PUPAZZI_PASS).
-# La console deve essere accesa, in Wi-Fi, con SSH attivo. Se c'e' sshpass la password non viene chiesta.
+# The console must be on, connected to Wi-Fi, with SSH enabled. With sshpass there is no password prompt.
 #
-# Sulla console tutto finisce in /mnt/mmc/Roms/APPS: la voce di menu Pupazzi.sh, la cartella
-# pupazzi/ e l'icona Imgs/Pupazzi.png. Un aggiornamento della MOD svuota quella cartella: dopo
-# basta rifare "installa".
+# On the console everything ends up in /mnt/mmc/Roms/APPS: the menu entry Pupazzi.sh, the
+# pupazzi/ folder and the icon Imgs/Pupazzi.png. An update of the MOD empties that folder:
+# afterwards just run "installa" again.
 
 set -u
 HERE="$(cd "$(dirname "$0")" && pwd)"
 SRC="$HERE/dist/APPS"
 APPS="/mnt/mmc/Roms/APPS"
 IP="${PUPAZZI_IP:-192.168.1.228}"
-# Avanzi delle versioni prima, relativi ad APPS: voci di menu e risultati del benchmark della prova
-# tecnica 0.1.0; le mappe di serie della prateria (fino alla 0.4).
+# Leftovers of earlier versions, relative to APPS: menu entries and benchmark results of the
+# 0.1.0 technical test; the built-in prairie maps (up to 0.4).
 OLD="Pupazzi_GPU.sh Pupazzi_Bench.sh Imgs/Pupazzi_GPU.png Imgs/Pupazzi_Bench.png pupazzi/out/bench pupazzi/out/RISULTATI.txt pupazzi/out/pupazzi_bench.txt"
 OLD="$OLD pupazzi/mappe/originali/prateria1.txt pupazzi/mappe/originali/prateria2.txt pupazzi/mappe/originali/prateria3.txt pupazzi/mappe/originali/prateria_boss.txt"
 
 die() { echo "ERRORE: $*" >&2; exit 1; }
 
-# ssh_run 'comando': esegue un comando sulla console. PUPAZZI_SSH sostituisce ssh (serve alle prove).
+# ssh_run 'command': runs a command on the console. PUPAZZI_SSH replaces ssh (used by the tests).
 ssh_run() {
   if [ -n "${PUPAZZI_SSH:-}" ]; then
     $PUPAZZI_SSH "root@$IP" "$1"
     return
   fi
-  # Console di casa con password di fabbrica e chiave che cambia a ogni reinstallazione: niente controllo della chiave.
+  # Home console with the factory password and a key that changes at every reinstall: no host key check.
   local opts=(-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR -o ConnectTimeout=8)
   if command -v sshpass > /dev/null 2>&1; then
     SSHPASS="${PUPAZZI_PASS:-root}" sshpass -e ssh "${opts[@]}" "root@$IP" "$1"
@@ -53,10 +53,10 @@ cmd_installa() {
   need_dist
   echo "Copio su root@$IP:$APPS ($(cat "$SRC/pupazzi/VERSIONE" 2> /dev/null)) ..."
   ssh_run "true" || die "la console non risponde su $IP (accesa? SSH attivo? IP giusto?)"
-  # Prima si tolgono le voci della versione precedente e si mette da parte il suo registro.
+  # First remove the entries of the previous version and set its log aside.
   ssh_run "cd '$APPS' 2> /dev/null && rm -rf $OLD && { [ ! -f pupazzi/out/pupazzi_log.txt ] || mv -f pupazzi/out/pupazzi_log.txt pupazzi/out/pupazzi_log.txt.vecchio; }; true"
-  # La scheda della console e' FAT montata con tutti i permessi a 777: l'archivio li dichiara cosi',
-  # altrimenti tar sulla console protesta perche' non puo' cambiarli. Il controllo vero e' la somma qui sotto.
+  # The console's SD card is FAT, mounted with all permissions at 777: the archive declares them so,
+  # otherwise tar on the console complains that it cannot change them. The real check is the checksum below.
   local errs here there
   errs="$(tar -C "$SRC" --owner=0 --group=0 --mode='a+rwx' -cf - Pupazzi.sh pupazzi Imgs |
     ssh_run "mkdir -p '$APPS' && cd '$APPS' && { tar --no-same-owner -p -xf - 2>&1; sync; }")"
@@ -76,8 +76,8 @@ cmd_risultati() {
   d="$base"
   while [ -e "$d" ]; do d="${base}_$n"; n=$((n + 1)); done
   mkdir -p "$d" || die "non posso creare $d"
-  # Se la scheda era piena o in sola lettura lo script di avvio ha scritto in /tmp/pupazzi_out:
-  # si prende la cartella con l'avvio piu' recente.
+  # If the SD card was full or read-only the launch script wrote to /tmp/pupazzi_out:
+  # take the folder with the most recent launch.
   ssh_run "if [ /tmp/pupazzi_out/avvio.log -nt '$APPS/pupazzi/out/avvio.log' ]; then cd /tmp/pupazzi_out; else cd '$APPS/pupazzi/out' || cd /tmp/pupazzi_out; fi 2> /dev/null && tar -cf - ." | tar -C "$d" -xf - 2> /dev/null
   st=("${PIPESTATUS[@]}")
   if [ -z "$(ls -A "$d")" ]; then
@@ -85,7 +85,7 @@ cmd_risultati() {
     die "nessun risultato da $IP (console spenta o non raggiungibile, oppure il gioco non e' ancora stato lanciato)"
   fi
   if [ "${st[0]}" != 0 ] || [ "${st[1]}" != 0 ]; then incomplete=1; fi
-  # Un solo file di testo con tutto cio' che serve per capire com'e' andata.
+  # A single text file with everything needed to understand how it went.
   local out="$d/DA_MANDARE.txt" f
   {
     echo "=== PUPAZZI: registri dalla console ($(date '+%Y-%m-%d %H:%M:%S')) ==="

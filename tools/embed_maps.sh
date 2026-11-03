@@ -1,5 +1,5 @@
 #!/bin/sh
-# Genera il sorgente C++ con le mappe incorporate nel core, nell'ordine della campagna.
+# Generates the C++ source with the maps embedded in the core, in campaign order.
 #   sh tools/embed_maps.sh maps/terra1.txt ... > build/gen/maps_data.cpp
 echo '// Generato da tools/embed_maps.sh: non modificare, si cambiano i file in maps/.'
 echo '#include "game/sim/maps.h"'

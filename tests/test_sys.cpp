@@ -1,5 +1,5 @@
-// Prove di sysinfo (0.5.4): batteria da una /sys finta (carica, in carica, piena, nessuna batteria,
-// riletta ogni 2 secondi, PUPAZZI_BATTERIA) e carico della CPU da una /proc finta.
+// Tests of sysinfo (0.5.4): battery from a fake /sys (charge, charging, full, no battery, re-read
+// every 2 seconds, PUPAZZI_BATTERIA) and CPU load from a fake /proc.
 //   make build/native/test_sys && ./build/native/test_sys
 #include "platform/sysinfo.h"
 #include <stdio.h>
@@ -14,7 +14,7 @@ static char g_base[64] = "/tmp/pupazzi_test_sys_XXXXXX";
 static void put(const char* rel, const char* text) {
   char path[512], dir[512];
   snprintf(path, sizeof(path), "%s/%s", g_base, rel);
-  // crea le cartelle del percorso
+  // create the directories of the path
   snprintf(dir, sizeof(dir), "%s", path);
   for (char* p = dir + strlen(g_base) + 1; *p; ++p)
     if (*p == '/') {
@@ -76,8 +76,8 @@ TEST_CASE("2) CPU") {
   put("proc/self/stat", "1234 (retro arch) S 1 1 1 0 -1 4194560 100 0 0 0 40 10 0 0 20 0 5 0 100 1000 100\n");
   SysCpu c = sys_cpu_sample();
   EXPECT(!c.valid, "prima lettura: niente differenze ancora");
-  // Mezzo secondo dopo: 400 tick in tutto (100 per core); occupati 200 (core 0 tutto, 1 meta',
-  // 2 un quarto, 3 un quarto); il gioco ne ha usati 100.
+  // Half a second later: 400 ticks in all (100 per core); 200 busy (core 0 all of it, 1 half,
+  // 2 a quarter, 3 a quarter); the game used 100 of them.
   put("proc/stat",
       "cpu  250 0 150 1000 0 0 0 0 0 0\n"
       "cpu0 75 0 50 200 0 0 0 0 0 0\n"
@@ -97,7 +97,7 @@ TEST_CASE("2) CPU") {
   sys_set_roots(sys, "/nessuna");
   c = sys_cpu_sample();
   EXPECT(!c.valid, "senza /proc: niente");
-  // Quella vera, se c'e': due letture, numeri nei limiti.
+  // The real one, if there is one: two reads, numbers within limits.
   sys_set_roots(NULL, NULL);
   sys_cpu_sample();
   usleep(100000);
