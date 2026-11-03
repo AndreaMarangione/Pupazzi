@@ -2,6 +2,7 @@
 // interface sounds, camera moves) and picks the music. See view.h.
 #include "game/view/view.h"
 #include "game/sim/game_int.h"
+#include "game/view/models.h"
 #include "engine/audio.h"
 #include <stdlib.h>
 #include <type_traits>
@@ -31,13 +32,21 @@ void on_camera(void* ctx, const Game& g, int how) { view_camera(*(View*)ctx, g, 
 static_assert(std::is_trivially_default_constructible<View>::value && std::is_trivially_copyable<View>::value,
               "View is plain data: created with calloc");
 
+static int g_views;   // views alive: the models are shared by all of them
+
 View* view_create(void) {
   View* v = (View*)calloc(1, sizeof(View));
   v->hdmi = true;
+  if (g_views++ == 0) models_build();
   return v;
 }
 
-void view_destroy(View* v) { free(v); }
+void view_destroy(View* v) {
+  if (!v) return;
+  level_meshes_free(&v->lm);
+  free(v);
+  if (--g_views == 0) models_free();
+}
 
 GameEvents view_events(View* v) {
   GameEvents e;

@@ -7,7 +7,7 @@
 #include "game/game.h"
 #include "engine/lang.h"
 #include "game/sim/level.h"
-#include "game/view/models.h"
+#include "game/sim/shapes.h"
 #include "engine/audio.h"
 #include "game/save.h"
 
@@ -407,6 +407,7 @@ struct GameSession {
   int net_err_seen;             // network errors already shown (NetView::error_seq)
   bool lobby_join;              // the waiting room is the one of a console that joined
   SlotView slot_view[SAVE_SLOTS];
+  uint32_t level_serial;        // grows at every map load: the views build the geometry of the new one
 };
 
 struct Game {

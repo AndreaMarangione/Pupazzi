@@ -10,13 +10,13 @@
 // cells (level.cpp): the shapes deviate from the cells by at most about 0.2 m.
 //
 // The geometry is split into chunks of 8x8 cells (the renderer culls the ones outside the
-// framing); the distant scenery is in L->scenery. Around the map (0.5.1) only the strip that the
+// framing); the distant scenery is in LevelMeshes::scenery. Around the map (0.5.1) only the strip that the
 // play camera can show is drawn (LV_MARGIN_*: cheap ground and few silhouettes); beyond it, flat
 // ground and a few large shapes only where the menus (to the south) and the end of the map (to the
 // north) see it. Bushes, tall grass, crates and trampolines are moving objects: their meshes are
-// built here (L->dyn_mesh), game_draw.cpp draws them. None of this touches the game state: the
+// built here (LevelMeshes::dyn), game_draw.cpp draws them. None of this touches the game state: the
 // variety comes from hash functions of the cells, never from the game's random number generator.
-#include "game/sim/level.h"
+#include "game/view/level_mesh.h"
 #include <stdlib.h>
 #include <string.h>
 
@@ -204,7 +204,8 @@ const Style STYLES[NSTYLES] = {
 const int EW_MAX = LV_MAX_W + 2 * LV_MARGIN_X, EH_MAX = LV_MAX_H + LV_MARGIN_N + LV_MARGIN_S;
 
 struct Build {
-  Level* L;
+  const Level* L;
+  LevelMeshes* out;       // where the meshes go
   const Style* S;
   int style;
   int MW, MN, ew, eh;     // margin to the west and to the north, size of the extended grid (map + landscape)
@@ -2078,7 +2079,7 @@ void colosseum_far(void) {
   }
 }
 
-void build_landscape(Level* L) {
+void build_landscape(void) {
   switch (B.style) {
     case STYLE_PIRAMIDI: desert_far(); break;
     case STYLE_CHICHENITZA: jungle_far(); break;
@@ -2087,8 +2088,8 @@ void build_landscape(Level* L) {
   }
   for (int k = 0; k < TILE_N * TILE_N; ++k) {
     MeshBuilder* mb = &g_tile[k];
-    if (mb->nt == 0 || L->nscenery >= LV_MAX_SCENERY) { free(mb->v); free(mb->t); mb_init(mb); continue; }
-    L->scenery[L->nscenery++] = mb_finish(mb);
+    if (mb->nt == 0 || B.out->nscenery >= LV_MAX_SCENERY) { free(mb->v); free(mb->t); mb_init(mb); continue; }
+    B.out->scenery[B.out->nscenery++] = mb_finish(mb);
   }
 }
 
@@ -2097,9 +2098,10 @@ void build_landscape(Level* L) {
 // Leaves (0.5.4: swing gates, before that a portcullis that went down into the ground): each one
 // with the hinge at the origin and, when closed, along +X (the leaf at end u0) or -X (the one at
 // end u1) for the west-east gates, along Z for the north-south ones. game_draw.cpp turns them.
-void build_gate_leaf(Level* L, int gi, int side) {
+void build_gate_leaf(int gi, int side) {
   const Style& S = *B.S;
-  Gate& gt = L->gates[gi];
+  const Level* L = B.L;
+  const Gate& gt = L->gates[gi];
   Vec3 hinge, dir;
   float len;
   level_gate_leaf(L, gi, side, 0.0f, &hinge, &dir, &len);
@@ -2186,7 +2188,7 @@ void build_gate_leaf(Level* L, int gi, int side) {
       break;
     }
   }
-  gt.leaf[side] = mb_finish(&mb);
+  B.out->gate_leaf[gi][side] = mb_finish(&mb);
 }
 
 // Static parts around the gates (obelisks, jambs, towers): they stay even with the gate open.
@@ -2306,7 +2308,7 @@ void blades(MeshBuilder* mb, int n, float r, float hg, float hv, float w, uint32
   }
 }
 
-void build_dyn_meshes(Level* L) {
+void build_dyn_meshes(void) {
   const Style& S = *B.S;
   for (int d = 0; d < DM_COUNT; ++d) {
     MeshBuilder mb;
@@ -2467,7 +2469,7 @@ void build_dyn_meshes(Level* L) {
       }
       default: break;
     }
-    L->dyn_mesh[d] = mb_finish(&mb);
+    B.out->dyn[d] = mb_finish(&mb);
   }
 }
 
@@ -2477,39 +2479,44 @@ void build_dyn_meshes(Level* L) {
 // overlaps, as far as the menu cameras reach (120 m); under everything a plane of the same color
 // as the ground, which covers any one-pixel cracks between the pieces of the ground (with the
 // cenote it lies below its water).
-void build_far_ground(Level* L) {
+void build_far_ground(void) {
   const float x0 = B.ox, x1 = (float)B.ew + B.ox, z0 = B.oz, z1 = (float)B.eh + B.oz;
   const float F = 130.0f;
   const uint32_t c = B.krgb[keyat(0, 0)];
   const float rects[4][4] = { { -F, -F, F, z0 }, { -F, z1, F, F }, { -F, z0, x0, z1 }, { x1, z0, F, z1 } };
   for (int r = 0; r < 4; ++r) {
-    if (L->nscenery >= LV_MAX_SCENERY) return;
+    if (B.out->nscenery >= LV_MAX_SCENERY) return;
     MeshBuilder mb;
     mb_init(&mb);
     quad_up(&mb, rects[r][0], rects[r][1], rects[r][2], rects[r][3], B.far_y, c);
-    L->scenery[L->nscenery++] = mb_finish(&mb);
+    B.out->scenery[B.out->nscenery++] = mb_finish(&mb);
   }
-  if (L->nscenery >= LV_MAX_SCENERY) return;
+  if (B.out->nscenery >= LV_MAX_SCENERY) return;
   MeshBuilder mb;
   mb_init(&mb);
   quad_up(&mb, x0, z0, x1, z1, B.pits ? PIT_WATER_Y - 0.6f : B.far_y - 0.45f, B.krgb[TK_FLOOR * 4 + 1]);
-  L->scenery[L->nscenery++] = mb_finish(&mb);
+  B.out->scenery[B.out->nscenery++] = mb_finish(&mb);
 }
 
 }  // namespace
 
-void level_build_mesh(Level* L) {
-  for (int i = 0; i < L->nchunks; ++i) mesh_free(&L->chunk[i]);
-  L->nchunks = 0;
-  for (int i = 0; i < L->nscenery; ++i) mesh_free(&L->scenery[i]);
-  L->nscenery = 0;
-  for (int i = 0; i < DM_COUNT; ++i) mesh_free(&L->dyn_mesh[i]);
-  for (int i = 0; i < L->ngates; ++i) {
-    mesh_free(&L->gates[i].leaf[0]);
-    mesh_free(&L->gates[i].leaf[1]);
+void level_meshes_free(LevelMeshes* m) {
+  for (int i = 0; i < m->nchunks; ++i) mesh_free(&m->chunk[i]);
+  m->nchunks = 0;
+  for (int i = 0; i < m->nscenery; ++i) mesh_free(&m->scenery[i]);
+  m->nscenery = 0;
+  for (int i = 0; i < DM_COUNT; ++i) mesh_free(&m->dyn[i]);
+  for (int i = 0; i < LV_MAX_GATES; ++i) {
+    mesh_free(&m->gate_leaf[i][0]);
+    mesh_free(&m->gate_leaf[i][1]);
   }
+}
 
+void level_build_mesh(const Level& level, LevelMeshes* out) {
+  level_meshes_free(out);
+  const Level* L = &level;
   B.L = L;
+  B.out = out;
   B.style = L->style >= 0 && L->style < NSTYLES ? L->style : STYLE_PIRAMIDI;
   B.S = &STYLES[B.style];
   B.MW = LV_MARGIN_X;
@@ -2548,7 +2555,7 @@ void level_build_mesh(Level* L) {
         if (gx >= i0 && gx < i1 && gz >= j0 && gz < j1) build_gate_frame(&mb, gi);
       }
     }
-  build_landscape(L);
+  build_landscape();
   for (int k = 0; k < g_ncx * g_ncz && k < LV_MAX_CHUNKS; ++k) {
     MeshBuilder& mb = g_cmb[k];
     if (mb.nt == 0) {
@@ -2557,12 +2564,12 @@ void level_build_mesh(Level* L) {
       mb_init(&mb);
       continue;
     }
-    L->chunk[L->nchunks++] = mb_finish(&mb);
+    out->chunk[out->nchunks++] = mb_finish(&mb);
   }
-  build_far_ground(L);
-  build_dyn_meshes(L);
+  build_far_ground();
+  build_dyn_meshes();
   for (int gi = 0; gi < L->ngates; ++gi) {
-    build_gate_leaf(L, gi, 0);
-    build_gate_leaf(L, gi, 1);
+    build_gate_leaf(gi, 0);
+    build_gate_leaf(gi, 1);
   }
 }

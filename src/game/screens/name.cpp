@@ -179,7 +179,7 @@ void name_hud(const Game& g, Hud* h) {
     const char* it[6] = { "A", tr("scrivi"), "B", tr("cancella"), "START", tr("fatto") };
     ui::footer(h, it, 6);
   }
-  ui::version(h);
+  ui::version(h, PUPAZZI_VERSION);
 }
 
 }  // namespace screens

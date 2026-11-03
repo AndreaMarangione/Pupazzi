@@ -1,5 +1,5 @@
 // Map: reading of the text file, zones and gates, collisions, line of sight.
-// The geometry to draw is in level_mesh.cpp.
+// The geometry to draw is built by the view (game/view/level_mesh.cpp).
 #include "game/sim/level.h"
 #include <ctype.h>
 #include <stdarg.h>
@@ -924,18 +924,6 @@ bool level_parse(Level* L, const char* text, char* err, int errlen) {
     }
   }
   return true;
-}
-
-void level_free(Level* L) {
-  for (int i = 0; i < L->nchunks; ++i) mesh_free(&L->chunk[i]);
-  L->nchunks = 0;
-  for (int i = 0; i < L->nscenery; ++i) mesh_free(&L->scenery[i]);
-  L->nscenery = 0;
-  for (int i = 0; i < DM_COUNT; ++i) mesh_free(&L->dyn_mesh[i]);
-  for (int i = 0; i < L->ngates; ++i) {
-    mesh_free(&L->gates[i].leaf[0]);
-    mesh_free(&L->gates[i].leaf[1]);
-  }
 }
 
 void level_reset_dynamic(Level* L, int z) {

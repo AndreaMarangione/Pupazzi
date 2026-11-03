@@ -81,7 +81,7 @@ void mode_hud(const Game& g, Hud* h) {
   ui::fit(t, sizeof(t), tr("tutte le console tornano al titolo"), HF_S13, 0.5f, W - 44.0f);
   ui::text(h, 320.0f, Y + 66.0f, HF_S13, O(ui::MU), t, 0.5f, 0);
   yes_no(h, Y + 116.0f);
-  ui::version(h);
+  ui::version(h, PUPAZZI_VERSION);
 }
 
 }  // namespace screens

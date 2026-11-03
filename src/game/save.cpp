@@ -2,6 +2,7 @@
 // format and usage in save.h. No allocations: everything in static memory, the biggest possible
 // file fits in OUT_LEN.
 #include "game/save.h"
+#include "engine/lang.h"
 #include "platform/plat.h"
 #include <errno.h>
 #include <fcntl.h>
@@ -10,6 +11,8 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <unistd.h>
+
+static_assert(NLANGS == SAVE_LANGS, "save.h e lang.h devono avere le stesse lingue");
 
 namespace {
 

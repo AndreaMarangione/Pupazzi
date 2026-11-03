@@ -66,7 +66,7 @@ void footer(const Game& g, Hud* h, const char* a_label, const char* b_label) {
     const char* it[4] = { "A", a_label, "B", b_label };
     ui::footer(h, it, b_label ? 4 : 2);
   }
-  ui::version(h);
+  ui::version(h, PUPAZZI_VERSION);
 }
 
 // "A si'   B no" centered on cy (as in the windows for entering).

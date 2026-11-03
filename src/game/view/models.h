@@ -1,16 +1,8 @@
 // Cartoon-style models: rounded shapes, solid colors, dark outline.
-// They must be built only once at start-up (the GPU renderer recognizes them by their id).
+// Built once by the first view (view_create) and shared (the GPU renderer recognizes them by their id).
 #pragma once
 #include "game/game.h"
-
-#define NSETS 5        // colors of the 4 players + gray
-
-// Particle colors (0..3 = player colors). Since 0.5: spit (greenish white), scorpion armor (amber,
-// since 0.5.1), clay of the warriors and of the archers, scarab, wool (cream white), sand, stone,
-// bronze, moon crystals, shotgun energy, sulfur.
-enum { PC_WHITE = 4, PC_GOLD, PC_GREEN, PC_GREY, PC_WOOD, PC_STRAW, PC_SNOW, PC_FIRE, PC_DARK, PC_LEAF,
-       PC_RED, PC_EARTH, PC_SPIT, PC_SCORPION, PC_CLAY, PC_SCARAB,
-       PC_WOOL, PC_SAND, PC_STONE, PC_BRONZE, PC_MOON, PC_ENERGY, PC_SULFUR, NPCOL };
+#include "game/sim/shapes.h"
 
 // Character: the body has its origin at the feet and faces +Z; arms and legs hang from their
 // pivots (they extend towards -Y) and are animated by rotating them.
@@ -46,15 +38,10 @@ const Vec3 SCORPION_STING_TIP = { 0.0f, 0.13f, 0.3f };
 const float ARCHER_SH_X = 0.26f, ARCHER_SH_Y = 1.2f, ARCHER_ARM = 0.5f, ARCHER_UPPER = 0.25f, ARCHER_FORE = 0.25f;
 const float ARCHER_HIP_X = 0.11f, ARCHER_HIP_Y = 0.7f, ARCHER_THIGH = 0.33f;   // hips (and knee at -ARCHER_THIGH)
 const float ARCHER_STRING_Z = -0.14f, ARCHER_BOW_TIP = 0.58f;
-// Where the arrow starts from (coordinates of the kneeling archer: the center of the nocked arrow
-// at full draw, next to the bow hand).
-const float ARCHER_NOCK_Y = 1.3f, ARCHER_NOCK_Z = 0.25f;
-// Frames to kneel and draw the bow, and after the shot to stand up again (rules and drawing).
-const int ARCHER_DRAW_FRAMES = 36, ARCHER_REST_FRAMES = 24;
+// (Where the arrow starts and the draw timings: ARCHER_NOCK_*, ARCHER_*_FRAMES in game/sim/shapes.h.)
 const float WARRIOR_SH_X = 0.5f, WARRIOR_SH_Y = 1.36f, WARRIOR_ARM = 0.62f, WARRIOR_HIP_X = 0.2f, WARRIOR_HIP_Y = 0.62f;
-const float BOSS_SH_X = 1.02f, BOSS_SH_Y = 3.3f, BOSS_ARM = 1.45f, BOSS_HIP_X = 0.42f, BOSS_HIP_Y = 1.5f;
+const float BOSS_SH_X = 1.02f, BOSS_SH_Y = 3.3f, BOSS_ARM = 1.45f, BOSS_HIP_Y = 1.5f;   // BOSS_HIP_X in shapes.h
 const float BOSS_NECK_Y = 3.55f;
-const float BOSS_SWEEP_HALF = 1.22f;   // gladiator's sweep: half of the span (140 degrees), ground mark and rules
 // Rotation that takes the local axes X, Y, Z onto x, y, z (orthonormal, right-handed).
 static inline Xform xf_axes(Vec3 x, Vec3 y, Vec3 z) {
   Xform r = xf_identity();
@@ -105,7 +92,7 @@ struct Models {
   // length is scaled), end 2 wide, impact mark where he crashes.
   Mesh mark_sector, mark_sector_fill, mark_sector_hit, mark_swoosh;   // mark_swoosh: white trail of the sword (arc)
   Mesh mark_lane_fill, mark_lane_edge, mark_lane_end, mark_chevron, mark_impact;
-  Mesh blast, muzzle, alert, snow_ring, stars, smoke;   // (bushes, tall grass, crates, trampolines: Level::dyn_mesh)
+  Mesh blast, muzzle, alert, snow_ring, stars, smoke;   // (bushes, tall grass, crates, trampolines: LevelMeshes::dyn)
   Mesh capsule, capsule_open;  // explorer's capsule, closed and open
   Mesh capsule_light;          // antenna light (drawn intermittently)
   Mesh explorer;               // the capsule's explorer, arms up; origin at the feet
@@ -113,9 +100,7 @@ struct Models {
 };
 
 extern Models M;
-extern const uint32_t PLAYER_RGB[NSETS];
 extern const uint32_t PARTICLE_RGB[NPCOL];
-extern const uint32_t PW_RGB[4];       // power-up colors: light blue (VELOCITA'), red (FURIA), gold (INVINCIBILE), purple (CARICA)
 
 void models_build(void);
 void models_free(void);

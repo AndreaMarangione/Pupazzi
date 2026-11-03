@@ -1,5 +1,6 @@
 // Map: grid of 1-metre cells read from a text file, zones separated by gates, collisions and
-// line of sight computed on the cells, static geometry for drawing.
+// line of sight computed on the cells. Its geometry for drawing is built by the view
+// (game/view/level_mesh.h).
 //
 // Coordinates: column cx goes from west to east, row cz from north (row 0) to south. The world
 // has X towards east and Z towards south: cell (cx, cz) has its centre at
@@ -7,7 +8,7 @@
 // so the map lies between x = -W/2 and +W/2 and between z = -H and 0; the players start at the
 // bottom (south).
 #pragma once
-#include "engine/mesh.h"
+#include "engine/vmath.h"
 
 #define LV_MAX_W 48
 #define LV_MAX_H 96
@@ -52,8 +53,8 @@ enum CellType {
   C_NTYPES
 };
 // Dynamic objects (they get squashed, break, bounce): their meshes are in the map's style, built
-// by level_build_mesh and drawn by game_draw.cpp (origin on the ground at the centre of the cell,
-// within the cell's metre).
+// by the view (level_mesh.cpp) and drawn by game_draw.cpp (origin on the ground at the centre of
+// the cell, within the cell's metre).
 enum { DM_BUSH = 0, DM_GRASS, DM_CRATE, DM_CRATE_TAL, DM_TRAMP, DM_COUNT };
 
 // The worlds are the planets (17/10), in the order of the journey.
@@ -114,7 +115,6 @@ struct Gate {
   float vel;                           // how much open changes every frame (game.cpp, update_gates)
   float mx, mz;                        // towards from_zone, perpendicular to the gate: the leaves open on that side
   float stop[2];                       // how far each leaf opens (1: fully; less if there is an obstacle)
-  Mesh leaf[2];                        // closed leaves, with the hinge at the origin (level_mesh.cpp)
 };
 #define GATE_LEAF_HALF 0.1f            // half the thickness of the leaves (for the pushes)
 struct MapItem {
@@ -145,19 +145,10 @@ struct Level {
   DynCell dyn[LV_MAX_DYN];
   int16_t capsule_dyn;                 // capsule with the explorer: index in dyn[], -1 if the map has none
   Vec3 boss_pos;
-  int nchunks;
-  Mesh chunk[LV_MAX_CHUNKS];           // ground, walls, fixed obstacles, nearby scenery (blocks of 8x8 cells)
-  int nscenery;
-  Mesh scenery[LV_MAX_SCENERY];        // distant scenery: ground beyond the border and large shapes
-  Mesh dyn_mesh[DM_COUNT];             // bush, tall grass, crate, crate with the talisman, trampoline
 };
 
 // Reads a map from the text. false (with the reason in err) if the text is not valid.
 bool level_parse(Level* L, const char* text, char* err, int errlen);
-// Builds the static geometry, the scenery and the meshes of the dynamic objects in the map's
-// style (to be called once after level_parse; level_free frees everything).
-void level_build_mesh(Level* L);
-void level_free(Level* L);
 // Puts crates and gates back as at the start of the map (z < 0) or only those of zone z.
 void level_reset_dynamic(Level* L, int z);
 // Gate leaves (0.5.4): how far leaf side is turned (radians, from 0 closed to pi/2 open). The

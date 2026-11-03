@@ -49,7 +49,7 @@ void lang_hud(const Game& g, Hud* h) {
   }
   const char* it[4] = { "A", tr("scegli"), "B", tr("indietro") };
   ui::footer(h, it, 4);
-  ui::version(h);
+  ui::version(h, PUPAZZI_VERSION);
 }
 
 }  // namespace screens

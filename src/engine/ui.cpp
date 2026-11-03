@@ -1,5 +1,4 @@
 #include "engine/ui.h"
-#include "game/game.h"
 #include "engine/lang.h"
 #include <math.h>
 #include <stdio.h>
@@ -273,7 +272,7 @@ void footer(Hud* h, const char* const* items, int n) {
   }
 }
 
-void version(Hud* h) { text(h, 640.0f - SAFE_X, 480.0f - SAFE_Y - 11.0f, HF_S13, A(FTX, 0.75f), PUPAZZI_VERSION, 1.0f, 1); }
+void version(Hud* h, const char* v) { text(h, 640.0f - SAFE_X, 480.0f - SAFE_Y - 11.0f, HF_S13, A(FTX, 0.75f), v, 1.0f, 1); }
 
 float tag(Hud* h, float x, float cy, const char* s, uint32_t color, int face, float track, float padx, float hh, int align) {
   const float w = hud_text_w(face, s, track) + 2.0f * padx + 3.0f;

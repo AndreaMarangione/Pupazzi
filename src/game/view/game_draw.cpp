@@ -1,6 +1,7 @@
 // Drawing: scene objects with their animations, camera and the game HUD.
 #include "game/sim/game_int.h"
 #include "game/view/view.h"
+#include "game/view/models.h"
 #include "game/sim/maps.h"
 #include "platform/plat.h"
 #include "platform/sysinfo.h"
@@ -16,6 +17,7 @@ const int HELP_FLASH = 150;    // the capsule has just called for help: light st
 DrawItem g_items[MAX_ITEMS];
 int g_n;
 Vec3 g_view;          // center of the framing: far objects are not even sent to the renderer
+const LevelMeshes* g_lm;   // geometry of the map of the view being drawn
 
 const float CAM_FOVY = 0.87f;
 
@@ -53,11 +55,11 @@ float ground_under(const Game& g, Vec3 p) { return level_ground(&g.L, p.x, p.z, 
 const Mesh* shadow(const Game& g, int k) {
   static uint32_t seen = 0;
   static int tone = -1;
-  if (g.L.nchunks > 0 && g.L.chunk[0].id != seen) {
-    seen = g.L.chunk[0].id;
+  if (g_lm->nchunks > 0 && g_lm->chunk[0].id != seen) {
+    seen = g_lm->chunk[0].id;
     float r = 0.0f, gr = 0.0f, bl = 0.0f, n = 0.0f;
-    for (int c = 0; c < g.L.nchunks; ++c) {
-      const Mesh& m = g.L.chunk[c];
+    for (int c = 0; c < g_lm->nchunks; ++c) {
+      const Mesh& m = g_lm->chunk[c];
       for (int i = 0; i < m.nt; ++i) {
         const MeshTri& t = m.t[i];
         if (t.n.y < 0.95f || fabsf(m.v[t.a].y) > 0.05f) continue;
@@ -891,8 +893,8 @@ void push_capsule(const Game& g, const DynCell& dc, int d, Vec3 c) {
 }
 
 void push_world(const View& v, const Game& g) {
-  for (int i = 0; i < g.L.nchunks; ++i) push(&g.L.chunk[i], xf_identity(), 0, 0, ITEM_STATIC);
-  for (int i = 0; i < g.L.nscenery; ++i) push(&g.L.scenery[i], xf_identity(), 0, 0, ITEM_STATIC);   // distant scenery
+  for (int i = 0; i < v.lm.nchunks; ++i) push(&v.lm.chunk[i], xf_identity(), 0, 0, ITEM_STATIC);
+  for (int i = 0; i < v.lm.nscenery; ++i) push(&v.lm.scenery[i], xf_identity(), 0, 0, ITEM_STATIC);   // distant scenery
   // Swing gates (0.5.4): each leaf turns around its hinge, starting from the closed position.
   for (int i = 0; i < g.L.ngates; ++i)
     for (int side = 0; side < 2; ++side) {
@@ -906,7 +908,7 @@ void push_world(const View& v, const Game& g) {
       xf.r[2] = si;
       xf.r[6] = -si;
       xf.r[8] = co;
-      push(&g.L.gates[i].leaf[side], xf);
+      push(&v.lm.gate_leaf[i][side], xf);
     }
   // Bushes, tall grass, crates and trampolines with the meshes of the map's style (level_mesh.cpp):
   // turned and a little bigger or smaller depending on the cell, so they don't look lined up.
@@ -921,13 +923,13 @@ void push_world(const View& v, const Game& g) {
     switch (dc.type) {
       case C_BUSH: {
         const float s = g.squash[d];
-        push(&g.L.dyn_mesh[DM_BUSH], scaled(at(c, yaw), k * (1.0f + 0.15f * s), k * (1.0f - 0.55f * s), k * (1.0f + 0.15f * s)));
+        push(&v.lm.dyn[DM_BUSH], scaled(at(c, yaw), k * (1.0f + 0.15f * s), k * (1.0f - 0.55f * s), k * (1.0f + 0.15f * s)));
         break;
       }
       case C_GRASS: {
         const float s = g.squash[d];
         const float w = 0.05f * d_sin((float)g.ui_tick * 0.05f + (float)(dc.cx + dc.cz));
-        push(&g.L.dyn_mesh[DM_GRASS], scaled(xf_mul(at(c, yaw), xf_rot_x(w)), 1.0f + 0.1f * s, k * (1.0f - 0.6f * s), 1.0f + 0.1f * s));
+        push(&v.lm.dyn[DM_GRASS], scaled(xf_mul(at(c, yaw), xf_rot_x(w)), 1.0f + 0.1f * s, k * (1.0f - 0.6f * s), 1.0f + 0.1f * s));
         break;
       }
       case C_BREAK: {
@@ -941,14 +943,14 @@ void push_world(const View& v, const Game& g) {
         const float hit = (float)g.crate_hit[d] / 10.0f;
         const float wob = 0.06f * hit * d_sin((float)g.crate_hit[d] * 2.0f);
         const float tilt = 0.004f * (float)((int)((hh >> 4) % 100u) - 50);   // slightly: the square crates stay inside the cell
-        push(&g.L.dyn_mesh[tal ? DM_CRATE_TAL : DM_CRATE], scaled(at(c, tilt + wob), 1.0f + 0.05f * hit, 1.0f - 0.05f * hit, 1.0f + 0.05f * hit),
+        push(&v.lm.dyn[tal ? DM_CRATE_TAL : DM_CRATE], scaled(at(c, tilt + wob), 1.0f + 0.05f * hit, 1.0f - 0.05f * hit, 1.0f + 0.05f * hit),
              hit > 0.0f ? 120 : 0);
         break;
       }
       case C_TRAMP: {
         const float t = (float)g.tramp_t[d] / 20.0f;
         const float s = t > 0.0f ? 0.35f * d_sin(t * D_PI * 2.0f) * t : 0.0f;
-        push(&g.L.dyn_mesh[DM_TRAMP], scaled(at(c, yaw), 1.0f - 0.5f * s, 1.0f + s, 1.0f - 0.5f * s));
+        push(&v.lm.dyn[DM_TRAMP], scaled(at(c, yaw), 1.0f - 0.5f * s, 1.0f + s, 1.0f - 0.5f * s));
         break;
       }
       default: break;
@@ -1615,7 +1617,14 @@ bool to_screen(const Camera& c, Vec3 p, int* sx, int* sy) {
   return true;
 }
 
-void view_build_frame(const View& v, const Game& g, FrameDesc* fd, int w, int h, Hud* hud) {
+void view_build_frame(View& v, const Game& g, FrameDesc* fd, int w, int h, Hud* hud) {
+  // A map just loaded (or none any more): its geometry.
+  if (v.lm_serial != g.session.level_serial) {
+    v.lm_serial = g.session.level_serial;
+    if (g.level_ok) level_build_mesh(g.L, &v.lm);
+    else level_meshes_free(&v.lm);
+  }
+  g_lm = &v.lm;
   g_n = 0;
   g_view = v.cam_target;
   if (g.level_ok) {

@@ -1,5 +1,5 @@
-// Game flow: screens, campaign, maps, zones, waves, gates, lives and map restarts, stars and
-// rounds of the planets, camera.
+// Game flow: campaign, maps, zones, waves, gates, lives and map restarts, stars and rounds of the
+// planets; the game API of game.h.
 #include "game/sim/game_int.h"
 #include "engine/lang.h"
 #include "game/sim/maps.h"
@@ -27,11 +27,13 @@ void game_destroy(Game* g) { free(g); }
 const char* const WORLD_NAMES[NWORLDS] = { N_("TERRA"), N_("LUNA"), N_("MARTE"), N_("VENERE"), N_("MERCURIO"), N_("GIOVE"),
                                             N_("SATURNO"), N_("URANO"), N_("NETTUNO") };
 static_assert(SAVE_WORLDS == NWORLDS, "save.h e level.h devono avere gli stessi pianeti");
+const uint32_t PLAYER_RGB[NSETS] = { 0xE8463C, 0x3C82E8, 0x3FC04A, 0xF2C230, 0x8A8E94 };
+const uint32_t PW_RGB[4] = { 0x3FD8FF, 0xFF4A3A, 0xFFC83C, 0xB06CFF };
 static_assert(NET_NAME_LEN == SAVE_NAME_LEN, "game.h e save.h: stessa lunghezza dei nomi delle partite");
 
 namespace {
 
-bool g_inited;                 // models and maps built (shared by every game in the process)
+bool g_inited;                 // maps loaded (shared by every game in the process)
 // Monsters of a group: more players in play (whoever is out of lives does not count), more
 // monsters; and more at every round.
 int wave_size(Game& g, int base) {
@@ -705,10 +707,9 @@ void show_msg(Game& g, const char* big, const char* small, uint32_t rgb, int siz
 bool load_map_preview(Game& g, int idx) {
   if (idx < 0 || idx >= maps_count()) return false;
   if (g.level_ok && g.map_shown == idx) return true;
-  level_free(&g.L);
+  g.session.level_serial++;      // another map: the views build its geometry again
   g.level_ok = maps_load(idx, &g.L, g.map_note, sizeof(g.map_note));
   if (!g.level_ok) return false;
-  level_build_mesh(&g.L);
   g.map_shown = idx;
   clear_actors(g);
   memset(g.bo, 0, sizeof(g.bo));
@@ -753,7 +754,6 @@ void game_init(Game& g) {
   for (int i = 0; i < MAX_PLAYERS; ++i) g.aim_level[i] = AIM_DEFAULT;   // it stays for the whole session
   g.aa_level = 1;                                                       // antialiasing: the best the renderer can do
   g.aa_cap = 8;
-  models_build();
   maps_init();
   g_inited = true;
   game_reset(g);
@@ -761,8 +761,6 @@ void game_init(Game& g) {
 
 void game_shutdown(Game& g) {
   if (!g_inited) return;
-  level_free(&g.L);
-  models_free();
   g_inited = false;
 }
 

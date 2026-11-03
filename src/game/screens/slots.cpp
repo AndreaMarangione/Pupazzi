@@ -301,13 +301,13 @@ void slots_hud(const Game& g, Hud* h) {
   }
   if (g.session.info_t > 0) {
     toast(h, g.session.info, ui::L1);
-    ui::version(h);
+    ui::version(h, PUPAZZI_VERSION);
     return;
   }
   static const char* const ACT[4] = { N_("carica"), N_("scegli"), N_("sovrascrivi"), N_("scegli") };
   const char* it[4] = { "A", tr(ACT[g.slots_mode]), "B", tr("indietro") };
   ui::footer(h, it, 4);
-  ui::version(h);
+  ui::version(h, PUPAZZI_VERSION);
 }
 
 }  // namespace screens

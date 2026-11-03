@@ -97,7 +97,7 @@ void title_hud(const Game& g, Hud* h) {
     const char* it[2] = { "A", tr("conferma") };
     ui::footer(h, it, 2);
   }
-  ui::version(h);
+  ui::version(h, PUPAZZI_VERSION);
 }
 
 }  // namespace screens

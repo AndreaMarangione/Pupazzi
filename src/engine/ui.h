@@ -62,7 +62,8 @@ void sep(Hud* h, float x, float y, float w);
 float key(Hud* h, float x, float cy, const char* s, uint32_t color = L1);
 // Menu footer at the bottom left: button-text pairs ("A", "conferma", "B", "indietro"...).
 void footer(Hud* h, const char* const* items, int n);
-void version(Hud* h);
+// Version number v at the bottom right, above the footer.
+void version(Hud* h, const char* v);
 // Label with the outline (GIRO 2, BOSS, IN ARRIVO); align as in hud_text; returns the width.
 float tag(Hud* h, float x, float cy, const char* s, uint32_t color, int face, float track, float padx, float hh, int align = -1);
 // Player token (G1...): player color, white lettering; returns the width.

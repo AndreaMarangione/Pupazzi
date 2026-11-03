@@ -237,13 +237,13 @@ void lobby_hud(const Game& g, Hud* h) {
     }
     if (g.session.info_t > 0) {
       toast(h, g.session.info, ui::L1);
-      ui::version(h);
+      ui::version(h, PUPAZZI_VERSION);
     } else if (v.ngames > 0) {
       footer(g, h, tr("unisciti"), tr("indietro"));
     } else {
       const char* it[2] = { "B", tr("indietro") };
       ui::footer(h, it, 2);
-      ui::version(h);
+      ui::version(h, PUPAZZI_VERSION);
     }
     return;
   }
@@ -265,13 +265,13 @@ void lobby_hud(const Game& g, Hud* h) {
   net_ip_line(g, h, 320.0f, NET_IP_Y);
   if (g.session.info_t > 0) {
     toast(h, g.session.info, ui::L1);
-    ui::version(h);
+    ui::version(h, PUPAZZI_VERSION);
   } else if (v.mode == NV_HOST) {
     footer(g, h, tr("inizia"), tr("annulla"));
   } else {
     const char* it[2] = { "B", v.mode == NV_JOINING ? tr("annulla") : tr("esci") };
     ui::footer(h, it, 2);
-    ui::version(h);
+    ui::version(h, PUPAZZI_VERSION);
   }
 }
 

@@ -154,7 +154,7 @@ void maps_hud(const Game& g, Hud* h) {
   // Custom map with a problem: the note in place of the footer.
   if (note) {
     toast(h, maps_note(g.map_sel), ui::A2);
-    ui::version(h);
+    ui::version(h, PUPAZZI_VERSION);
   } else {
     footer(g, h, tr("gioca"), tr("indietro"));
   }
