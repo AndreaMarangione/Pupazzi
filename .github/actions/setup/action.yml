@@ -1,0 +1,17 @@
+# Tools for building and testing: Python (scripts and the zig cross compiler, pinned), Mesa for the
+# GPU renderer tests without a screen.
+name: Set up tools
+description: Python, zig (cross compiler for the console and the PC) and Mesa
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-python@v5
+      with:
+        python-version: "3.12"
+    - name: Install zig and Mesa
+      shell: bash
+      run: |
+        python3 -m pip install --quiet ziglang==0.16.0
+        python3 -m ziglang version
+        sudo apt-get update -qq
+        sudo apt-get install -y -qq --no-install-recommends libegl1 libgles2 libegl-mesa0 libgl1-mesa-dri

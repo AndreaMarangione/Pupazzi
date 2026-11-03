@@ -1,0 +1,4 @@
+# Not part of the release archive (git archive).
+.github export-ignore
+.gitattributes export-ignore
+.gitignore export-ignore

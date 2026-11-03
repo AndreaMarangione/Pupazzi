@@ -1,0 +1,72 @@
+# Release: when Andrea publishes a release on GitHub (for example with
+#   gh release create v0.5.5 -R AndreaMarangione/Pupazzi --target main --title "Pupazzi 0.5.5" --notes ""
+# ) this workflow builds that tag, runs the tests, packs sources and ready-to-install cores into
+# pupazzi-VERSION-BUILD.tar.gz and attaches it to the release, together with the preview image and
+# the notes taken from CHANGELOG.md. It can also be started by hand for an existing tag.
+name: Release
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag to rebuild (for example v0.5.5)
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      TAG: ${{ github.event.release.tag_name || inputs.tag }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+
+      - name: Check that the tag matches the version in the code
+        run: |
+          version="$(sed -n 's/^#define PUPAZZI_VERSION "\([^"]*\)".*/\1/p' src/game.h)"
+          if [ "$TAG" != "v$version" ]; then
+            echo "::error::tag $TAG does not match PUPAZZI_VERSION $version (src/game.h)"
+            exit 1
+          fi
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+          echo "BUILD_ID=$(git log -1 --format=%cd --date=format:%Y%m%d)" >> "$GITHUB_ENV"
+
+      - name: Set up tools
+        uses: ./.github/actions/setup
+
+      - name: Build (console ARM32/ARM64, PC, native and tools)
+        run: |
+          make -j"$(nproc)" dist BUILD_ID="$BUILD_ID"
+          make -j"$(nproc)" BUILD_ID="$BUILD_ID"
+
+      - name: Tests
+        run: |
+          make test
+          make test-audio
+          make test-gl
+          make test-net
+          python3 tools/test_remote.py
+
+      - name: Package and notes
+        run: |
+          bash .github/scripts/package.sh "$VERSION" "$BUILD_ID" "pupazzi-$VERSION-$BUILD_ID.tar.gz"
+          bash .github/scripts/release_notes.sh "$VERSION" "pupazzi-$VERSION-$BUILD_ID.tar.gz" > notes.md
+          cat notes.md
+
+      - name: Attach to the release
+        run: |
+          files=("pupazzi-$VERSION-$BUILD_ID.tar.gz")
+          if [ -f docs/anteprima.png ]; then
+            cp docs/anteprima.png "pupazzi-$VERSION-anteprima.png"
+            files+=("pupazzi-$VERSION-anteprima.png")
+          fi
+          gh release upload "$TAG" "${files[@]}" --clobber
+          gh release edit "$TAG" --title "Pupazzi $VERSION" --notes-file notes.md

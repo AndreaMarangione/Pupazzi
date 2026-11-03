@@ -1,0 +1,53 @@
+# Continuous integration: every push to main and every pull request builds the cores for the console
+# (ARM 32 and 64 bit), the PC and the local test tools, then runs the automatic tests.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up tools
+        uses: ./.github/actions/setup
+
+      - name: Build (console ARM32/ARM64, PC, native and tools)
+        run: |
+          make -j"$(nproc)" dist BUILD_ID="$(git log -1 --format=%cd --date=format:%Y%m%d)"
+          make -j"$(nproc)" BUILD_ID="$(git log -1 --format=%cd --date=format:%Y%m%d)"
+
+      - name: Tests (rules, maps, boss, aim, saves, languages, network input, raster)
+        run: make test
+
+      - name: Sound tests
+        run: make test-audio
+
+      - name: GPU renderer tests (Mesa, no screen)
+        run: make test-gl
+
+      - name: LAN play tests (several game copies on this machine)
+        run: make test-net
+
+      - name: Remote controller tests
+        run: python3 tools/test_remote.py
+
+      - name: Upload console and PC package
+        uses: actions/upload-artifact@v4
+        with:
+          name: pupazzi-dist-${{ github.sha }}
+          path: dist/
+          retention-days: 14

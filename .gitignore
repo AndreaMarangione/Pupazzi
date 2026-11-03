@@ -1,7 +1,8 @@
-# Compilazione (si rifà con make; il pacchetto pronto per la console è in dist/)
+# Build output (make; make dist builds the console/PC package, published with each release)
 build/
-# Registri scaricati dalla console con ./deploy.sh risultati
+dist/
+# Logs downloaded from the console with ./deploy.sh risultati
 risultati/
-# Compilatore incrociato (pip install ziglang in un ambiente virtuale)
+# Cross compiler (pip install ziglang in a virtual environment)
 .zig/
 __pycache__/

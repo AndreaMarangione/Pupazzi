@@ -1,58 +1,31 @@
-# Pupazzi — 0.5.4
+# Pupazzi
 
-Gioco cooperativo da 1 a 4 giocatori per l'Anbernic RG35XX Pro (Stock OS MOD), ispirato a
-Brawl Stars: il giro del **sistema solare**, pianeta dopo pianeta, attraversando mappe fatte di
-zone piene di mostri. La specifica completa, decisa insieme, è in `SPECIFICA.md`.
+Gioco cooperativo da 1 a 4 giocatori per le console Anbernic con RetroArch (fatto sull'RG35XX Pro
+con la Stock OS MOD), ispirato a Brawl Stars: il giro del **sistema solare**, pianeta dopo pianeta,
+attraversando mappe fatte di zone piene di mostri. Si gioca sullo schermo della console, sulla TV con
+l'HDMI e in rete, ognuno sulla sua console. Oggi c'è la **Terra**, con **Le Piramidi**, **La Grande
+Muraglia**, **Chichén Itzá** e il boss nel **Colosseo**; gli eroi sono **Astro**, **Mochi**,
+**Marzio** e **Zolfo**.
 
-Le versioni prima: la 0.3 ha dato la grafica in stile cartone, le mappe, i 4 personaggi iniziali,
-le bombe e i menu; la 0.3.1 e la 0.3.2 la mira a ventaglio, la levetta destra più morbida (quattro
-livelli), l'antialias, salto e bomba su R2 e L2; la 0.4 le carte, le 3 stelle per mappa, i
-salvataggi e il sonoro.
+- Le novità di ogni versione sono in `CHANGELOG.md`.
+- La specifica completa, decisa insieme, è in `SPECIFICA.md`.
+- Tutti i diritti riservati: vedi **Diritti** in fondo.
 
-La 0.5 cambia tema: niente più pupazzi e burattinaio, si parte dalla **Terra** con le sue
-meraviglie (oggi **Le Piramidi**, **La Grande Muraglia**, **Chichén Itzá** e il boss nel **Colosseo**).
-Mappe più grandi di due terzi e disegnate morbide, senza quadretti; i quattro eroi **Astro**,
-**Mochi**, **Marzio** e **Zolfo**; mostri e boss nuovi; **3 vite** a testa per mappa; i **giri**
-di ogni pianeta, che si aprono con 10 stelle; le icone dei giocatori in alto a sinistra; visuale
-fino a 30 m; musiche nuove; i controller via Wi-Fi senza ritardo. La Luna e gli altri pianeti
-arrivano con le prossime versioni.
-
-La 0.5.1, dopo la prova della 0.5: visuale minima più lontana (22 m, anche da soli); acqua che
-non si attraversa più nemmeno saltando e mappe tutte giocabili (alle Piramidi dal Nilo si passava
-nelle altre zone), con il paesaggio attorno ridotto e controlli automatici su ogni mappa; il
-**Gladiatore** che insegue e combatte; **Chichén Itzá** al posto di Machu Picchu, con i **cenote**
-in cui si cade e si perde una vita; **scorpioni** e **arcieri di terracotta** al posto di
-sciacalli e lama.
-
-La 0.5.2 rifà tutta l'interfaccia, scelta da Andrea sui mockup: stile **Orbita** con i colori
-**Tramonto**. Pannelli prugna con due angoli tagliati e il bordo che sfuma dall'ambra al rosa, voce
-scelta con la stessa sfumatura e un alone caldo, titoli bianchi con l'alone, caratteri Chakra Petch
-con gli accenti veri, tutto dentro il margine che i televisori tagliano; anche l'HUD in partita. La
-pausa non elenca più i tasti: li mostra la voce **COMANDI**, in un riquadro a parte. La scelta della
-mappa è al centro dello schermo, con un pianeta alla volta.
-
-La 0.5.3 aggiunge sostanza: **quattro salvataggi** (prima schermata con NUOVA PARTITA, CARICA
-SALVATAGGIO, GESTISCI SALVATAGGI per duplicarli ed eliminarli, LINGUA, ESCI), **sette lingue**
-(italiano, inglese, spagnolo, portoghese, cinese, giapponese, hindi) e la **visuale più vicina
-sullo schermo della console**: da 15 a 30 m, e da 22 a 30 m quando l'HDMI è collegato (lo capisce da
-solo, anche se lo si attacca o stacca a partita iniziata).
-
-La 0.5.4 porta il **gioco in rete**: fino a 4 console nella stessa Wi-Fi, ognuna con il suo schermo
-e la telecamera sul suo eroe (vedi **Gioco in rete**). Poi i **bonus** nelle casse e nelle anfore
-che si rompono (VELOCITÀ, FURIA, INVINCIBILE, CARICA), i **cancelli a battente** che si aprono verso
-chi aspetta e si richiudono sbattendo, il **nome** delle partite scritto con la tastiera a schermo
-(anche dopo, con RINOMINA), il banner **RITIRA LE TUE CARTE** prima della scelta, l'antialias fino a
-**8 campioni**, la **batteria** in alto a destra e il carico della **CPU** nel riquadro di SELECT.
-La storia all'inizio non c'è più.
+![Anteprima](docs/anteprima.png)
 
 ## Installazione
 
-Console accesa, in Wi-Fi, con SSH attivo. Dal PC, dentro questa cartella:
+Il pacchetto pronto è nell'archivio di ogni release su GitHub
+(https://github.com/AndreaMarangione/Pupazzi/releases): sorgenti più `dist/`, già compilato per la
+console e per il PC. Dal PC, con la console accesa, in Wi-Fi e con SSH attivo:
 
+    gh release download -R AndreaMarangione/Pupazzi -p 'pupazzi-*.tar.gz'   # l'ultima release
+    tar -xzf pupazzi-*.tar.gz && cd pupazzi
     ./deploy.sh installa            # IP predefinito 192.168.1.228
     ./deploy.sh installa 192.168.1.50
 
-Senza SSH: scheda SD nel PC e `./deploy.sh sd /percorso/della/scheda/Roms`.
+Senza SSH: scheda SD nel PC e `./deploy.sh sd /percorso/della/scheda/Roms`. Dai sorgenti (senza
+release) prima `make dist` (vedi **Compilare**).
 
 Sulla console compare **App Center → APPS → Pupazzi**. Un aggiornamento della MOD svuota la
 cartella APPS: dopo basta rifare `./deploy.sh installa`. Per togliere tutto: `./deploy.sh rimuovi`
@@ -428,7 +401,11 @@ dell'antialias da 8 a 4 campioni.
 
 ## Sul PC
 
+Su un PC Linux con RetroArch, dalla cartella dell'archivio della release (o dopo `make dist`):
+
     retroarch -L dist/pc/pupazzi_libretro.so
+
+Serve un pad: la mira è sulla levetta destra. Il PC può entrare nelle partite in rete con le console.
 
 ## Compilare
 
@@ -449,12 +426,30 @@ Per la console serve zig come compilatore incrociato (provato con la versione 0.
     python3 -m venv .zig && .zig/bin/pip install ziglang
     make dist ZIG=".zig/bin/python -m ziglang"     # ARM 32 e 64 bit e PC, pronti in dist/
 
-Nel pacchetto `dist/` è già compilato.
+`dist/` non è nel repository: è nell'archivio di ogni release (vedi **Pubblicare una versione**).
 
 I caratteri dell'interfaccia (`src/font_hud.h` e `src/font_hud_data.h`) e i testi (`src/lang_data.h`)
 sono già generati. Per rifarli: `python3 tools/make_lang.py` e `python3 tools/make_font.py`, che
 vuole Pillow con raqm, `pip install uharfbuzz freetype-py` e i caratteri Noto Sans CJK del sistema
 (pacchetto `fonts-noto-cjk`, oppure la cartella in `PUPAZZI_NOTO_CJK`).
+
+## Pubblicare una versione
+
+Le release si fanno da GitHub (GitHub Actions, `.github/workflows/`):
+
+1. Nel codice: il numero in `src/game.h` (`PUPAZZI_VERSION`) e la sezione della versione in
+   `CHANGELOG.md` (le note della release vengono da lì).
+2. Andrea crea la release, con un comando solo:
+
+       gh release create v0.5.5 -R AndreaMarangione/Pupazzi --target main --title "Pupazzi 0.5.5" --notes ""
+
+3. GitHub compila (console 32 e 64 bit e PC), fa le prove, prepara `pupazzi-VERSIONE-BUILD.tar.gz`
+   (sorgenti più `dist/`) e lo allega alla release con l'anteprima (`docs/anteprima.png`) e le note.
+   Se qualcosa non va la release resta senza file e il motivo è nella pagina **Actions**; si rifà
+   con **Run workflow** su **Release**, indicando il tag.
+
+A ogni modifica su `main` la CI (**CI** in **Actions**) compila e fa tutte le prove; il pacchetto
+`dist/` di quella build si scarica dalla pagina dell'esecuzione.
 
 ## Com'è fatto
 
@@ -654,5 +649,15 @@ i comandi dalle altre console sul Wi-Fi vero.
   e impronta delle mappe si controllano entrando. Le prove (`make test-net`) fanno girare più copie
   del gioco sul PC, anche con messaggi persi e in ritardo; tra x86 e ARM (32 e 64 bit, in emulazione)
   la stessa partita è uguale fotogramma per fotogramma.
-- `libretro.h` viene da libretro-common (licenza MIT); licenze dei caratteri in
-  `third_party/fonts/LEGGIMI.txt`.
+
+## Diritti
+
+© 2026 Andrea Marangione. Tutti i diritti riservati.
+
+Il repository è pubblico ma senza licenza, di proposito: nessuno ha il permesso di copiare,
+modificare, distribuire o usare il gioco o il codice, in tutto o in parte, senza il consenso scritto
+dell'autore (restano solo i diritti che i Termini di servizio di GitHub danno sui repository
+pubblici, come vederli e farne un fork su GitHub).
+
+Fanno eccezione i componenti di terzi, con le loro licenze: `src/libretro.h` (MIT, del team di
+RetroArch) e i caratteri in `third_party/fonts/` (SIL Open Font License, vedi `LEGGIMI.txt`).
