@@ -4,11 +4,11 @@
 # giocatore con il computer (PUPAZZI_BOT=1) e scrive nel registro l'impronta della partita a ogni
 # fotogramma (PUPAZZI_TRACE=1): su tutte le copie devono essere uguali, fotogramma per fotogramma.
 #
-#   sh tools/test_net.sh            tutte le prove (qualche minuto)
-#   sh tools/test_net.sh perdite    solo quella (tre_console perdite scollegamento caduta
+#   sh tests/test_net.sh            tutte le prove (qualche minuto)
+#   sh tests/test_net.sh perdite    solo quella (tre_console perdite scollegamento caduta
 #                                   chi_crea_esce rifiuto fine_al_titolo quattro_console progressi
 #                                   mappa_intera menu storia_prima)
-#   TEMPO=60 sh tools/test_net.sh   fotogrammi al secondo di ogni copia (120: il doppio del vero)
+#   TEMPO=60 sh tests/test_net.sh   fotogrammi al secondo di ogni copia (120: il doppio del vero)
 set -u
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 HOST=${HOST:-$ROOT/build/native/host}                   # altri binari (sanitizer): HOST=... CORE=...

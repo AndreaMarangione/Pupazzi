@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # Pupazzi - prove dei comandi dalla rete (Remote RetroPad) con il frontend di prova.
 #
-#   python3 tools/test_remote.py [--host build/native/host] [--core build/native/pupazzi_libretro.so]
+#   python3 tests/test_remote.py [--host build/native/host] [--core build/native/pupazzi_libretro.so]
 #                                [--prima CORE_DI_PRIMA.so]
 #
 # Il frontend di prova fa girare il gioco (mappa 1, 2 giocatori) e da qui si mandano i messaggi
@@ -34,11 +34,11 @@ import sys
 import tempfile
 import time
 
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.dont_write_bytecode = True          # niente __pycache__ in tools/
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.join(ROOT, "tools"))
 import remote_send as rs  # noqa: E402
 
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 TRACE_RE = re.compile(r"^traccia (\d+) ([0-9a-f]+)$")
 NET_RE = re.compile(r"^rete (\d+) giocatore (\d+): (\d+) messaggi, tasti ([0-9a-f]+), levette (-?\d+) (-?\d+) (-?\d+) (-?\d+)$")
 GAME_ENV = {"PUPAZZI_TRACE": "1", "PUPAZZI_RENDERER": "software", "PUPAZZI_RES": "320", "PUPAZZI_MAPPA": "1",

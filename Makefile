@@ -100,52 +100,52 @@ build/native/host: tools/host.cpp src/platform/libretro.h
 	@mkdir -p build/native
 	$(CXX) -std=c++17 -O2 -Wall -DHOST_GL -Isrc -o $@ $< -ldl
 
-build/native/test_raster: tools/test_raster.cpp src/engine/swr.cpp src/engine/mesh.cpp src/engine/hud.cpp src/platform/plat.cpp $(HDR)
+build/native/test_raster: tests/test_raster.cpp src/engine/swr.cpp src/engine/mesh.cpp src/engine/hud.cpp src/platform/plat.cpp $(HDR)
 	@mkdir -p build/native
-	$(CXX) $(TOOLFLAGS) -o $@ tools/test_raster.cpp src/engine/swr.cpp src/engine/mesh.cpp src/engine/hud.cpp src/platform/plat.cpp -lm -lpthread
+	$(CXX) $(TOOLFLAGS) -o $@ tests/test_raster.cpp src/engine/swr.cpp src/engine/mesh.cpp src/engine/hud.cpp src/platform/plat.cpp -lm -lpthread
 
 # Aim tests: the game without a frontend (no core.cpp and no renderers).
 GAME_SRC := $(filter-out src/platform/core.cpp src/engine/swr.cpp src/engine/glr.cpp src/net/net.cpp,$(SRC))
-build/native/test_aim: tools/test_aim.cpp $(GAME_SRC) $(GEN) $(HDR)
+build/native/test_aim: tests/test_aim.cpp $(GAME_SRC) $(GEN) $(HDR)
 	@mkdir -p build/native
-	$(CXX) $(TOOLFLAGS) -o $@ tools/test_aim.cpp $(GAME_SRC) $(GEN) -lm -lpthread
+	$(CXX) $(TOOLFLAGS) -o $@ tests/test_aim.cpp $(GAME_SRC) $(GEN) -lm -lpthread
 
 # Rules tests (lives, maps from the start, rounds): the game without a frontend plus the software
 # renderer (with --immagini it writes the HUD screens).
-build/native/test_rules: tools/test_rules.cpp $(GAME_SRC) src/engine/swr.cpp $(GEN) $(HDR)
+build/native/test_rules: tests/test_rules.cpp $(GAME_SRC) src/engine/swr.cpp $(GEN) $(HDR)
 	@mkdir -p build/native
-	$(CXX) $(TOOLFLAGS) -o $@ tools/test_rules.cpp $(GAME_SRC) src/engine/swr.cpp $(GEN) -lm -lpthread
+	$(CXX) $(TOOLFLAGS) -o $@ tests/test_rules.cpp $(GAME_SRC) src/engine/swr.cpp $(GEN) -lm -lpthread
 
 # Map tests (0.5.1): no way out of the zones (fixed checks, random players, targeted cases).
-build/native/test_maps: tools/test_maps.cpp $(GAME_SRC) $(GEN) $(HDR)
+build/native/test_maps: tests/test_maps.cpp $(GAME_SRC) $(GEN) $(HDR)
 	@mkdir -p build/native
-	$(CXX) $(TOOLFLAGS) -o $@ tools/test_maps.cpp $(GAME_SRC) $(GEN) -lm -lpthread
+	$(CXX) $(TOOLFLAGS) -o $@ tests/test_maps.cpp $(GAME_SRC) $(GEN) -lm -lpthread
 
 # Giant Gladiator tests (0.5.1): movement, attacks, phases, restarts (with --immagini the moves, with
 # --lotte whole fights with the bots).
-build/native/test_boss: tools/test_boss.cpp $(GAME_SRC) src/engine/swr.cpp $(GEN) $(HDR)
+build/native/test_boss: tests/test_boss.cpp $(GAME_SRC) src/engine/swr.cpp $(GEN) $(HDR)
 	@mkdir -p build/native
-	$(CXX) $(TOOLFLAGS) -o $@ tools/test_boss.cpp $(GAME_SRC) src/engine/swr.cpp $(GEN) -lm -lpthread
+	$(CXX) $(TOOLFLAGS) -o $@ tests/test_boss.cpp $(GAME_SRC) src/engine/swr.cpp $(GEN) -lm -lpthread
 
 # Language tests (0.5.3): texts, glyphs, line breaks.
-build/native/test_lang: tools/test_lang.cpp src/engine/lang.cpp src/engine/hud.cpp src/engine/ui.cpp src/game/save.cpp src/platform/plat.cpp $(HDR)
+build/native/test_lang: tests/test_lang.cpp src/engine/lang.cpp src/engine/hud.cpp src/engine/ui.cpp src/game/save.cpp src/platform/plat.cpp $(HDR)
 	@mkdir -p build/native
-	$(CXX) $(TOOLFLAGS) -o $@ tools/test_lang.cpp src/engine/lang.cpp src/engine/hud.cpp src/engine/ui.cpp src/game/save.cpp src/platform/plat.cpp -lm -lpthread
+	$(CXX) $(TOOLFLAGS) -o $@ tests/test_lang.cpp src/engine/lang.cpp src/engine/hud.cpp src/engine/ui.cpp src/game/save.cpp src/platform/plat.cpp -lm -lpthread
 
 # Save tests: only save.cpp (and plat.cpp for the log), in a temporary folder.
-build/native/test_save: tools/test_save.cpp src/game/save.cpp src/platform/plat.cpp $(HDR)
+build/native/test_save: tests/test_save.cpp src/game/save.cpp src/platform/plat.cpp $(HDR)
 	@mkdir -p build/native
-	$(CXX) $(TOOLFLAGS) -o $@ tools/test_save.cpp src/game/save.cpp src/platform/plat.cpp
+	$(CXX) $(TOOLFLAGS) -o $@ tests/test_save.cpp src/game/save.cpp src/platform/plat.cpp
 
 # Tests of the commands that reach the host of a LAN game (0.5.4): src/net/net.cpp without a network.
-build/native/test_netin: tools/test_netin.cpp src/net/net.cpp $(GAME_SRC) $(GEN) $(HDR)
+build/native/test_netin: tests/test_netin.cpp src/net/net.cpp $(GAME_SRC) $(GEN) $(HDR)
 	@mkdir -p build/native
-	$(CXX) $(TOOLFLAGS) -o $@ tools/test_netin.cpp $(GAME_SRC) $(GEN) -lm -lpthread
+	$(CXX) $(TOOLFLAGS) -o $@ tests/test_netin.cpp $(GAME_SRC) $(GEN) -lm -lpthread
 
 # Battery and CPU tests (0.5.4) with a fake /sys and /proc.
-build/native/test_sys: tools/test_sys.cpp src/platform/sysinfo.cpp $(HDR)
+build/native/test_sys: tests/test_sys.cpp src/platform/sysinfo.cpp $(HDR)
 	@mkdir -p build/native
-	$(CXX) $(TOOLFLAGS) -o $@ tools/test_sys.cpp src/platform/sysinfo.cpp
+	$(CXX) $(TOOLFLAGS) -o $@ tests/test_sys.cpp src/platform/sysinfo.cpp
 
 test: native tools
 	python3 tools/make_lang.py --controlla
@@ -161,9 +161,9 @@ test: native tools
 	./build/native/host build/native/pupazzi_libretro.so --frames 120 --quiet
 
 # Sound tests: every effect and every tune in build/wav (levels, peaks, time per frame).
-build/native/test_audio: tools/test_audio.cpp src/engine/audio.cpp src/engine/audio.h
+build/native/test_audio: tests/test_audio.cpp src/engine/audio.cpp src/engine/audio.h
 	@mkdir -p build/native
-	$(CXX) -std=c++17 -O2 -Wall -Wextra -Isrc -o $@ tools/test_audio.cpp src/engine/audio.cpp
+	$(CXX) -std=c++17 -O2 -Wall -Wextra -Isrc -o $@ tests/test_audio.cpp src/engine/audio.cpp
 
 test-audio: build/native/test_audio
 	@mkdir -p build/wav
@@ -171,13 +171,13 @@ test-audio: build/native/test_audio
 
 # GPU renderer tests on a software OpenGL ES: they need the Mesa libraries (usually already there).
 test-gl: native tools
-	sh tools/test_gl.sh
+	sh tests/test_gl.sh
 
 # LAN play: 2, 3 and 4 copies of the game playing together with UDP messages on the same machine
 # (lost and late messages, consoles that leave or switch off, different version...): the games must
 # stay the same frame by frame. A few minutes.
 test-net: native tools
-	sh tools/test_net.sh
+	sh tests/test_net.sh
 
 # Folder ready for the console (to be copied into Roms/APPS) and core for the PC.
 dist: console pc

@@ -375,7 +375,7 @@ Se un controller resta bloccato sullo stesso comando per 30 secondi (per esempio
 
 Prove senza una seconda console: dal PC `python3 tools/remote_send.py 192.168.1.228 2 "lx=1@0-2"`
 fa da Remote RetroPad del giocatore 2 (levetta sinistra tutta a destra per 2 secondi); `python3
-tools/test_remote.py` prova i comandi dalla rete con il frontend di prova (`PUPAZZI_REMOTO=0` non
+tests/test_remote.py` prova i comandi dalla rete con il frontend di prova (`PUPAZZI_REMOTO=0` non
 apre le porte, `PUPAZZI_REMOTO_PORTA` cambia la prima).
 
 ## Registri
@@ -416,7 +416,7 @@ Serve un pad: la mira è sulla levetta destra. Il PC può entrare nelle partite 
     make test-gl    # prove del renderer GPU su un OpenGL ES software (Mesa)
     make test-audio # prove del sonoro; scrive ogni suono e ogni musica in build/wav/ per ascoltarli
     make test-net   # gioco in rete: più copie del gioco su questo PC (perdite, ritardi, uscite, rifiuti)
-    python3 tools/test_remote.py   # comandi dalle altre console (Remote RetroPad) con il frontend di prova
+    python3 tests/test_remote.py   # comandi dalle altre console (Remote RetroPad) con il frontend di prova
 
 Il frontend di prova registra anche il sonoro di una partita: `build/native/host
 build/native/pupazzi_libretro.so --frames 3600 --wav partita.wav`.
@@ -478,16 +478,16 @@ A ogni modifica su `main` la CI (**CI** in **Actions**) compila e fa tutte le pr
 | `src/sysinfo.cpp` | batteria e carico della CPU letti da `/sys` e `/proc` |
 | `src/glr.cpp`, `swr.cpp` | renderer OpenGL ES 2 con antialias (console) e software (riserva e prove) |
 | `tools/host.cpp` | frontend libretro minimo per le prove |
-| `tools/test_aim.cpp` | prove della mira (direzione, soglia, tremolio, scatti, rilascio, ventagli, pausa) e delle carte |
-| `tools/test_rules.cpp` | prove di vite, zone e mappe da capo, rientri, giri e stelle, mappe aperte |
-| `tools/test_maps.cpp` | prove delle mappe: chiuse, tutte giocabili, niente passaggi tra le zone (anche saltando e spinti), cenote |
-| `tools/test_boss.cpp` | prove del gladiatore: inseguimento, fendente, carica, stordito, giavellotti, fasi, niente blocchi |
-| `tools/test_save.cpp` | prove dei salvataggi: file rotti, troncati, enormi, chiavi sconosciute, salvataggi della 0.4 e della 0.5.2, partite nuove, copiate, eliminate |
-| `tools/test_lang.cpp` | prove delle lingue: ogni testo in ogni lingua si disegna, a capo e puntini (anche cinese, giapponese, hindi) |
-| `tools/test_audio.cpp` | prove del sonoro: livelli, picchi, voci, tempi, equilibrio musica/effetti; scrive i WAV |
-| `tools/test_net.sh` | prove del gioco in rete con più copie del gioco (stessa partita bit per bit, perdite e ritardi, uscite, rifiuti, dai menu) |
-| `tools/test_sys.cpp` | prove di batteria e carico della CPU con una `/sys` e una `/proc` finte |
-| `tools/remote_send.py`, `test_remote.py` | finto Remote RetroPad e prove dei comandi dalla rete |
+| `tests/test_aim.cpp` | prove della mira (direzione, soglia, tremolio, scatti, rilascio, ventagli, pausa) e delle carte |
+| `tests/test_rules.cpp` | prove di vite, zone e mappe da capo, rientri, giri e stelle, mappe aperte |
+| `tests/test_maps.cpp` | prove delle mappe: chiuse, tutte giocabili, niente passaggi tra le zone (anche saltando e spinti), cenote |
+| `tests/test_boss.cpp` | prove del gladiatore: inseguimento, fendente, carica, stordito, giavellotti, fasi, niente blocchi |
+| `tests/test_save.cpp` | prove dei salvataggi: file rotti, troncati, enormi, chiavi sconosciute, salvataggi della 0.4 e della 0.5.2, partite nuove, copiate, eliminate |
+| `tests/test_lang.cpp` | prove delle lingue: ogni testo in ogni lingua si disegna, a capo e puntini (anche cinese, giapponese, hindi) |
+| `tests/test_audio.cpp` | prove del sonoro: livelli, picchi, voci, tempi, equilibrio musica/effetti; scrive i WAV |
+| `tests/test_net.sh` | prove del gioco in rete con più copie del gioco (stessa partita bit per bit, perdite e ritardi, uscite, rifiuti, dai menu) |
+| `tests/test_sys.cpp` | prove di batteria e carico della CPU con una `/sys` e una `/proc` finte |
+| `tools/remote_send.py`, `tests/test_remote.py` | finto Remote RetroPad e prove dei comandi dalla rete |
 | `console/`, `deploy.sh` | voce di menu, script di avvio, icona; installazione dal PC |
 
 Variabili d'ambiente del core, per le prove: `PUPAZZI_RENDERER` (`gpu`, `software`), `PUPAZZI_RES`
