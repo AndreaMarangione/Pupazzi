@@ -746,25 +746,6 @@ Vec3 menu_spot(const Game& g, int i) {
   return v3(c.x + (1.5f - (float)i) * 1.25f, 0.0f, c.z);
 }
 
-void go_screen(Game& g, int s) {
-  g.screen = s;
-  g.screen_t = 0;
-  g.menu_sel = 0;
-  g.paused = false;
-  if (s != SC_PLAY && s != SC_STATS) {
-    if (!g.level_ok) load_map_preview(g, s == SC_MAPS || s == SC_CHARS ? g.map_sel : 0);
-  }
-  if (s == SC_CHARS) {
-    for (int i = 0; i < MAX_PLAYERS; ++i) {
-      g.ready[i] = false;
-      g.joined[i] = g.pl[i].active;
-      if (g.pl[i].active) g.pick[i] = g.pl[i].ch;
-    }
-    g.chars_t = 0;
-  }
-  ev_camera(g, CAM_CUT);
-}
-
 // --- interfaccia ------------------------------------------------------------------------
 
 void game_init(Game& g) {
@@ -849,7 +830,7 @@ void game_update(Game& g, const Pad pads[MAX_PLAYERS]) {
   if (g.screen == SC_PLAY) {
     play_update(g, pads);
   } else {
-    menu_update(g);
+    screens_update(g);
     effects_update(g);
     ev_camera(g, CAM_FOLLOW);
   }

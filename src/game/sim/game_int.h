@@ -361,7 +361,8 @@ struct Bot {
   uint16_t field[FLOW_W * FLOW_H];
 };
 
-// A save as the slot screens show it (menu.cpp).
+// A save as the slot screens show it (game/screens/slots.cpp): the farthest planet reached with its
+// round, the stars of that round, the open maps, the play time.
 struct SlotView { int state, world, giro, stars, smax, open, total; uint32_t seconds; char name[SAVE_NAME_LEN]; };
 
 // State that outlives game_init (until 0.5.4 it lived in module variables): session settings, caches
@@ -572,7 +573,6 @@ float diff_hp(Game& g);          // moltiplicatori dei mostri secondo il giro de
 float diff_dmg(Game& g);
 float diff_speed(Game& g);
 void start_map(Game& g, int idx);      // carica la mappa e comincia dalla zona 1
-void go_screen(Game& g, int s);
 void game_request_quit(Game& g);
 bool load_map_preview(Game& g, int idx);
 Vec3 menu_spot(const Game& g, int i);        // dove sta il personaggio del giocatore i nei menu
@@ -649,12 +649,13 @@ int net_local(const Game& g);             // giocatore di questa console in una 
 static inline bool net_console(const Game& g, int i) { return !g.net || ((g.net_consoles >> i) & 1u) != 0u; }
 int net_wait_frames(const Game& g);       // da quanti fotogrammi questa console aspetta la rete (solo HUD)
 uint8_t net_silent(const Game& g);        // console che non rispondono da un po' (solo HUD)
-// --- menu.cpp ---
+// --- screens (game/screens: the menus as states, the pause, the card choice) ---
+void go_screen(Game& g, int s);           // change screen (SC_*)
+void screens_update(Game& g);             // a step of the current screen (not SC_PLAY)
+void screens_hud(const Game& g, Hud* h);  // what the current screen draws (not SC_PLAY)
 void menu_info(Game& g, const char* s);   // avviso nei menu al posto del piede (2 secondi)
 const char* net_error_text(Game& g, int e, char* buf, int n);   // cosa dire per un errore della rete (NE_*)
-void menu_update(Game& g);
 void play_menus_update(Game& g);  // pausa e finestre per entrare, durante la partita
-void menu_build_hud(const Game& g, Hud* h, const Camera& cam);
 void play_menus_hud(const Game& g, Hud* h);
 // --- game_draw.cpp ---
 bool to_screen(const Camera& c, Vec3 p, int* sx, int* sy);
@@ -670,6 +671,7 @@ void cards_map_start(Game& g);           // nuova mappa (o mappa da capo): via t
 void cards_offer(Game& g);               // apre la scelta (se le carte sono attive) per chi ha ancora vite
 void cards_zone_cleared(Game& g);        // zona ripulita e ne segue un'altra: la scelta si apre tra poco
 void cards_zone_start(Game& g);          // inizio (o nuovo inizio) di una zona: si ricaricano gli scudi
+void card_take(Game& g, int i, int c);   // the player i takes the card c
 void cards_update(Game& g);              // scelta aperta: cursori e conferme di tutti, poi si chiude
 void cards_hud(const Game& g, Hud* h);               // riquadri della scelta (al posto della pausa)
 void card_lose_all(Game& g, int i);            // chi lascia la partita perde le sue carte

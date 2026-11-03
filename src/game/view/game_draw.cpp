@@ -1650,7 +1650,7 @@ void view_build_frame(const View& v, const Game& g, FrameDesc* fd, int w, int h,
   if (!hud) return;
   hud_reset(hud);
   if (g.screen == SC_PLAY) build_play_hud(g, hud, fd->cam);
-  else menu_build_hud(g, hud, fd->cam);
+  else screens_hud(g, hud);
   // Caratteri che il gioco non sa disegnare (si vedono come '?'; nomi di mappe personalizzate, o
   // testi cambiati senza rigenerare i caratteri): una volta nel registro.
   static bool missing_logged = false;

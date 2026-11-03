@@ -21,7 +21,11 @@
 #   net/          LAN play
 
 SRC := src/platform/core.cpp src/game/sim/game.cpp src/game/view/game_draw.cpp src/game/view/view.cpp src/game/view/camera.cpp src/game/sim/player.cpp \
-       src/game/sim/combat.cpp src/game/sim/monsters.cpp src/game/sim/flow.cpp src/game/screens/menu.cpp \
+       src/game/sim/combat.cpp src/game/sim/monsters.cpp src/game/sim/flow.cpp \
+       src/game/screens/screens.cpp src/game/screens/common.cpp src/game/screens/title.cpp \
+       src/game/screens/slots.cpp src/game/screens/name.cpp src/game/screens/language.cpp src/game/screens/lan.cpp \
+       src/game/screens/mode.cpp src/game/screens/map_select.cpp src/game/screens/chars.cpp src/game/screens/stats.cpp \
+       src/game/screens/pause.cpp src/game/screens/cards.cpp \
        src/game/sim/bot.cpp src/game/sim/cards.cpp src/game/sim/level.cpp src/game/view/level_mesh.cpp \
        src/game/sim/maps.cpp src/game/view/models.cpp src/engine/swr.cpp src/engine/glr.cpp src/engine/hud.cpp \
        src/engine/ui.cpp src/engine/lang.cpp src/engine/mesh.cpp src/platform/plat.cpp src/game/save.cpp \
